@@ -30,9 +30,8 @@ void test_bacnet_client_builds_who_is_request() {
 
 void test_bacnet_client_parses_i_am_response() {
   const uint8_t response[] = {
-      0x81, 0x0A, 0x00, 0x15, 0x01, 0x00, 0x10, 0x00, 0x0C, 0x02,
-      0x00, 0x04, 0xD2, 0x1A, 0x05, 0xC4, 0x29, 0x03, 0x3A, 0x00,
-      0x0F,
+      0x81, 0x0A, 0x00, 0x14, 0x01, 0x00, 0x10, 0x00, 0xC4, 0x02,
+      0x00, 0x23, 0x29, 0x22, 0x05, 0xC4, 0x91, 0x00, 0x21, 0xDE,
   };
   BacnetIAmDevice device;
 
@@ -40,8 +39,8 @@ void test_bacnet_client_parses_i_am_response() {
                                                   device));
   TEST_ASSERT_EQUAL_UINT32(1234, device.deviceInstance);
   TEST_ASSERT_EQUAL_UINT32(1476, device.maxApduLengthAccepted);
-  TEST_ASSERT_EQUAL_UINT8(3, device.segmentationSupported);
-  TEST_ASSERT_EQUAL_UINT16(15, device.vendorId);
+  TEST_ASSERT_EQUAL_UINT8(0, device.segmentationSupported);
+  TEST_ASSERT_EQUAL_UINT16(222, device.vendorId);
 }
 
 void test_bacnet_client_rejects_non_i_am_response() {

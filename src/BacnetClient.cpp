@@ -17,8 +17,8 @@ uint16_t readUint16(const uint8_t* buffer) {
   return (static_cast<uint16_t>(buffer[0]) << 8) | buffer[1];
 }
 
-bool readContextUnsigned(const uint8_t* buffer, size_t length, size_t& offset,
-                         uint8_t expectedTag, uint32_t& value) {
+bool readApplicationValue(const uint8_t* buffer, size_t length, size_t& offset,
+                          uint8_t expectedTag, uint32_t& value) {
   if (offset >= length) {
     return false;
   }
@@ -28,7 +28,7 @@ bool readContextUnsigned(const uint8_t* buffer, size_t length, size_t& offset,
   const bool isContextTag = (tag & 0x08) != 0;
   const uint8_t valueLength = tag & 0x07;
 
-  if (!isContextTag || tagNumber != expectedTag || valueLength == 0 ||
+  if (isContextTag || tagNumber != expectedTag || valueLength == 0 ||
       valueLength > 4 || valueLength == 5 || offset + valueLength > length) {
     return false;
   }
@@ -170,13 +170,13 @@ bool BacnetClient::parseIAmResponse(const uint8_t* buffer, size_t length,
   uint32_t segmentationSupported = 0;
   uint32_t vendorId = 0;
 
-  if (!readContextUnsigned(buffer, length, offset, 0, objectIdentifier) ||
+  if (!readApplicationValue(buffer, length, offset, 12, objectIdentifier) ||
       (objectIdentifier >> 22) != kDeviceObjectType ||
-      !readContextUnsigned(buffer, length, offset, 1,
-                           maxApduLengthAccepted) ||
-      !readContextUnsigned(buffer, length, offset, 2, segmentationSupported) ||
+      !readApplicationValue(buffer, length, offset, 2,
+                            maxApduLengthAccepted) ||
+      !readApplicationValue(buffer, length, offset, 9, segmentationSupported) ||
       segmentationSupported > UINT8_MAX ||
-      !readContextUnsigned(buffer, length, offset, 3, vendorId) ||
+      !readApplicationValue(buffer, length, offset, 2, vendorId) ||
       vendorId > UINT16_MAX) {
     return false;
   }
