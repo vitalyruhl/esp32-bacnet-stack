@@ -8,9 +8,12 @@ shaped. It is intended to become public around the first usable release.
 
 ## Current Status
 
-- Initial library scaffold only.
-- Minimal `BacnetClient` and `BacnetServer` role placeholders are available.
+- Minimal `BacnetClient` discovery support is available for BACnet/IP.
+- `BacnetClient` can build and send Who-Is requests and parse basic I-Am
+  responses.
+- Minimal `BacnetServer` role placeholder is available.
 - BACnet/IP is the first target.
+- ReadProperty and WriteProperty are not implemented yet.
 - BACnet MS/TP is planned for later work.
 - No upstream `bacnet-stack` source files are imported yet.
 - ESP32 Configuration Manager is not a core dependency. It may be used later
@@ -53,12 +56,35 @@ BacnetServer server;
 
 void setup() {
   client.begin();
+  client.sendWhoIs();
   server.begin(1234);
 }
 
 void loop() {
+  BacnetIAmDevice device;
+  if (client.pollIAm(device)) {
+    // Discovery result available in device.deviceInstance and related fields.
+  }
 }
 ```
+
+## BACnet/IP Client Discovery
+
+The first client slice is discovery-only:
+
+- builds standard BACnet/IP Who-Is requests
+- sends Who-Is on UDP port `47808`
+- parses minimal I-Am responses into `BacnetIAmDevice`
+- exposes discovered device instance, max APDU, segmentation, and vendor ID
+
+The `examples/client-demo` firmware demonstrates discovery on ESP32. It uses
+the optional ConfigurationManager-based example setup to connect WiFi, then
+sends Who-Is to the local BACnet/IP broadcast address every 30 seconds and logs
+received I-Am responses.
+
+Hardware validation for this slice was performed against a WAGO BACnet/IP
+server at `192.168.2.101:47808`; the ESP32 repeatedly discovered device
+instance `9001`.
 
 ## Build
 

@@ -7,6 +7,8 @@ This changelog is a curated overview.
 - Started GitHub Issue #4 with minimal BACnet/IP client discovery support.
 - Added BACnet/IP Who-Is request building and sending.
 - Added minimal BACnet/IP I-Am response parsing for device discovery.
+- Added ESP32 client demo hardware validation against a WAGO BACnet/IP device
+  with device instance `9001`.
 
 ## 0.1.0
 
