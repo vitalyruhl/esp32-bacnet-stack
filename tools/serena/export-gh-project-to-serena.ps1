@@ -19,7 +19,7 @@ GitHub Project owner login. If omitted, the script derives the owner from
 "gh repo view --json nameWithOwner".
 
 .PARAMETER OutputPath
-Output markdown path. Defaults to .serena/memories/shared/gh-project.md.
+Output markdown path. Defaults to .Temp/gh-project.md.
 
 .PARAMETER Limit
 Maximum project items to fetch. Defaults to 200.
@@ -45,7 +45,7 @@ Generate and print the markdown snapshot summary without writing a file.
 .\tools\serena\export-gh-project-to-serena.ps1 -IssueNumbers 10,11,12 -DryRun
 
 .EXAMPLE
-.\tools\serena\export-gh-project-to-serena.ps1 -ProjectNumber 6 -Owner vitalyruhl -OutputPath .serena/memories/shared/gh-project.md
+.\tools\serena\export-gh-project-to-serena.ps1 -ProjectNumber 6 -Owner vitalyruhl -OutputPath .Temp/gh-project.md
 #>
 
 [CmdletBinding()]
@@ -118,7 +118,7 @@ function Resolve-OutputFile {
     )
 
     if ([string]::IsNullOrWhiteSpace($RequestedPath)) {
-        return Join-Path $RepositoryRoot ".serena/memories/shared/gh-project.md"
+        return Join-Path $RepositoryRoot ".Temp/gh-project.md"
     }
 
     if ([System.IO.Path]::IsPathRooted($RequestedPath)) {
@@ -254,8 +254,8 @@ function New-MarkdownSnapshot {
 
     $lines.Add("# Raw GitHub Project Snapshot")
     $lines.Add("")
-    $lines.Add("[WARNING] This is a temporary raw GitHub Project snapshot for Serena context transfer. It is not curated long-term Serena memory.")
-    $lines.Add("[WARNING] Do not treat this file as source code provenance, implementation guidance, or a substitute for repository files and GitHub state.")
+    $lines.Add("[WARNING] This is a temporary raw GitHub Project snapshot for planning/context transfer. It is not curated long-term Serena memory.")
+    $lines.Add("[WARNING] Do not treat this file as source code provenance, implementation guidance, curated Serena memory, or a substitute for repository files and GitHub state.")
     $lines.Add("")
     $lines.Add("Generated at: $timestamp")
     $lines.Add("Repository: $($RepoInfo.nameWithOwner)")
@@ -388,7 +388,7 @@ if ($DryRun) {
 
 $outputDirectory = Split-Path -Parent $resolvedOutputPath
 if (-not (Test-Path -LiteralPath $outputDirectory -PathType Container)) {
-    New-Item -ItemType Directory -Path $outputDirectory | Out-Null
+    New-Item -ItemType Directory -Force -Path $outputDirectory | Out-Null
 }
 
 Set-Content -LiteralPath $resolvedOutputPath -Value $markdown -Encoding UTF8

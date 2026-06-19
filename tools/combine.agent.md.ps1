@@ -1,7 +1,9 @@
+
 $ErrorActionPreference = "Stop"
 
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
-$outputPath = Join-Path $repoRoot "all-agents-combined.md"
+$outputDir = Join-Path $repoRoot ".Temp"
+$outputPath = Join-Path $outputDir "all-agents-combined.md"
 
 $governanceFiles = @(
     "AGENTS.md"
@@ -13,6 +15,12 @@ $governanceFiles = @(
     ".github/agents/refactor.agent.md"
     ".github/agents/workflow.agent.md"
 )
+
+New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
+
+if (Test-Path -LiteralPath $outputPath) {
+    Remove-Item -LiteralPath $outputPath
+}
 
 $governanceFiles | ForEach-Object {
     $relativePath = $_
@@ -29,3 +37,5 @@ $governanceFiles | ForEach-Object {
     "---"
     ""
 } | Set-Content -LiteralPath $outputPath -Encoding UTF8
+
+Get-Item -LiteralPath $outputPath | Select-Object FullName, Length, LastWriteTime

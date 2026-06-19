@@ -23,5 +23,6 @@ Thumbs.db
 **/secrets.h
 **/wifiSecret.h
 
-# extra
-all-agents-combined.md
+# Temporary generated exports
+.Temp/
+**/.Temp/

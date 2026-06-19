@@ -3,21 +3,84 @@
 Canonical reusable governance for ESP32/C++/PlatformIO Arduino-library
 repositories. Project facts live only in `.github/agents/project.agent.md`.
 
-## Mandatory Load
+## Governance Loading
 
-- Before any repository work, read by known path:
-  - `.github/AGENTS.md`
-  - `.github/agents/project.agent.md`
-  - `.github/agents/<selected-agent>.agent.md`
+Do not blindly reload all governance files before every task. Use a minimal governance gate first, then decide whether a full governance reload is required.
+
+### Minimal Governance Gate
+
+Before any repository work, the agent must identify:
+
+- current task type: read-only, docs-only, workflow-only, tooling-only, or product-code-related
+- selected agent
+- current branch before file changes or git mutations
+- whether the task touches Level C / risky areas
+- whether the task may modify files, git state, GitHub state, releases, or branches
+- forbidden actions for the current task
+- expected validation policy
+
+If the agent cannot confidently state these items, it must perform a full governance reload before continuing.
+
+### Selected Agent
+
 - For workflow shortcuts, selected agent is `.github/agents/workflow.agent.md`.
-  - Treat leading-dot command tokens such as `.checkpoint`, `.audit`, `.ready`, or `.toMain` as workflow shortcut shorthand unless they are clearly paths, filenames, extensions, versions, or quoted literals.
-- Project profile is mandatory context and never replaces the selected agent.
-- Do not discover governance only by broad search; hidden paths may be skipped.
-- Governance searches MUST use hidden paths:
-  - `rg --hidden -n "workflow\.begin|workflow\.audit|workflow\.toMain|workflow\.cleanBranches" .`
-  - `fd --hidden "AGENTS|agent\.md|workflow\.agent\.md" .`
-- Plain `rg ... .` or `fd ... .` is insufficient for governance discovery.
-- Missing required governance reads are a hard blocker; report before work.
+  - Treat leading-dot command tokens such as `.checkpoint`, `.audit`, `.ready`, `.toMain`, or `.cleanBranches` as workflow shortcut shorthand unless they are clearly paths, filenames, extensions, versions, or quoted literals.
+- Project profile is mandatory context when a full governance reload is required.
+- Project profile never replaces the selected agent.
+
+### Full Governance Reload
+
+A full governance reload means reading by known path:
+
+- `.github/AGENTS.md`
+- `.github/agents/project.agent.md`
+- `.github/agents/<selected-agent>.agent.md`
+
+Full governance reload is required when one of these applies:
+
+- this is a new agent session or the agent cannot prove current governance context
+- governance files changed since the last load
+- selected agent changes
+- task scope changes from read-only/docs/workflow to code/refactor/product behavior
+- task touches Level C / risky areas
+- task will modify files
+- task will perform git mutations, branch changes, PRs, merges, releases, or branch cleanup
+- task runs on `main`, `master`, a release branch, or an unknown branch
+- previous response showed uncertainty, stale assumptions, or rule drift
+- user explicitly requests audit, checkpoint, ready, toMain, cleanBranches, release, or session close
+
+Missing required governance reads when full reload is required is a hard blocker; report before work.
+
+### Governance Reuse
+
+Governance reuse is allowed only when all of these are true:
+
+- same session
+- same repository
+- same branch or a verified safe branch transition
+- same selected agent
+- governance files are unchanged
+- task risk level did not increase
+- no signs of stale or forgotten context exist
+
+When governance is reused, report briefly:
+
+- reused governance context
+- reason reuse is safe
+- whether validation rules were reused or re-evaluated
+
+### Governance Discovery
+
+Do not discover governance only by broad search; hidden paths may be skipped.
+
+Governance searches MUST use hidden paths, for example:
+
+- `rg --hidden -n "workflow\.begin|workflow\.audit|workflow\.toMain|workflow\.cleanBranches" .`
+- `fd --hidden "AGENTS|agent\.md|workflow\.agent\.md" .`
+
+Plain `rg ... .` or `fd ... .` is insufficient for governance discovery.
+
+Serena memories, generated snapshots, summaries, and previous reports may help orientation, but they never replace direct governance reads when a full governance reload is required.
 
 ## Language
 
@@ -168,6 +231,28 @@ repositories. Project facts live only in `.github/agents/project.agent.md`.
   confirmed.
 - Distinguish command failure, no matches, missing files, and missing tools.
 - Failed commands are not evidence about repository content.
+
+
+## Serena Index Freshness
+
+- Do not run `serena project index .` before every task.
+- For docs-, GitHub-, issue-, workflow-, or governance-only tasks, skip Serena indexing unless explicitly requested or needed because Serena results are stale.
+- For C++/PlatformIO code, architecture, or refactor tasks, re-run `serena project index .` only when one of these applies:
+  - branch was changed, merged, rebased, or pulled and source/header/build files changed
+  - new `.h`, `.hpp`, `.cpp`, `.ino`, library, include, or test files were added
+  - `platformio.ini`, dependencies, include paths, or compile database changed
+  - Serena symbol results look stale, incomplete, or wrong
+  - a previous Serena health/index check failed or was missing
+  - the task is a larger code refactor and no recent index exists for the current branch
+
+Serena indexing does not replace mandatory direct governance reads, direct file inspection, or exact searches with `rg --hidden`.
+
+- Never reuse across branches unless commit/tree identity is proven.
+- Never reuse local validation after merge, rebase, conflict resolution, source/header/example/test/build metadata changes, PlatformIO config changes, compile database changes, generated-file refresh, or dependency updates that affect build output, runtime behavior, supported PlatformIO environments, or release artifacts.
+- For GitHub Actions-only workflow dependency updates, fresh successful GitHub Actions checks on the updated workflow may be used as validation for that workflow change. In that case, report local PlatformIO as skipped, not reused.
+
+- When governance context is reused for file-changing, workflow, risky, or validation-sensitive tasks, report the reuse briefly and explain why it is safe. Do not list governance file names unless loading failed, drift was found, governance changed, or the user asks.
+
 
 ## Validation
 
