@@ -41,6 +41,9 @@ Use this agent for:
   layout, OTA behavior, security-sensitive behavior, or build pipelines without
   explicit confirmation.
 - Keep hardware-facing changes conservative and easy to verify.
+- Keep reusable BACnet stack code separate from examples, tests, generated
+  artifacts, and repository tooling.
+- Keep protocol encoding and decoding boundaries explicit.
 
 ## Branch And Workflow:
 
@@ -113,8 +116,12 @@ Use this agent for:
 - Run at least one PlatformIO build after `.cpp` or `.h` changes.
 - Default validation:
   - `pio run -e usb`
-- For affected examples, run the relevant example build.
-- If tests are affected, run `pio test` for at least one relevant environment.
+- For affected client example changes:
+  - `pio run -d examples/client-demo -e usb`
+- For affected server example changes:
+  - `pio run -d examples/server-demo -e usb`
+- If tests are affected, run:
+  - `pio test -e usb --without-uploading --without-testing`
 - Run relevant tests when tests are present and affected.
 - Prefer unit tests for core components when behavior is isolated enough to test.
 - Use configured and enabled GitHub Actions or checks when they exist. Do not
@@ -138,7 +145,7 @@ Use this agent for:
 - Prefer changed file lists, concise summaries, validation commands and results,
   skipped validation reasons, and remaining risks or blockers.
 - Prefer `git diff --stat` or focused summaries for reporting.
-- Include focused diff snippets only when needed to explain a risky, ambiguous,
+- Include focused diff excerpts only when needed to explain a risky, ambiguous,
   or important change.
 - Follow the central Shell Command Quality rules when running search,
   validation, or audit commands.

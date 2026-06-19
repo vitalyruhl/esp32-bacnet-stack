@@ -30,11 +30,12 @@ If using ripgrep to inspect governance, the agent MUST use `--hidden`, for examp
 - `main` is the published/released branch.
 - `release/*` branches are runnable snapshot branches and must stay buildable and
   runnable.
-- `release/*` branches are versioned by release, for example `release/v4.0.0`
-  or `release/v4.1.0`.
+- `release/*` branches are versioned by release, for example `release/v0.1.0`.
 - Do not assume `release/*` branches exist. If no suitable release branch
   exists, report that and skip release-branch updates unless the user explicitly
   asks to create or update one.
+- Before the first release, `release/*` branches are optional. Do not create or
+  update release branches unless the user explicitly requests that.
 - Missing release branches do not block normal pull-request based `main`
   integration unless release sync is explicitly in scope.
 - `feature/*` branches are work-in-progress branches and may be unfinished or
@@ -164,7 +165,12 @@ If using ripgrep to inspect governance, the agent MUST use `--hidden`, for examp
   validation.
 - Default build validation:
   - `pio run -e usb`
-- For affected examples, run the relevant example build.
+- For affected client example changes:
+  - `pio run -d examples/client-demo -e usb`
+- For affected server example changes:
+  - `pio run -d examples/server-demo -e usb`
+- For affected tests:
+  - `pio test -e usb --without-uploading --without-testing`
 - OTA environment validation, when explicitly relevant:
   - `pio run -e ota`
 - Upload commands require explicit user request because they interact with
@@ -199,6 +205,9 @@ If using ripgrep to inspect governance, the agent MUST use `--hidden`, for examp
   changes, firmware code changes, and example changes that affect build outputs
   require an appropriate project version bump unless the user explicitly says
   not to bump.
+- GitHub Actions-only Dependabot updates do not require a `library.json` version
+  bump unless they change produced library output, firmware build output,
+  supported PlatformIO environments, or release artifact behavior.
 - Governance-only and documentation-only changes do not require a version bump.
   Report that the version bump was skipped by policy.
 - Use patch bumps for dependency updates, bug fixes, internal compatible
@@ -233,8 +242,8 @@ If using ripgrep to inspect governance, the agent MUST use `--hidden`, for examp
   state.
 - If fast-forward is not possible, ask explicitly before force-pushing. Prefer
   `--force-with-lease` if force-push is approved.
-- Do not invent Python or `pyproject.toml` release steps for this repository
-  unless the repository later adds such files and policy.
+- Do not invent non-PlatformIO release steps for this repository unless the
+  repository later adds such files and policy.
 - Project version bumps are governed by `Version Bump Workflow`.
 
 ## Workflow Shortcuts
@@ -252,7 +261,15 @@ These names describe expected intent if the user invokes them:
   - do not perform code edits
   - do not perform build changes
   - do not run implementation work unless the user explicitly asks after the branch exists
-- `workflow.checkpoint`: create a commit and push the current coherent state.
+- `workflow.checkpoint`:
+  - verify current branch and repository status first
+  - refuse checkpoint directly on `main` or `master` unless the documented
+    docs-only TODO exception applies
+  - inspect `git diff --stat` before staging
+  - stage with `git add -A`
+  - create one meaningful English commit
+  - push only the current work branch
+  - run or report relevant validation according to changed file types
 - `workflow.docs`: perform a narrow documentation-only synchronization.
 - `workflow.audit`: read-only workflow or repository-state audit.
   - read-only only
@@ -286,6 +303,10 @@ These names describe expected intent if the user invokes them:
   files, validation state, and blockers without claiming merge or fix success.
   Do not commit, push, merge, or update release branches unless explicitly
   requested.
+- Session close is report-only by default. Do not commit, push, merge, switch
+  branches, or update release branches during session close unless the user
+  explicitly invokes `workflow.checkpoint`, `workflow.toMain`, or an explicit
+  release-sync workflow.
 
 Shortcut behavior must remain conservative:
 
@@ -316,5 +337,5 @@ Report:
 Inspect relevant diffs before reporting file-changing work. Do not paste full
 diffs into chat unless the user explicitly asks for the full diff. Prefer
 `git diff --stat`, changed file lists, and focused summaries. Include focused
-diff snippets only when needed to explain a risky, ambiguous, or important
+diff excerpts only when needed to explain a risky, ambiguous, or important
 change.

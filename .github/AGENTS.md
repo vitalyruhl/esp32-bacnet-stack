@@ -96,22 +96,41 @@ reported before any further action.
 ## Repository Scope
 
 - Primary project configuration: `platformio.ini`.
-- Main firmware source code lives under `src/`.
+- Canonical library metadata and version source: `library.json`.
+- Main library source code lives under `src/`.
+- Public headers may live under `include/` if the repository adds that layout.
+- Internal libraries may live under `lib/` if the repository adds that layout.
 - Examples live under `examples/`.
 - Supporting documentation lives under `docs/` and `README.md`.
 - Tests live under `test/` when present.
 - Support scripts and repository tooling live under `tools/`.
+- Serena project metadata lives under `.serena/`; shared memories are summaries
+  only and never override repository files or canonical governance.
 - Optional demo integrations may live under `examples/` when present.
 - Wokwi simulation files may live under example-specific `Wokwi/` folders.
 - Do not assume Python application release flows or a standalone backend web
   service unless the repository explicitly introduces them.
 
+## Architecture Guardrails
+
+- The core library exposes BACnet/IP client and server roles through
+  `BacnetClient` and `BacnetServer`.
+- Keep reusable BACnet stack code separate from examples, tests, generated
+  artifacts, and repository tooling.
+- Keep protocol encoding and decoding boundaries explicit. Do not hide wire
+  format changes inside unrelated refactors.
+- Treat BACnet protocol semantics, network-facing behavior, Arduino/PlatformIO
+  integration, and ESP32 hardware interaction as conservative change areas.
+- Do not add core dependencies on optional demo integrations.
+- Do not import external BACnet implementation code without an explicit license,
+  provenance, and architecture review.
+
 ## Agent Routing
 
 - `.github/AGENTS.md` is the canonical source for repository-wide rules.
 - `.github/agents/control-plane.agent.md` only routes work to the correct agent.
-- Use `.github/agents/refactor.agent.md` for code changes, refactors, tests, and
-  build validation.
+- Use `.github/agents/refactor.agent.md` for code changes, refactors, tests,
+  examples, and build validation.
 - Use `.github/agents/workflow.agent.md` for branches, issues, PRs, releases,
   checkpoints, and explicit session-close workflows.
 - Use `.github/agents/docs.agent.md` for documentation work.
@@ -169,13 +188,15 @@ reported before any further action.
 - `main` is the published or released branch.
 - `release/*` branches are runnable snapshot branches and must stay buildable
   and runnable.
-- `release/*` branches are versioned by release, for example `release/v4.0.0`.
+- `release/*` branches are versioned by release, for example `release/v0.1.0`.
 - Do not assume `release/*` branches exist. Missing release branches do not
   block normal pull-request based `main` integration unless release sync is
   explicitly in scope.
 - If release sync is explicitly requested and no suitable release branch exists,
   report that and skip the release update unless the user explicitly asks to
   create or update a release branch.
+- Before the first release, `release/*` branches are optional. Do not create or
+  update release branches unless the user explicitly requests that.
 - `feature/*` branches are work-in-progress branches and may be unfinished or
   temporarily broken.
 - Do not change `main` directly.
@@ -343,24 +364,32 @@ reported before any further action.
   - commands used for version scanning
   - build/test validation performed
   - any remaining mismatch or risk
+- GitHub Actions-only Dependabot updates do not require a `library.json` version
+  bump unless they change produced library output, firmware build output,
+  supported PlatformIO environments, or release artifact behavior.
 
 ## Session-Close Workflow
 
-- Default session-close behavior:
-  - commit the current work branch (`feature/*`) with `git add -A` and a
-    meaningful English commit message
-  - push the work branch to `origin`
-  - run `pio run -e usb` from the repository root when `.cpp` or `.h` files
-    changed
-  - if that build succeeds, or was skipped because no `.cpp` or `.h` files
-    changed, update the active `release/*` branch to match the work branch
-  - if no suitable release branch exists or no release branch is in scope,
-    report that and skip the release update unless the user explicitly asks to
-    create or update one
-  - prefer fast-forward updates for the release branch
-  - if fast-forward is not possible, ask explicitly before using
-    `--force-with-lease`
-  - push the updated release branch
+- Session close is report-only by default.
+- Do not commit, push, merge, switch branches, or update release branches during
+  session close unless the user explicitly invokes `workflow.checkpoint`,
+  `workflow.toMain`, or an explicit release-sync workflow.
+- If the user explicitly requests a checkpoint, follow `workflow.checkpoint`.
+- If no suitable release branch exists, report that and do not create or update
+  one unless explicitly requested.
+
+## Checkpoint Workflow
+
+- `workflow.checkpoint` creates one coherent commit and pushes only the current
+  work branch.
+- Verify the current branch and repository status first.
+- Refuse checkpoint directly on `main` or `master` unless the documented
+  docs-only TODO exception applies.
+- Inspect `git diff --stat` before staging.
+- Stage with `git add -A`.
+- Create one meaningful English commit.
+- Push only the current work branch.
+- Run or report relevant validation according to changed file types.
 
 ## Code Rules
 
@@ -418,7 +447,23 @@ follow this policy.
 
 ## Tool Policy
 
-- Prefer available VS Code or agent-workspace tools first when they fit the task.
+- Prefer available agent-workspace tools first when they fit the task.
+- When Serena is configured, healthy, and useful for this repository, prefer
+  Serena before raw text search for semantic code navigation, symbol lookup,
+  reference discovery, and project-memory-aware inspection.
+- Use Serena especially for C++ source/header navigation, class/function
+  reference checks, architecture inspection, and project context review.
+- Do not use Serena as a replacement for mandatory direct governance reads.
+- Do not use Serena as a replacement for required `rg --hidden`
+  governance/policy text searches.
+- Use `rg` or `fd` directly for plain text audits, governance searches, exact
+  string checks, generated-file scans, stale-term searches, and hidden-path
+  policy checks.
+- If Serena is unavailable, unhealthy, stale, incomplete, or missing memories
+  for this repository, report that clearly and fall back to `rg`, `fd`, `git`,
+  and direct file reads as appropriate.
+- Do not let Serena memories override repository files, user instructions, or
+  canonical governance.
 - Prefer locally installed CLI tools next.
 - Do not use unnecessarily heavy tools when simple search or inspection is
   enough.
@@ -435,11 +480,12 @@ follow this policy.
   - winget
   - choco
   - coreutils
-  - node / npm
   - python
   - uv
   - platformio / pio, if installed for this repository
 - Preferred tools:
+  - Serena for semantic C++/project-context navigation when configured,
+    healthy, and useful.
   - rg for text search, audits, and reference checks.
   - fd for file discovery, audits, and reference checks.
   - git for version-control inspection and explicit version-control actions.
@@ -486,6 +532,8 @@ follow this policy.
 - Use 7z for archive inspection or extraction when needed.
 - Use uv only when Python tooling is actually part of the task. Do not infer
   Python project workflows from the presence of uv.
+- Do not use JavaScript package-manager commands as preferred validation tools
+  unless the repository actually contains package-managed tooling.
 - Do not mix jq and dasel syntax.
 - Do not use deprecated dasel flags.
 - Prefer structured tools over brittle text parsing when that reduces risk.
@@ -502,16 +550,25 @@ follow this policy.
 - Always run at least one PlatformIO build after `.cpp` or `.h` changes.
 - Default build check:
   - `pio run -e usb`
-- For affected examples, run the relevant example build.
+- For affected client example changes, run:
+  - `pio run -d examples/client-demo -e usb`
+- For affected server example changes, run:
+  - `pio run -d examples/server-demo -e usb`
+- For tests affected by changes, run:
+  - `pio test -e usb --without-uploading --without-testing`
+- For OTA-specific behavior or configuration, run when explicitly relevant:
+  - `pio run -e ota`
+- Upload and serial monitor commands require explicit user request.
 - If only Markdown or governance files changed, skip PlatformIO build unless the
   user asks for it.
 - Governance-only changes require a governance consistency check, but do not
   require PlatformIO validation by themselves.
 - A governance consistency check means reading the affected governance files and
   verifying that agent routing, shortcut rules, branch rules, tool policy,
-  validation rules, version rules, and reporting rules do not contradict each
-  other.
-- If tests are affected, run `pio test` for at least one relevant environment.
+  validation rules, version rules, session-close rules, checkpoint rules, Serena
+  rules, and reporting rules do not contradict each other.
+- If tests are affected, run the concrete test command above unless a different
+  relevant PlatformIO environment is required.
 - Run relevant tests when tests are present and affected.
 - Docker or image builds are not required unless configured in this repository
   or explicitly in scope.
@@ -533,7 +590,7 @@ After file-changing work, report:
 Inspect relevant diffs before reporting file-changing work. Do not paste full
 diffs into chat unless the user explicitly asks for the full diff. Prefer
 `git diff --stat`, changed file lists, and focused summaries. Include focused
-diff snippets only when needed to explain a risky, ambiguous, or important
+diff excerpts only when needed to explain a risky, ambiguous, or important
 change.
 
 ## Final Rule

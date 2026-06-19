@@ -5,8 +5,10 @@ Keep documentation aligned with the implemented ESP32/PlatformIO system reality.
 
 Use this agent for:
 
-- `readme.md` updates
+- `README.md` updates
 - `docs/` updates
+- roadmap updates
+- architecture documentation
 - architecture or hardware wiring documentation
 - release notes
 - Wokwi usage documentation
@@ -63,7 +65,7 @@ Reporting:
   diff.
 - Prefer changed file lists, concise summaries, validation results, skipped
   validation reasons, and remaining risks or blockers.
-- Include focused diff snippets only when needed to explain a risky, ambiguous,
+- Include focused diff excerpts only when needed to explain a risky, ambiguous,
   or important change.
 
 Escalation:
