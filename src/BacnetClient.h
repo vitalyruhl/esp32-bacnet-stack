@@ -15,10 +15,30 @@ struct BacnetIAmDevice {
   uint16_t vendorId = 0;
 };
 
+struct BacnetObjectId {
+  uint16_t type = 0;
+  uint32_t instance = 0;
+};
+
+enum class BacnetPropertyId : uint32_t {
+  FirmwareRevision = 44,
+  ModelName = 70,
+  ObjectName = 77,
+  VendorName = 121,
+};
+
+struct BacnetValue {
+  static constexpr size_t kMaxTextLength = 64;
+
+  char text[kMaxTextLength] = {};
+  size_t textLength = 0;
+};
+
 class BacnetClient {
  public:
   static constexpr uint16_t kDefaultPort = 47808;
   static constexpr size_t kWhoIsRequestSize = 8;
+  static constexpr size_t kMaxReadPropertyRequestSize = 19;
 
   BacnetClient() = default;
 
@@ -31,10 +51,23 @@ class BacnetClient {
   bool sendWhoIs(IPAddress address = IPAddress(255, 255, 255, 255),
                  uint16_t port = kDefaultPort);
   bool pollIAm(BacnetIAmDevice& device);
+  bool sendReadProperty(IPAddress address, BacnetObjectId object,
+                        BacnetPropertyId property, uint8_t invokeId = 1,
+                        uint16_t port = kDefaultPort);
+  bool pollReadProperty(BacnetValue& value, uint8_t expectedInvokeId,
+                        BacnetPropertyId expectedProperty);
 
   static size_t buildWhoIsRequest(uint8_t* buffer, size_t bufferSize);
   static bool parseIAmResponse(const uint8_t* buffer, size_t length,
                                BacnetIAmDevice& device);
+  static size_t buildReadPropertyRequest(uint8_t* buffer, size_t bufferSize,
+                                         BacnetObjectId object,
+                                         BacnetPropertyId property,
+                                         uint8_t invokeId = 1);
+  static bool parseReadPropertyAck(const uint8_t* buffer, size_t length,
+                                   uint8_t expectedInvokeId,
+                                   BacnetPropertyId expectedProperty,
+                                   BacnetValue& value);
 
  private:
   static constexpr size_t kMaxDiscoveryPacketSize = 512;

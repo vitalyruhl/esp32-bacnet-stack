@@ -11,9 +11,11 @@ shaped. It is intended to become public around the first usable release.
 - Minimal `BacnetClient` discovery support is available for BACnet/IP.
 - `BacnetClient` can build and send Who-Is requests and parse basic I-Am
   responses.
+- Minimal client-side ReadProperty support is available for simple character
+  string properties.
 - Minimal `BacnetServer` role placeholder is available.
 - BACnet/IP is the first target.
-- ReadProperty and WriteProperty are not implemented yet.
+- WriteProperty is not implemented yet.
 - BACnet MS/TP is planned for later work.
 - No upstream `bacnet-stack` source files are imported yet.
 - ESP32 Configuration Manager is not a core dependency. It may be used later
@@ -70,7 +72,7 @@ void loop() {
 
 ## BACnet/IP Client Discovery
 
-The first client slice is discovery-only:
+The first client slice supports discovery:
 
 - builds standard BACnet/IP Who-Is requests
 - sends Who-Is on UDP port `47808`
@@ -85,6 +87,20 @@ received I-Am responses.
 Hardware validation for this slice was performed against a WAGO BACnet/IP
 server at `192.168.2.101:47808`; the ESP32 repeatedly discovered device
 instance `9001`.
+
+## BACnet/IP Client ReadProperty
+
+The first ReadProperty slice is intentionally narrow:
+
+- builds minimal confirmed ReadProperty requests
+- sends ReadProperty to a BACnet/IP device
+- parses confirmed ReadProperty ACKs for character string values
+- includes public object, property, and value helper types small enough to reuse
+  later from server-side work
+
+The initial property targets are device `objectName`, `vendorName`,
+`modelName`, and `firmwareRevision`. Hardware validation read `objectName` from
+the WAGO device instance `9001`.
 
 ## Build
 

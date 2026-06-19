@@ -2,6 +2,11 @@
 
 This changelog is a curated overview.
 
+## 0.3.0
+
+- Started minimal BACnet/IP client ReadProperty support with request building
+  and narrow ACK parsing for simple character string properties.
+
 ## 0.2.0
 
 - Started GitHub Issue #4 with minimal BACnet/IP client discovery support.

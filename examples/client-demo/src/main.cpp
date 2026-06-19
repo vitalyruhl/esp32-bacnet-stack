@@ -55,7 +55,9 @@ static Ticker temperatureTicker;
 static BacnetClient bacnetClient;
 
 static const IPAddress kWhoIsDestination(192, 168, 2, 255);
+static const IPAddress kWagoAddress(192, 168, 2, 101);
 static constexpr uint32_t kWhoIsIntervalMs = 30000;
+static constexpr uint8_t kReadPropertyInvokeId = 1;
 
 static float temperature = 0.0f;
 static float dewPoint = 0.0f;
@@ -63,6 +65,8 @@ static float humidity = 0.0f;
 static float pressure = 0.0f;
 static bool bacnetStarted = false;
 static bool receivedIAmSinceLastWhoIs = true;
+static bool readPropertyRequested = false;
+static bool readPropertyReceived = false;
 static uint32_t whoIsCount = 0;
 static unsigned long lastWhoIsAt = 0;
 
@@ -258,10 +262,48 @@ static void startBacnetDiscovery() {
   sendWhoIs();
 }
 
+static void sendReadProperty(BacnetIAmDevice device) {
+  if (readPropertyRequested || device.deviceInstance != 9001) {
+    return;
+  }
+
+  Serial.print("[I] Sending BACnet ReadProperty objectName to ");
+  Serial.print(kWagoAddress);
+  Serial.print(":");
+  Serial.println(BacnetClient::kDefaultPort);
+
+  if (bacnetClient.sendReadProperty(kWagoAddress, BacnetObjectId{8, 9001},
+                                    BacnetPropertyId::ObjectName,
+                                    kReadPropertyInvokeId)) {
+    readPropertyRequested = true;
+    Serial.println("[I] BACnet ReadProperty sent");
+  } else {
+    Serial.println("[W] BACnet ReadProperty send failed");
+  }
+}
+
+static void pollReadProperty() {
+  if (!readPropertyRequested || readPropertyReceived) {
+    return;
+  }
+
+  BacnetValue value;
+  if (!bacnetClient.pollReadProperty(value, kReadPropertyInvokeId,
+                                     BacnetPropertyId::ObjectName)) {
+    return;
+  }
+
+  readPropertyReceived = true;
+  Serial.print("[I] BACnet ReadProperty objectName=");
+  Serial.println(value.text);
+}
+
 static void pollBacnetDiscovery() {
   if (!bacnetStarted) {
     return;
   }
+
+  pollReadProperty();
 
   BacnetIAmDevice device;
   if (bacnetClient.pollIAm(device)) {
@@ -275,6 +317,7 @@ static void pollBacnetDiscovery() {
     Serial.println(device.segmentationSupported);
     Serial.print("[I] Vendor ID: ");
     Serial.println(device.vendorId);
+    sendReadProperty(device);
   }
 
   if (millis() - lastWhoIsAt >= kWhoIsIntervalMs) {

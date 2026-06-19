@@ -52,6 +52,35 @@ void test_bacnet_client_rejects_non_i_am_response() {
                                                    device));
 }
 
+void test_bacnet_client_builds_read_property_request() {
+  uint8_t request[BacnetClient::kMaxReadPropertyRequestSize] = {};
+  const uint8_t expected[] = {
+      0x81, 0x0A, 0x00, 0x11, 0x01, 0x04, 0x00, 0x05, 0x01,
+      0x0C, 0x0C, 0x02, 0x00, 0x23, 0x29, 0x19, 0x4D,
+  };
+
+  TEST_ASSERT_EQUAL_UINT32(
+      sizeof(expected),
+      BacnetClient::buildReadPropertyRequest(
+          request, sizeof(request), BacnetObjectId{8, 9001},
+          BacnetPropertyId::ObjectName, 1));
+  TEST_ASSERT_EQUAL_UINT8_ARRAY(expected, request, sizeof(expected));
+}
+
+void test_bacnet_client_parses_read_property_ack() {
+  const uint8_t response[] = {
+      0x81, 0x0A, 0x00, 0x19, 0x01, 0x00, 0x30, 0x01, 0x0C,
+      0x0C, 0x02, 0x00, 0x23, 0x29, 0x19, 0x4D, 0x3E, 0x75,
+      0x05, 0x00, 0x57, 0x41, 0x47, 0x4F, 0x3F,
+  };
+  BacnetValue value;
+
+  TEST_ASSERT_TRUE(BacnetClient::parseReadPropertyAck(
+      response, sizeof(response), 1, BacnetPropertyId::ObjectName, value));
+  TEST_ASSERT_EQUAL_STRING("WAGO", value.text);
+  TEST_ASSERT_EQUAL_UINT32(4, value.textLength);
+}
+
 void test_bacnet_server_lifecycle() {
   BacnetServer server;
 
@@ -71,6 +100,8 @@ void setup() {
   RUN_TEST(test_bacnet_client_builds_who_is_request);
   RUN_TEST(test_bacnet_client_parses_i_am_response);
   RUN_TEST(test_bacnet_client_rejects_non_i_am_response);
+  RUN_TEST(test_bacnet_client_builds_read_property_request);
+  RUN_TEST(test_bacnet_client_parses_read_property_ack);
   RUN_TEST(test_bacnet_server_lifecycle);
   UNITY_END();
 }
