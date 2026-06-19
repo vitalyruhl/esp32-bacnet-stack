@@ -1,0 +1,15 @@
+.pio/
+.pioenvs/
+.piolibdeps/
+.vscode/
+.idea/
+*.code-workspace
+compile_commands.json
+.DS_Store
+Thumbs.db
+
+# Secrets
+**/secret/secrets.h
+**/secret/wifiSecret.h
+**/secrets.h
+**/wifiSecret.h

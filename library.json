@@ -1,0 +1,59 @@
+{
+  "name": "ESP32 BACnet Stack",
+  "version": "0.1.0",
+  "keywords": "esp32, bacnet, bacnet-ip, bacnet-stack, bacnet-client, bacnet-server, building-automation, bms, automation, hvac, scada, arduino, platformio",
+  "description": "ESP32 BACnet/IP stack library with client and server support for Arduino and PlatformIO projects.",
+  "license": "GPL-2.0-or-later WITH GCC-exception-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vitalyruhl/esp32-bacnet-stack.git"
+  },
+  "authors": [
+    {
+      "name": "Vitaly Ruhl",
+      "email": "info@vitaly-ruhl.de"
+    }
+  ],
+  "frameworks": [
+    "arduino"
+  ],
+  "platforms": [
+    "espressif32"
+  ],
+  "headers": [
+    "EspBacnet.h"
+  ],
+  "export": {
+    "include": [
+      "src/**",
+      "examples/**",
+      "docs/**",
+      "tools/**",
+      "README.md",
+      "LICENSE",
+      "library.json"
+    ],
+    "exclude": [
+      ".git",
+      ".git/**",
+      ".pio",
+      ".pio/**",
+      "**/.pio",
+      "**/.pio/**",
+      "**/.pioenvs",
+      "**/.pioenvs/**",
+      "**/.piolibdeps",
+      "**/.piolibdeps/**",
+      ".vscode",
+      ".vscode/**",
+      ".idea",
+      ".idea/**",
+      "*.code-workspace",
+      "src/main.cpp",
+      "**/secret/secrets.h",
+      "**/secret/wifiSecret.h",
+      "**/secrets.h",
+      "**/wifiSecret.h"
+    ]
+  }
+}
