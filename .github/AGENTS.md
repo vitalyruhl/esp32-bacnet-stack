@@ -2,9 +2,9 @@
 
 Repository guidance for contributors and coding agents.
 
-This repository is `ConfigurationsManager`, a C++/ESP32 project built with
-PlatformIO and the Arduino framework. The repository also contains a web UI and
-support tooling used by the embedded project.
+This repository is `esp32-bacnet-stack`, a C++/ESP32 BACnet/IP stack library
+project built with PlatformIO and the Arduino framework. The repository targets
+Arduino/PlatformIO library use with BACnet client and server roles.
 
 ## Mandatory Governance Load Preflight
 
@@ -97,11 +97,11 @@ reported before any further action.
 
 - Primary project configuration: `platformio.ini`.
 - Main firmware source code lives under `src/`.
-- Web UI sources and build tooling live under `webui/`.
 - Examples live under `examples/`.
 - Supporting documentation lives under `docs/` and `README.md`.
 - Tests live under `test/` when present.
 - Support scripts and repository tooling live under `tools/`.
+- Optional demo integrations may live under `examples/` when present.
 - Wokwi simulation files may live under example-specific `Wokwi/` folders.
 - Do not assume Python application release flows or a standalone backend web
   service unless the repository explicitly introduces them.
@@ -123,7 +123,8 @@ reported before any further action.
 - GitHub Issues may be used for tracked work when useful.
 - GitHub Pull Requests may be used for review and integration when useful.
 - GitHub Project usage is optional and repository-specific.
-- Current GitHub Project: `ConfigurationsManager` (#5)
+- Current GitHub Project: `ESP32 BACnet Stack` (TODO: record project number
+  after project creation)
 - When tracked workflow or project coordination is relevant, agents may use the
   configured GitHub Project.
 - Do not invent mandatory project-board updates for tasks that do not actually
@@ -157,8 +158,9 @@ reported before any further action.
 - Level A, safe: read-only actions such as search, read, and analysis may be done
   immediately.
 - Level B, normal: small, clearly scoped changes may be implemented immediately.
-- Level C, risky: changes involving settings structure, storage/NVS, OTA,
-  security, build pipelines, or large refactors require explicit confirmation.
+- Level C, risky: changes involving BACnet protocol semantics, network-facing
+  behavior, storage/NVS, OTA, security, build pipelines, or large refactors
+  require explicit confirmation.
 
 ## Repository Workflow Rules
 
@@ -289,55 +291,45 @@ reported before any further action.
 - Use major version bumps for breaking public API changes, incompatible
   storage/NVS layout changes, incompatible configuration schema changes, and
   behavior changes requiring user migration.
-- `library.json` is the canonical source of truth for the ConfigurationsManager
-  project/library version. Do not silently use `src/ConfigManager.h`,
-  `webui/package.json`, `webui/package-lock.json`, README text, changelog text,
-  or any example file as the source of truth.
+- `library.json` is the canonical source of truth for the esp32-bacnet-stack
+  project/library version. Do not silently use README text, changelog text, or
+  any example file as the source of truth.
 - All other project/library version occurrences are mirrors and must be
-  synchronized from `library.json` when the ConfigurationsManager
-  project/library version changes.
+  synchronized from `library.json` when the esp32-bacnet-stack project/library
+  version changes.
 - Before changing versions, release metadata, changelog/release notes, package
   metadata, library metadata, or files that may contain the project version,
   scan the repository for relevant version occurrences and report the candidate
   files found. The scan must include at least:
   - `library.json`
-  - `src/ConfigManager.h`
-  - `webui/package.json`
-  - `webui/package-lock.json`
-  - `examples/minimal/platformio.ini`
-  - `examples/minimal/src/main.cpp`
+  - `README.md`
   - `docs/CHANGELOG.md` or the resolved changelog path when different
   - README version badges or version mentions, when present
   - any additional files found by ripgrep containing the current or target
     version string
 - Suggested version scan commands:
-  - `rg -n "version|VERSION|CONFIG_MANAGER_VERSION|CONFIGMANAGER_VERSION|CM_VERSION" .`
+  - `rg -n "version|VERSION|ESP_BACNET_VERSION|BACNET_STACK_VERSION" .`
   - `rg -n "<current-version>|<target-version>" .`
-- The following known mirrors must carry the same ConfigurationsManager
+- The following known mirrors must carry the same esp32-bacnet-stack
   project/library version whenever the project version is changed:
   - `library.json`
-  - `src/ConfigManager.h`
-  - `webui/package.json`
-  - `webui/package-lock.json`
   - README version badges or project/library version mentions, when present
-  - minimal example version references, including
-    `examples/minimal/platformio.ini`, `examples/minimal/src/main.cpp`, and any
-    other minimal example file containing the library/app version
+  - changelog release headings or project/library version mentions, when
+    present
+  - example version references, when examples intentionally carry the
+    library/app version
 - If a required mirror path does not exist, report the missing path instead of
   silently ignoring it.
-- The minimal example is part of the library smoke/example baseline and must
-  mirror the ConfigurationsManager project/library version.
+- The client and server examples are part of the library smoke/example baseline.
+  If they gain explicit project/library version references, they must mirror the
+  esp32-bacnet-stack project/library version.
 - Other examples may have independent firmware/application versions. Do not
   automatically change them unless the issue explicitly asks for that example
   version to change. Preserve example-specific version policies and mention
   them in the report when relevant.
-- Treat the WebUI package under `webui/` as part of the repository build
-  artifact, not as an independent example firmware or app. `webui/package.json`
-  and `webui/package-lock.json` are mirrors of `library.json`.
-- `webui/package-lock.json` is generated but still must be updated
-  consistently when `webui/package.json` changes. Prefer npm tooling where
-  appropriate so the lockfile remains consistent. If npm is not run, explain how
-  `package-lock.json` was updated or why it was not updated.
+- TODO: If a Web UI or package-managed demo is added later, define whether its
+  package metadata mirrors `library.json` or has an independent version before
+  changing version files.
 - Version changes that affect the published library/package must include a
   changelog update unless the governing issue explicitly says otherwise. Before
   editing changelog/docs, follow the docs-agent rules. If the changelog location

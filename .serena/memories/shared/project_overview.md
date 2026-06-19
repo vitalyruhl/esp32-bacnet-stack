@@ -1,21 +1,22 @@
 # Project Overview
 
-- Status: verified unless marked canonical.
-- ConfigurationsManager is a C++17 Arduino/ESP32 library and example firmware built with
+- Status: verified from the current scaffold.
+- esp32-bacnet-stack is a C++17 Arduino/ESP32 BACnet/IP stack library built with
   PlatformIO.
-- Verified features include typed settings, ESP32 Preferences/NVS persistence, JSON
-  configuration, an embedded web UI, runtime values, WebSocket updates, WiFi management,
-  OTA, and optional MQTT, logging, alarm, and IO helpers.
+- The current public API direction is one `BacnetClient` role and one
+  `BacnetServer` role.
+- BACnet/IP is the first implementation target. BACnet MS/TP is planned later.
+- ESP32 Configuration Manager is not a core dependency and may only appear later
+  in explicitly optional demo examples.
 - `library.json` is the canonical package/library metadata and version source.
 - Main areas:
-  - `src/`: library source and checked-in embedded WebUI output.
+  - `src/`: library source plus an export-excluded root build smoke sketch.
   - `examples/`: standalone PlatformIO example applications.
-  - `webui/`: Vue 3 WebUI sources and npm tooling.
   - `docs/`: user and contributor documentation.
-  - `test/`: PlatformIO tests.
-  - `tools/`: build, validation, WebUI embedding, and release helpers.
-- `README.md` is the public entry point. `.github/AGENTS.md` is canonical agent governance.
-- Serena project indexing is configured for `cpp`.
+  - `test/`: PlatformIO Unity tests.
+  - `tools/`: repository tooling when present.
+- `README.md` is the public entry point. `.github/AGENTS.md` is canonical agent
+  governance.
 
-Sources: `README.md`, `library.json`, `platformio.ini`, `src/ConfigManager.h`,
-`webui/package.json`, `.serena/project.yml`.
+Sources: `README.md`, `library.json`, `platformio.ini`, `src/EspBacnet.h`,
+`.serena/project.yml`.

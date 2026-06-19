@@ -1,108 +1,75 @@
 # Contributing Guidelines
 
-These guidelines define how to work in this repository. The project targets ESP32 / PlatformIO and uses modern C++17.
+These guidelines define how to work in this repository. The project targets
+ESP32, PlatformIO, Arduino, and C++17.
 
 ## 1. Where things live
 
-- **Documentation:** `docs/`
-- **Review reports (generated):** `review/`
-- **Tests:** `test/`
-- **Tools / helper scripts:** `tools/`
-- **GitHub files:** `.github/`
-- Keep the repo root clean (only essential project files like `README.md`, `library.json`, etc.)
-
-Recommended docs files:
-- `docs/NAMING.md` – API naming rules (authoritative)
-- `docs/CONTRIBUTING.md` – this document
-- `docs/TODO.md` – project tracking
+- Documentation: `docs/`
+- Tests: `test/`
+- Examples: `examples/`
+- Tools and helper scripts: `tools/`
+- GitHub files: `.github/`
+- Keep the repository root limited to essential project files.
 
 ## 2. Branching model
 
-- `main`: published / released branch (do **not** develop directly here)
-- `release/v4.0.0`: runnable snapshot branch (must always build/run)
-- `feature/*`: work-in-progress branches (may be unfinished/broken)
+- `main`: published or released branch. Do not develop directly here.
+- `release/*`: runnable snapshot branches when they exist.
+- `feature/*`: work-in-progress branches.
 - Suggested naming:
   - `feature/<short-topic>`
   - `fix/<short-topic>`
   - `chore/<short-topic>`
   - `docs/<short-topic>`
 
-## 3. Code style (hard rules)
+## 3. Code style
 
-- All code comments **English only**
-- Clear, descriptive names (**English only**)
-- All log/error messages **English only**
-- **No emojis** in code/comments/log output. Use short severity tags: `[I]` for Info, `[W]` for Warning, `[E]` for Error, `[D]` for Debug, `[T]` for Trace.
-- Prefer C++17 features where appropriate
-- Prefer RAII + smart pointers
-- Avoid `std::function` in hot paths / ISR contexts
+- Code comments, identifiers, and log/error messages must be English.
+- Do not use emojis in code, comments, logs, or generated outputs.
+- Use short ASCII severity tags in logs: `[I]`, `[W]`, `[E]`, `[D]`, `[T]`.
+- Prefer C++17 features where they keep the code clear.
+- Keep hardware-facing behavior conservative and easy to verify.
 
-## 4. String handling (ESP32 / C++17)
+## 4. Public API direction
 
-- Prefer `std::string_view` for read-only parameters (logging, lookups, parsing)
-- Use `std::string` when ownership/mutation is needed
-- Never store `std::string_view` in members/containers unless lifetime is guaranteed
-- Do not assume `string_view::data()` is null-terminated
+- The core public roles are `BacnetClient` and `BacnetServer`.
+- Avoid adding duplicate public role names for the same concept.
+- Before any API rename, search all references and update source, examples,
+  docs, and tests together.
+- The project is not yet public, so early API cleanup may be direct, but it
+  still needs full reference checks.
 
-## 5. Time handling
+## 5. Documentation requirements
 
-- Use `<chrono>` for durations/timeouts/intervals (unit safety)
-- Treat `millis()` / `micros()` as raw clocks; convert to `std::chrono::duration` early
-- Use wrap-safe comparisons (`now - last >= interval`)
+- Document implemented behavior only.
+- Keep PlatformIO commands aligned with `platformio.ini`.
+- Mention upload and monitor commands separately from default validation because
+  they interact with local hardware.
+- Keep BACnet/IP and future BACnet MS/TP status clear.
 
-## 6. Naming convention (API)
+## 6. Testing and build validation
 
-The authoritative naming rules live in `docs/NAMING.md`.
+- Default root build: `pio run -e usb`
+- Compile-only tests: `pio test -e usb --without-uploading --without-testing`
+- Client demo build: `pio run -d examples/client-demo -e usb`
+- Server demo build: `pio run -d examples/server-demo -e usb`
 
-When changing public API names:
-- If the library is **not yet published**, renames can be done directly (no deprecation required).
-- Always update **all** call sites:
-  - source code
-  - examples
-  - docs tables / snippets
-  - tests
-- Do not introduce synonyms (`State` vs `Status`, `Analog` vs `Adc`, etc.). Pick one concept name and use it everywhere.
+## 7. Dependency maintenance
 
-## 7. Documentation requirements
+- GitHub Actions updates are managed by Dependabot.
+- PlatformIO dependency updates are manual unless GitHub Dependabot adds an
+  official PlatformIO ecosystem later.
 
-- Every `docs/*.md` must contain a **single** `## Method overview` section with a table:
-  | Method | Overloads / Variants | Description | Notes |
-- Overloads and variants must be listed explicitly (one per line using `<br>`).
-- Keep descriptions short, factual, and consistent.
+## 8. Git workflow etiquette
 
-## 8. Review artifacts (generated)
+- Prefer small, reviewable commits.
+- Do not stage, commit, push, merge, rebase, reset, clean, stash, or switch
+  branches unless explicitly requested by the current task or workflow.
+- Before rename or delete operations, search references and update them.
 
-Automation may generate:
-- `review/unused.deprecated.md`
-- `review/unused.undocumented.md`
-- `review/naming.inconsistencies.md`
-- (optional) `review/rename.plan.md`
+## 9. CI and merge policy
 
-These files help decide what to keep, document, demonstrate in examples, or remove later.
-
-## 9. Testing / build validation
-
-- Default target for flashing/testing is typically `examples/Full-GUI-Demo` unless specified otherwise.
-- Before merging into `release/*` or `main`:
-  - Run at least one PlatformIO build: `pio run -e <env>`
-  - If tests are affected: `pio test -e <env>`
-
-## 10. Git workflow etiquette
-
-- Prefer small, reviewable commits
-- Do not stage/commit/push unless explicitly requested in the current task context
-- Before rename/delete:
-  - Search references and update them
-  - Ensure builds still pass
-
-## 11. CI / merge policy
-
-- All configured CI checks must pass before merging to `main`
-- No exceptions for failed CI
-- Keep `README.md` and `docs/TODO.md` current when usage/behavior changes
-
-## Method overview
-
-| Method | Overloads / Variants | Description | Notes |
-|---|---|---|---|
-| _none_ | - | Contribution guide only; no runtime API methods are defined here. | Policy/reference document. |
+- All configured CI checks must pass before merging to `main`.
+- Do not add deployment or publishing steps to CI unless explicitly requested.
+- Keep `README.md` and `docs/` aligned when usage or behavior changes.

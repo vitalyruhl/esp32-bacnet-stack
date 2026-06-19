@@ -37,8 +37,9 @@ Use this agent for:
 - Preserve external behavior unless the user explicitly asks for behavior change.
 - Keep changes small and coherent.
 - Do not mix unrelated refactors into functional fixes.
-- Do not change settings storage, NVS layout, OTA behavior, security-sensitive
-  behavior, or build pipelines without explicit confirmation.
+- Do not change BACnet protocol semantics, network-facing behavior, storage/NVS
+  layout, OTA behavior, security-sensitive behavior, or build pipelines without
+  explicit confirmation.
 - Keep hardware-facing changes conservative and easy to verify.
 
 ## Branch And Workflow:
@@ -66,25 +67,22 @@ Use this agent for:
   notes, package metadata, library metadata, or files that may contain the
   project version, run and report a version scan before editing. Include at
   least these commands or stricter equivalents:
-  - `rg -n "version|VERSION|CONFIG_MANAGER_VERSION|CONFIGMANAGER_VERSION|CM_VERSION" .`
+  - `rg -n "version|VERSION|ESP_BACNET_VERSION|BACNET_STACK_VERSION" .`
   - `rg -n "<current-version>|<target-version>" .`
 - Treat `library.json` as the only canonical source of truth for the
-  ConfigurationsManager project/library version. `src/ConfigManager.h`,
-  `webui/package.json`, `webui/package-lock.json`, README text, changelog text,
-  and example files are mirrors or independent app versions, not sources of
-  truth.
+  esp32-bacnet-stack project/library version. README text, changelog text, and
+  example files are mirrors or independent app versions, not sources of truth.
 - When the project/library version changes, synchronize the known mirror paths:
-  `library.json`, `src/ConfigManager.h`, `webui/package.json`,
-  `webui/package-lock.json`, README version badges or project/library version
-  mentions, `examples/minimal/platformio.ini`, `examples/minimal/src/main.cpp`,
-  and any other minimal example file containing the library/app version. Report
-  any missing listed path.
-- Keep the minimal example aligned with the ConfigurationsManager
-  project/library version. Do not automatically change other examples'
-  firmware/application versions unless the issue explicitly asks for it.
-- Prefer npm tooling for WebUI package version changes so
-  `webui/package-lock.json` remains consistent. If npm is not run, explain how
-  the lockfile was updated or why it was not updated.
+  `library.json`, README version badges or project/library version mentions,
+  changelog release headings or project/library version mentions, and any
+  example file containing the library/app version. Report any missing listed
+  path.
+- Keep client and server example version references aligned with the
+  esp32-bacnet-stack project/library version if such references are added. Do
+  not automatically change other examples' firmware/application versions unless
+  the issue explicitly asks for it.
+- TODO: If a Web UI or package-managed demo is added later, define package
+  version mirror rules before changing its metadata.
 - If version mirrors disagree before work starts, report the mismatch before
   changing version-related files. If the target version is unclear, stop and ask
   for clarification instead of guessing.
@@ -125,9 +123,9 @@ Use this agent for:
   validation.
 - Docker or image builds are not required unless configured in this repository
   or explicitly in scope.
-- If OTA-specific behavior or upload configuration changes, validate the relevant
-  PlatformIO environment as far as safely possible without assuming device
-  availability.
+- If OTA-specific behavior, upload configuration, or BACnet network behavior
+  changes, validate the relevant PlatformIO environment as far as safely
+  possible without assuming device availability.
 - Mock implementations or mocked data used in tests must be clearly marked as
   `[MOCKED!]`.
 - If validation cannot be run, report the reason plainly.

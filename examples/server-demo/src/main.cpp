@@ -3,12 +3,12 @@
 #include <Arduino.h>
 #include <EspBacnet.h>
 
-BacnetClient bacnetClient;
+BacnetServer bacnetServer;
 
 void setup() {
   Serial.begin(115200);
-  bacnetClient.begin();
-  Serial.println("[I] BACnet client demo started");
+  bacnetServer.begin(1234);
+  Serial.println("[I] BACnet server demo started");
 }
 
 void loop() {

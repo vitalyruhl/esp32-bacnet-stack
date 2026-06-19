@@ -5,6 +5,15 @@
 .idea/
 *.code-workspace
 compile_commands.json
+.serena/project.local.yml
+.serena/compile_commands.json
+.serena/cache/
+.serena/logs/
+.serena/index/
+.serena/memories/local/
+.serena/memories/tmp/
+.serena/memories/local_*.md
+.serena/memories/tmp_*.md
 .DS_Store
 Thumbs.db
 

@@ -100,8 +100,6 @@ ignored_paths:
 - "examples/**/node_modules/**"
 - "examples/**/src/secret/**"
 - "libdeps/**"
-- "webui/dist/**"
-- "webui/node_modules/**"
 - ".serena/cache/**"
 - ".serena/logs/**"
 - ".serena/index/**"

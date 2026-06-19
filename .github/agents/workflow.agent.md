@@ -211,13 +211,11 @@ If using ripgrep to inspect governance, the agent MUST use `--hidden`, for examp
 - Before changing versions, search for version declarations and report the
   candidate files found.
 - If multiple version declarations exist, report them before changing versions.
-- Treat the ConfigurationsManager package/library version as the main project
-  version.
-- Treat the WebUI package under `webui/` as part of the repository build
-  artifact, not as an independent example firmware or app.
-- When WebUI npm dependencies, WebUI build metadata, or WebUI package metadata
-  change, align the WebUI package version with the ConfigurationsManager
-  package/library version.
+- Treat the esp32-bacnet-stack package/library version in `library.json` as the
+  main project version.
+- TODO: If a Web UI or package-managed demo is added later, define whether its
+  package metadata mirrors `library.json` or has an independent version before
+  changing it.
 - Bump an example firmware or app version only when that example itself is
   intentionally changed or released.
 - If the version source of truth is unclear, stop and report candidate files

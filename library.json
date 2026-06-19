@@ -23,6 +23,9 @@
   "headers": [
     "EspBacnet.h"
   ],
+  "build": {
+    "srcFilter": "+<*> -<main.cpp>"
+  },
   "export": {
     "include": [
       "src/**",
