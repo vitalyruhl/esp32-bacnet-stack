@@ -40,6 +40,9 @@ shaped. It is intended to become public around the first usable release.
 | `test/` | PlatformIO Unity tests |
 | `docs/` | Project documentation |
 
+Repository setup notes are tracked in
+[docs/repository-settings.md](docs/repository-settings.md).
+
 ## Minimal Use
 
 ```cpp

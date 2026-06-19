@@ -73,3 +73,5 @@ ESP32, PlatformIO, Arduino, and C++17.
 - All configured CI checks must pass before merging to `main`.
 - Do not add deployment or publishing steps to CI unless explicitly requested.
 - Keep `README.md` and `docs/` aligned when usage or behavior changes.
+- Keep [repository settings](repository-settings.md) updated when GitHub
+  security, project, or branch-protection settings change.

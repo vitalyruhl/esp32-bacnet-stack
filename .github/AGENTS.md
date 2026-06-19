@@ -123,8 +123,7 @@ reported before any further action.
 - GitHub Issues may be used for tracked work when useful.
 - GitHub Pull Requests may be used for review and integration when useful.
 - GitHub Project usage is optional and repository-specific.
-- Current GitHub Project: `ESP32 BACnet Stack` (TODO: record project number
-  after project creation)
+- Current GitHub Project: `ESP32 BACnet Stack` (#6)
 - When tracked workflow or project coordination is relevant, agents may use the
   configured GitHub Project.
 - Do not invent mandatory project-board updates for tasks that do not actually
