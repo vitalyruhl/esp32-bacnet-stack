@@ -22,3 +22,6 @@ Thumbs.db
 **/secret/wifiSecret.h
 **/secrets.h
 **/wifiSecret.h
+
+# extra
+all-agents-combined.md

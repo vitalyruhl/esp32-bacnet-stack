@@ -5,34 +5,31 @@ repository-specific governance.
 
 ## Canonical Governance
 
-- `.github/AGENTS.md` is the canonical repository governance file.
+- `.github/AGENTS.md` is canonical.
 - Before repository work, read `.github/AGENTS.md` and the applicable
-  `.github/agents/*.agent.md` file directly.
-- Do not rely on repository-wide search to discover governance files; read known
-  governance paths directly.
+  `.github/agents/*.agent.md` directly by known path.
 - If this file conflicts with `.github/AGENTS.md`, follow `.github/AGENTS.md`.
-- Defer to `.github/AGENTS.md` for repository workflow, branch, pull request,
-  merge, release, validation, version, tool, and agent-routing rules.
+- Defer all workflow, branch, PR, merge, release, validation, version, tool, and
+  routing rules to `.github/AGENTS.md`.
 
 ## Communication
 
 - Use informal German ("du") in normal chat with the user.
-- Keep user-facing summaries brief unless detailed explanation is requested.
-- Repository artifacts, code comments, commit messages, issue text, pull request
-  text, and generated governance text follow the language rules in
-  `.github/AGENTS.md`.
+- Keep user-facing summaries brief unless detail is requested.
+- Repository artifacts, code comments, commits, issues, PRs, and generated
+  governance text follow `.github/AGENTS.md`.
 
 ## Safety Baseline
 
-- User changes are sacred. Never revert or overwrite user edits without explicit
+- User changes are sacred; never revert or overwrite them without explicit
   request.
 - Do not stage, commit, push, merge, rebase, reset, clean, stash, switch
-  branches, or update release branches unless the user explicitly requests it or
-  a named workflow in `.github/AGENTS.md` requires it.
-- Do not work directly on `main` or `master` except for the narrow exceptions
-  defined in `.github/AGENTS.md`.
-- Do not run upload, monitor, destructive, or hardware/network-affecting
-  commands unless explicitly requested.
+  branches, delete files, or update release branches unless explicitly requested
+  or required by a named workflow in `.github/AGENTS.md`.
+- Do not work directly on `main` or `master` except for the documented
+  docs-only TODO exception in `.github/AGENTS.md`.
+- Do not run upload, monitor, destructive, hardware-affecting, or
+  network-affecting commands unless explicitly requested.
 
 ## Final Rule
 

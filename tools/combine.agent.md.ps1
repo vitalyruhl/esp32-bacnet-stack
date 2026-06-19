@@ -6,8 +6,10 @@ $outputPath = Join-Path $repoRoot "all-agents-combined.md"
 $governanceFiles = @(
     "AGENTS.md"
     ".github/AGENTS.md"
+    ".github/agents/project.agent.md"
     ".github/agents/control-plane.agent.md"
     ".github/agents/docs.agent.md"
+    ".github/agents/plan.agent.md"
     ".github/agents/refactor.agent.md"
     ".github/agents/workflow.agent.md"
 )

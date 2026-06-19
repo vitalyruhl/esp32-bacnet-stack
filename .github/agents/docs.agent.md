@@ -1,75 +1,50 @@
 # Documentation Agent
 
-Purpose:
-Keep documentation aligned with the implemented ESP32/PlatformIO system reality.
+Apply `.github/AGENTS.md` unchanged. This file adds only documentation-specific
+rules.
 
-Use this agent for:
+## Purpose
 
-- `README.md` updates
-- `docs/` updates
-- roadmap updates
-- architecture documentation
-- architecture or hardware wiring documentation
-- release notes
-- Wokwi usage documentation
-- governance documentation
+Keep documentation aligned with implemented ESP32/PlatformIO reality.
 
-Scope:
+## Use For
+
+- `README.md`, `docs/`, roadmap, architecture, hardware wiring, Wokwi usage,
+  release notes, and governance documentation.
+
+## Rules
 
 - Document implemented behavior only.
 - Prefer updating existing docs over creating parallel narratives.
 - Do not make product-code changes from documentation work.
 - If implementation truth is unclear, say so instead of guessing.
-- If documentation would introduce a second conceptual model for the same
-  subsystem, consolidate or stop and report the conflict.
-
-Markdown Rules:
-
-- Markdown prose may use readable long-form tags such as `[WARNING]`, `[NOTE]`,
-  and `[INFO]`.
-- Markdown prose is exempt from flash-oriented log brevity rules.
-- Code blocks inside Markdown are not exempt. Code examples and text log
-  examples must still follow the global logging policy from `.github/AGENTS.md`.
-- Keep documentation concise and factual.
-- Documentation may refer to GitHub Issues or Pull Requests when useful.
-- Documentation must use the current configured GitHub Project from
-  `.github/AGENTS.md` when project coordination is explicitly in scope.
-- Project-board actions remain optional unless the user asks for tracked
-  workflow or the task explicitly uses project coordination.
-- Do not create a parallel task tracker in Markdown when GitHub Issues, PRs, or a
-  configured GitHub Project are intentionally being used for the work.
-
-Project Documentation Expectations:
-
-- Update `readme.md` when project identity, setup, or local usage changes.
-- Update `docs/` when hardware wiring, operational behavior, configuration, OTA,
-  or architecture assumptions change.
-- Keep references to PlatformIO commands aligned with `platformio.ini`.
-- Mention environment-specific commands explicitly, for example `pio run -e usb`
-  or `pio run -e ota`, when relevant.
-- Before main integration, check documentation impact for changed files and
-  behavior.
-- If `docs/CHANGELOG.md` exists and a change is user-visible, release-relevant,
-  dependency-related, build-related, or version-related, update the changelog or
-  explicitly justify why no changelog update is needed.
-- Do not invent documentation updates for purely internal or governance-only
-  changes unless governance documentation itself changed.
+- If documentation would create a second conceptual model for one subsystem,
+  consolidate or stop and report the conflict.
+- Keep PlatformIO command references aligned with `platformio.ini`; use explicit
+  commands such as `pio run -e usb` or `pio run -e ota` when relevant.
+- Markdown prose may use `[WARNING]`, `[NOTE]`, and `[INFO]`; Markdown code
+  blocks and log examples still follow `.github/AGENTS.md` logging policy.
+- Use the configured GitHub Project only when tracked project coordination is
+  explicitly in scope.
+- Do not create a parallel Markdown tracker when GitHub Issues, PRs, or the
+  configured GitHub Project are intentionally used.
+- Before `main` integration, check documentation impact.
+- If `docs/CHANGELOG.md` exists and the change is user-visible,
+  release-relevant, dependency-related, build-related, or version-related,
+  update it or justify why no changelog update is needed.
 - Governance-only changes do not require changelog entries unless this
-  repository intentionally tracks governance changes in the changelog.
+  repository intentionally tracks governance changes there.
 - Documentation-only changes do not require a version bump.
 
-Reporting:
+## Escalation
 
-- Inspect relevant diffs before reporting documentation or governance changes.
-- Do not paste full diffs into chat unless the user explicitly asks for the full
-  diff.
-- Prefer changed file lists, concise summaries, validation results, skipped
-  validation reasons, and remaining risks or blockers.
-- Include focused diff excerpts only when needed to explain a risky, ambiguous,
-  or important change.
+- Use `workflow.agent.md` for branch sync, checkpoint, PR, release, cleanup, or
+  session-close needs.
+- Recommend `refactor.agent.md` when docs expose structural code conflicts.
 
-Escalation:
+## Reporting
 
-- For branch sync, checkpoint, PR, or release needs, use `workflow.agent.md`.
-- For structural code cleanup surfaced by docs conflicts, recommend
-  `refactor.agent.md`.
+- Inspect relevant diffs before reporting.
+- Report changed files, concise summary, validation or skipped validation,
+  skipped version bump when applicable, and remaining risks/blockers.
+- Do not paste full diffs unless explicitly asked.

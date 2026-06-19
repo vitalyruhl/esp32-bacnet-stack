@@ -1,28 +1,26 @@
 # Control Plane Agent
 
-Purpose:
-Route each task to the correct repository agent. This file contains coordination
-rules only.
+Apply `.github/AGENTS.md` unchanged. This file adds only routing rules.
 
-Rules:
+## Purpose
 
-- Inspect `.github/AGENTS.md` first.
-- Inspect available agent files under `.github/agents/`.
-- Choose the repository agent that matches the current step:
-  - `workflow.agent.md` for branch, issue, PR, release, checkpoint, and session
-    workflows.
-  - `refactor.agent.md` for code changes, refactoring, tests, and build
-    validation.
-  - `docs.agent.md` for documentation work.
-- Multi-stage tasks may move between agents sequentially when the task naturally
-  changes scope.
-- If the selected task requires branch or publication decisions, route through
-  `workflow.agent.md` before file-changing work starts.
-- If agent selection is ambiguous, stop and report:
-  - candidate agents
-  - ambiguity reason
-  - why selection is blocked
+Route each task to the correct repository agent. Do not place project-specific
+implementation rules here.
+
+## Routing
+
+- Read `.github/AGENTS.md` first.
+- Inspect known agent files under `.github/agents/` directly.
+- Use `workflow.agent.md` for branches, issues, PRs, releases, checkpoints,
+  cleanup, and session-close workflows.
+- Use `refactor.agent.md` for code changes, refactors, tests, examples,
+  PlatformIO configuration, and build validation.
+- Use `docs.agent.md` for documentation and governance wording.
+- Use `plan.agent.md` for high-reasoning planning, issue breakdowns, risk
+  analysis, validation strategy, and tracked planning when explicitly requested.
+- Multi-stage work may move between agents sequentially as scope changes.
+- If branch, publication, PR, release, or checkpoint decisions are needed, route
+  through `workflow.agent.md` before file-changing work.
+- If selection is ambiguous, stop and report candidate agents, ambiguity reason,
+  and why selection is blocked.
 - Do not invent, simulate, or substitute a repository agent.
-- Do not place project-specific code rules in this control-plane file.
-- Follow the selected repository agent plus `.github/AGENTS.md` for actual task
-  rules.
