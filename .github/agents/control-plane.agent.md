@@ -1,6 +1,7 @@
 # Control Plane Agent
 
-Apply `.github/AGENTS.md` unchanged. This file adds only routing rules.
+Apply `.github/AGENTS.md` and `.github/agents/project.agent.md` unchanged.
+This file adds only routing rules.
 
 ## Purpose
 
@@ -10,9 +11,10 @@ implementation rules here.
 ## Routing
 
 - Read `.github/AGENTS.md` first.
+- Read `.github/agents/project.agent.md` as mandatory project context.
 - Inspect known agent files under `.github/agents/` directly.
-- Use `workflow.agent.md` for branches, issues, PRs, releases, checkpoints,
-  cleanup, and session-close workflows.
+- Use `workflow.agent.md` for branches, general issues, PRs, releases,
+  checkpoints, cleanup, and session-close workflows.
 - Use `refactor.agent.md` for code changes, refactors, tests, examples,
   PlatformIO configuration, and build validation.
 - Use `docs.agent.md` for documentation and governance wording.

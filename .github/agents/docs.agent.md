@@ -1,16 +1,16 @@
 # Documentation Agent
 
-Apply `.github/AGENTS.md` unchanged. This file adds only documentation-specific
-rules.
+Apply `.github/AGENTS.md` and `.github/agents/project.agent.md` unchanged.
+This file adds only documentation-specific rules.
 
 ## Purpose
 
-Keep documentation aligned with implemented ESP32/PlatformIO reality.
+Keep documentation aligned with implemented project reality.
 
 ## Use For
 
-- `README.md`, `docs/`, roadmap, architecture, hardware wiring, Wokwi usage,
-  release notes, and governance documentation.
+- Project-profile documentation paths, roadmap, architecture, hardware wiring,
+  simulation usage, release notes, and governance documentation.
 
 ## Rules
 
@@ -20,16 +20,16 @@ Keep documentation aligned with implemented ESP32/PlatformIO reality.
 - If implementation truth is unclear, say so instead of guessing.
 - If documentation would create a second conceptual model for one subsystem,
   consolidate or stop and report the conflict.
-- Keep PlatformIO command references aligned with `platformio.ini`; use explicit
-  commands such as `pio run -e usb` or `pio run -e ota` when relevant.
+- Keep PlatformIO command references aligned with the project profile and
+  repository configuration.
 - Markdown prose may use `[WARNING]`, `[NOTE]`, and `[INFO]`; Markdown code
   blocks and log examples still follow `.github/AGENTS.md` logging policy.
-- Use the configured GitHub Project only when tracked project coordination is
-  explicitly in scope.
+- Use the project-profile GitHub Project only when tracked project coordination
+  is explicitly in scope.
 - Do not create a parallel Markdown tracker when GitHub Issues, PRs, or the
   configured GitHub Project are intentionally used.
 - Before `main` integration, check documentation impact.
-- If `docs/CHANGELOG.md` exists and the change is user-visible,
+- If the project-profile changelog path exists and the change is user-visible,
   release-relevant, dependency-related, build-related, or version-related,
   update it or justify why no changelog update is needed.
 - Governance-only changes do not require changelog entries unless this

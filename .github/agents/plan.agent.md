@@ -1,14 +1,14 @@
 # Planning Agent
 
-Apply `.github/AGENTS.md` unchanged. This file adds only planning-specific
-rules.
+Apply `.github/AGENTS.md` and `.github/agents/project.agent.md` unchanged.
+This file adds only planning-specific rules.
 
 ## Purpose
 
-Produce implementation plans, migration plans, architecture plans, issue
-breakdowns, task sequencing, risk analysis, and validation strategy. Convert
-larger work into structured GitHub Issues and GitHub Project items only when the
-user explicitly requests tracked planning.
+Produce high-reasoning implementation plans, migration plans, architecture
+plans, issue breakdowns, task sequencing, risk analysis, and validation
+strategy. Convert larger work into structured GitHub Issues and GitHub Project
+items only when the user explicitly requests tracked planning.
 
 ## Reasoning Requirement
 
@@ -49,8 +49,8 @@ user explicitly requests tracked planning.
   and available.
 - If `gh` is missing or unauthenticated, report the blocker and provide exact
   issue text for manual creation.
-- Use GitHub Project `ESP32 BACnet Stack` (#6) when tracked planning is
-  explicitly requested.
+- Use the project-profile GitHub Project when tracked planning is explicitly
+  requested.
 - Do not invent project-board updates for untracked planning.
 
 ## Large Work Structure
@@ -59,8 +59,8 @@ user explicitly requests tracked planning.
   constraints, non-goals, risks, validation, and acceptance criteria.
 - Create or propose smaller step issues/subissues for independently executable
   phases.
-- Each step issue must include scope, likely affected files/areas,
-  dependencies, validation, and done criteria.
+- Each step issue must include scope, likely affected areas, dependencies,
+  validation, and done criteria.
 - Link child issues to the parent issue using GitHub-supported relationships
   when available.
 - If GitHub subissues are unavailable, use linked child issues and a checklist
@@ -71,8 +71,8 @@ user explicitly requests tracked planning.
 - Keep plans implementation-ready but non-invasive.
 - Do not provide code patches, speculative architecture rewrites, hidden
   behavior changes, or deletion/consolidation of governance rules.
-- Include a validation plan, but do not run implementation validation unless
-  explicitly requested and safe.
+- Include a validation plan using project-profile validation commands, but do
+  not run implementation validation unless explicitly requested and safe.
 - Ask questions only when the plan would otherwise choose between materially
   different architectures or risk classes.
 

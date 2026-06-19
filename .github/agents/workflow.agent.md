@@ -1,8 +1,8 @@
 # Workflow Agent
 
-Apply `.github/AGENTS.md` unchanged. This file adds only workflow-specific
-rules for branches, issues, PRs, checkpoints, releases, cleanup, and
-session-close handling.
+Apply `.github/AGENTS.md` and `.github/agents/project.agent.md` unchanged.
+This file adds only workflow-specific rules for branches, general issues, PRs,
+checkpoints, releases, cleanup, and session-close handling.
 
 ## Branch Model
 
@@ -11,14 +11,14 @@ session-close handling.
 - Do not change `main` directly.
 - If active branch is `main` or `master` and file-changing work is requested,
   stop before editing and create/select a side branch.
-- Only exception: an explicitly requested docs-only TODO update under
-  `docs/TODO.md` or `docs/todo_*.md`.
+- Only exception: an explicitly requested docs-only TODO update under the
+  project-profile TODO documentation paths.
 - Direct pushes to `main` are forbidden unless explicitly requested.
 - Fast-forward integration to `main` is allowed only when explicitly requested
   as fast-forward or `ff`.
 - `feature/*` branches are work-in-progress and may be unfinished or broken.
-- `release/*` branches are runnable snapshots, versioned by release such as
-  `release/v0.1.0`, and must stay buildable/runnable.
+- `release/*` branches are runnable snapshots and must stay buildable/runnable.
+- Use the project-profile release branch example when an example is needed.
 - Before the first release, `release/*` branches are optional.
 - Do not assume a release branch exists. Missing release branches do not block
   normal PR-based `main` integration unless release sync is explicitly in scope.
@@ -70,33 +70,29 @@ session-close handling.
 - If branch protection blocks merge, report the blocker and do not bypass it.
 - GitHub Issues, PRs, and comments created by agents follow the English language
   policy in `.github/AGENTS.md`.
-- Use GitHub Issues, PRs, and the configured GitHub Project only when tracked
-  workflow or project coordination is explicitly in scope.
+- Use GitHub Issues, PRs, and the project-profile GitHub Project only when
+  tracked workflow or project coordination is explicitly in scope.
+- `workflow.agent.md` owns branches, PRs, merges, releases, checkpoints,
+  cleanup, and general issue workflow.
+- `plan.agent.md` owns planning-only issue breakdowns and tracked planning when
+  explicitly requested.
 
 ## Validation And Docs
 
 - Use configured/enabled GitHub Actions or checks when present; do not invent CI.
-- Default PlatformIO build:
-  - `pio run -e usb`
-- Affected client example:
-  - `pio run -d examples/client-demo -e usb`
-- Affected server example:
-  - `pio run -d examples/server-demo -e usb`
-- Affected tests:
-  - `pio test -e usb --without-uploading --without-testing`
-- Explicitly relevant OTA:
-  - `pio run -e ota`
+- Use project-profile PlatformIO validation commands for root builds, affected
+  examples, affected tests, and explicitly relevant OTA work.
 - Upload and serial monitor commands require explicit user request.
 - If only Markdown/governance files changed, skip PlatformIO unless requested.
 - Before `workflow.toMain`, check documentation impact.
 - If docs are affected, route through `docs.agent.md`.
-- If `docs/CHANGELOG.md` exists and the change is user-visible,
+- If the project-profile changelog path exists and the change is user-visible,
   release-relevant, dependency-related, build-related, or version-related,
   update it or justify no update.
 - Governance-only changes do not require changelog entries unless intentionally
   tracked there.
 - Documentation-only and governance-only changes do not require a version bump.
-- GitHub Actions-only Dependabot updates do not require a `library.json` bump
+- GitHub Actions-only Dependabot updates do not require a project version bump
   unless they change produced library output, firmware build output, supported
   PlatformIO environments, or release artifact behavior.
 
@@ -110,7 +106,7 @@ session-close handling.
 - If fast-forward is impossible, ask before force-pushing; prefer
   `--force-with-lease` if approved.
 - Do not invent non-PlatformIO release steps.
-- Version bumps follow `.github/AGENTS.md`.
+- Version bumps follow `.github/AGENTS.md` and the project profile.
 
 ## Shortcuts
 

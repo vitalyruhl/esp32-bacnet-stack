@@ -5,12 +5,14 @@ repository-specific governance.
 
 ## Canonical Governance
 
-- `.github/AGENTS.md` is canonical.
-- Before repository work, read `.github/AGENTS.md` and the applicable
+- `.github/AGENTS.md` is canonical generic governance.
+- `.github/agents/project.agent.md` is mandatory project-specific context.
+- Before repository work, read `.github/AGENTS.md`,
+  `.github/agents/project.agent.md`, and the selected
   `.github/agents/*.agent.md` directly by known path.
 - If this file conflicts with `.github/AGENTS.md`, follow `.github/AGENTS.md`.
-- Defer all workflow, branch, PR, merge, release, validation, version, tool, and
-  routing rules to `.github/AGENTS.md`.
+- Defer workflow, branch, PR, merge, release, validation, version, tool, and
+  routing rules to `.github/AGENTS.md` plus the project profile.
 
 ## Communication
 

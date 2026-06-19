@@ -1,19 +1,23 @@
 # AGENTS.md
 
-Canonical governance for `esp32-bacnet-stack`, a C++ ESP32 BACnet/IP stack
-library built with PlatformIO and the Arduino framework.
+Canonical reusable governance for ESP32/C++/PlatformIO Arduino-library
+repositories. Project-specific facts live only in
+`.github/agents/project.agent.md`.
 
 ## Mandatory Governance Load
 
 - Before any agent command, workflow shortcut, branch action, validation, file
   edit, commit, push, pull request, merge, release update, cleanup, or GitHub
-  tracking action, read:
+  tracking action, read these known paths directly:
   - `.github/AGENTS.md`
+  - `.github/agents/project.agent.md`
   - `.github/agents/<selected-agent>.agent.md`
 - For workflow shortcuts, the selected agent is
   `.github/agents/workflow.agent.md`.
-- Read known governance paths directly. Do not rely on repository-wide search
-  to discover governance because `.github/` may be hidden.
+- `project.agent.md` is mandatory context for all agents and does not replace
+  the selected agent file.
+- Do not rely on repository-wide search to discover governance because
+  `.github/` may be hidden.
 - Governance searches MUST include hidden paths:
   - `rg --hidden -n "workflow\.begin|workflow\.audit|workflow\.toMain|workflow\.cleanBranches" .`
   - `fd --hidden "AGENTS|agent\.md|workflow\.agent\.md" .`
@@ -38,55 +42,49 @@ library built with PlatformIO and the Arduino framework.
   repository state. Ask if normalization changes scope.
 - Example: `gevernance-sharpenes` may derive `governance-sharpening`.
 
-## Repository Scope
+## Project Profile
 
-- Primary configuration: `platformio.ini`.
-- Canonical library metadata and version source: `library.json`.
-- Main library code: `src/`.
-- Public headers: `include/` when present.
-- Internal libraries: `lib/` when present.
-- Examples: `examples/`, including `client-demo` and `server-demo`.
-- Documentation: `README.md` and `docs/`.
-- Tests: `test/` when present.
-- Tooling: `tools/`.
-- Serena metadata: `.serena/`; memories are summaries only and never override
-  repository files, user instructions, or canonical governance.
-- Wokwi files may live under example-specific `Wokwi/` folders.
-- Do not assume unrelated application, backend, or release flows unless the
-  repository adds them explicitly.
+- Resolve project identity, exact paths, examples, version source, version scan
+  patterns, environments, validation commands, GitHub Project, release-branch
+  example, architecture facts, and project-specific risks from
+  `.github/agents/project.agent.md`.
+- Generic rules in this file remain binding. Project profile facts fill in
+  repository-specific values without weakening generic rules.
+- If this file and the project profile conflict, follow this file for generic
+  safety/workflow force and report the drift.
 
-## Architecture
+## Generic Repository Scope
 
-- Core library roles are `BacnetClient` and `BacnetServer`.
-- Keep reusable BACnet stack code separate from examples, tests, generated
-  artifacts, and repository tooling.
-- Keep protocol encoding and decoding boundaries explicit.
-- Treat BACnet protocol semantics, network-facing behavior, storage/NVS, OTA,
-  security, build pipelines, and large refactors as Level C/risky.
-- Do not add core dependencies on optional demo integrations.
-- Do not import external BACnet implementation code without explicit license,
+- Treat the repository as an ESP32/C++/PlatformIO Arduino-library project unless
+  the project profile says otherwise.
+- Keep reusable library code separate from examples, tests, generated artifacts,
+  and repository tooling.
+- Keep protocol, encoding, decoding, hardware, storage, network, security, OTA,
+  and build boundaries explicit.
+- Treat project-profile risky areas as Level C/risky.
+- Do not import external implementation code without explicit license,
   provenance, and architecture review.
 
 ## Agent Routing
 
-- `.github/AGENTS.md` is canonical.
+- `.github/AGENTS.md` is canonical generic governance.
+- `.github/agents/project.agent.md` is mandatory project context, not a work
+  agent.
 - `.github/agents/control-plane.agent.md` routes only.
 - Use `.github/agents/docs.agent.md` for documentation and governance wording.
 - Use `.github/agents/refactor.agent.md` for code changes, refactors, tests,
   examples, PlatformIO configuration, and build validation.
-- Use `.github/agents/workflow.agent.md` for branches, issues, PRs, releases,
-  checkpoints, cleanup, and session-close workflows.
-- Use `.github/agents/plan.agent.md` for high-reasoning planning, risk
-  analysis, validation strategy, issue breakdowns, and tracked planning when
-  explicitly requested.
+- Use `.github/agents/workflow.agent.md` for branches, general issues, PRs,
+  releases, checkpoints, cleanup, and session-close workflows.
+- Use `.github/agents/plan.agent.md` for planning-only issue breakdowns, risk
+  analysis, validation strategy, and tracked planning when explicitly requested.
 - Agent overlays may add scope-specific rules but MUST NOT contradict this file.
   If they do, follow this file and report drift.
 
 ## Tracking
 
 - GitHub Issues and PRs may be used for tracked work when useful.
-- Current GitHub Project: `ESP32 BACnet Stack` (#6).
-- Use the configured GitHub Project only when tracked workflow or project
+- Use the project-profile GitHub Project only when tracked workflow or project
   coordination is explicitly in scope.
 - Do not invent project-board updates for untracked work.
 - For larger tracked planning, prefer one parent issue plus smaller step
@@ -124,7 +122,7 @@ library built with PlatformIO and the Arduino framework.
 - `main` is the published/released branch.
 - `release/*` branches are runnable snapshots and must stay buildable and
   runnable.
-- `release/*` branches are versioned by release, for example `release/v0.1.0`.
+- Use the project-profile release example for release branch naming examples.
 - Before the first release, `release/*` branches are optional.
 - Do not assume `release/*` exists. Missing release branches do not block normal
   PR-based `main` integration unless release sync is explicitly in scope.
@@ -134,8 +132,8 @@ library built with PlatformIO and the Arduino framework.
 - Do not change `main` directly.
 - If active branch is `main` or `master` and file-changing work is requested,
   stop before editing and use workflow rules to create or select a side branch.
-- Only exception: an explicitly requested docs-only TODO update under
-  `docs/TODO.md` or `docs/todo_*.md` may be committed directly to `main`.
+- Only exception: an explicitly requested docs-only TODO update under the
+  project-profile TODO documentation paths may be committed directly to `main`.
 - Direct pushes to `main` are forbidden unless explicitly requested.
 - Fast-forward integration to `main` is allowed only when explicitly requested
   as fast-forward or `ff`.
@@ -158,7 +156,7 @@ library built with PlatformIO and the Arduino framework.
 - Before preparing or merging into `main`, run or report validation and perform
   a documentation impact check.
 - If docs are affected, route through `docs.agent.md` before integration.
-- If `docs/CHANGELOG.md` exists and the change is user-visible,
+- If the project-profile changelog path exists and the change is user-visible,
   release-relevant, dependency-related, build-related, or version-related,
   update it or justify why no changelog update is needed.
 - Governance-only changes do not require changelog entries unless the repository
@@ -214,6 +212,7 @@ library built with PlatformIO and the Arduino framework.
 
 ## Version Policy
 
+- Use the project-profile canonical version source.
 - Require an appropriate project version bump for dependency updates,
   PlatformIO configuration changes, library metadata changes, firmware code
   changes, or example changes that affect build outputs unless the user
@@ -226,36 +225,25 @@ library built with PlatformIO and the Arduino framework.
   additions.
 - Use major for breaking public APIs, incompatible storage/NVS layout,
   incompatible configuration schema, or behavior requiring migration.
-- `library.json` is the canonical esp32-bacnet-stack project/library version.
-  README text, changelog text, and examples are mirrors or independent app
-  versions, not sources of truth.
+- README text, changelog text, and examples are mirrors or independent app
+  versions, not sources of truth unless the project profile says otherwise.
 - Before changing versions, release metadata, changelog/release notes, library
-  metadata, or files that may contain the project version, scan and report
-  candidate files:
-  - `library.json`
-  - `README.md`
-  - `docs/CHANGELOG.md` or resolved changelog path
-  - README version badges or mentions
-  - additional files found by ripgrep containing current or target version
-- Version scan commands:
-  - `rg -n "version|VERSION|ESP_BACNET_VERSION|BACNET_STACK_VERSION" .`
-  - `rg -n "<current-version>|<target-version>" .`
-- When project/library version changes, synchronize `library.json`, README
-  version badges/mentions, changelog headings/mentions, and examples that
-  intentionally carry the library/app version. Report missing required paths.
-- Keep client and server example version references aligned with the
-  esp32-bacnet-stack project/library version if such references are added.
-- Do not change other example firmware/app versions unless explicitly requested.
+  metadata, or files that may contain the project version, run/report the
+  project-profile version scan commands and candidate files.
+- When project/library version changes, synchronize the project-profile
+  canonical version source and required mirrors. Report missing required paths.
+- Do not change independent example firmware/app versions unless explicitly
+  requested.
 - If a package-managed demo is added later, define whether its metadata mirrors
-  `library.json` or has an independent version before editing it.
+  the project version or has an independent version before editing it.
 - Version changes affecting published library output require a changelog update
   unless the governing issue explicitly says otherwise.
 - If version files disagree before work starts, report the mismatch. If target
   version is ambiguous, stop and ask.
-- After version changes, report canonical `library.json` version, synchronized
-  files and versions, files intentionally unchanged, scan commands, validation,
-  and remaining mismatch or risk.
-- GitHub Actions-only Dependabot updates do not require a `library.json` bump
+- After version changes, report canonical version source and value,
+  synchronized files and versions, files intentionally unchanged, scan commands,
+  validation, and remaining mismatch or risk.
+- GitHub Actions-only Dependabot updates do not require a project version bump
   unless they change produced library output, firmware build output, supported
   PlatformIO environments, or release artifact behavior.
 
@@ -280,14 +268,15 @@ library built with PlatformIO and the Arduino framework.
 - Severity reassignment is allowed when technically justified.
 - Logging normalization and API renames are separate; do not mix them.
 - Before API rename, search references with `rg`; after rename, rerun `rg` and
-  confirm old names do not remain in `src/`, `include/`, `lib/`, `test/`,
-  `docs/`, or examples when present.
+  confirm old names do not remain in relevant project-profile source, header,
+  test, docs, or example paths.
 
 ## Tool Policy
 
 - Prefer available agent-workspace tools when fit.
-- Prefer Serena when configured, healthy, and useful for semantic C++ navigation,
-  symbol lookup, references, architecture inspection, and project-context review.
+- Prefer Serena when configured, healthy, and useful for semantic C++
+  navigation, symbol lookup, references, architecture inspection, and
+  project-context review.
 - Serena does not replace mandatory direct governance reads, required
   `rg --hidden` governance/policy searches, repository files, user
   instructions, or canonical governance.
@@ -323,25 +312,17 @@ library built with PlatformIO and the Arduino framework.
   required CI.
 - If no enabled CI is configured, report that and rely on required local
   validation.
-- After `.cpp` or `.h` changes, run at least:
-  - `pio run -e usb`
-- For affected client example changes:
-  - `pio run -d examples/client-demo -e usb`
-- For affected server example changes:
-  - `pio run -d examples/server-demo -e usb`
-- For affected tests:
-  - `pio test -e usb --without-uploading --without-testing`
-- For OTA-specific behavior or configuration when explicitly relevant:
-  - `pio run -e ota`
+- Use the project-profile PlatformIO validation commands for root builds,
+  affected examples, affected tests, and explicitly relevant OTA work.
 - Upload and serial monitor commands require explicit user request.
 - If only Markdown or governance files changed, skip PlatformIO unless asked.
 - Governance-only changes require a consistency check: read affected governance
   files and verify routing, shortcut, branch, Git, PR, tool, Serena, validation,
-  version, session-close, checkpoint, planning-agent, and reporting rules do not
-  contradict each other.
+  version, session-close, checkpoint, planning-agent, project-profile, and
+  reporting rules do not contradict each other.
 - Run relevant tests when tests are present and affected.
-- Docker or image builds are not required unless configured here or explicitly
-  in scope.
+- Container or image builds are not required unless configured here or
+  explicitly in scope.
 - If required validation cannot run, report it plainly.
 
 ## Mandatory Reporting
