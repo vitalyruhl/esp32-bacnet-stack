@@ -1,112 +1,79 @@
 # Workflow Agent
 
-Apply `.github/AGENTS.md` and `.github/agents/project.agent.md` unchanged.
-This file adds only workflow-specific rules for branches, general issues, PRs,
-checkpoints, releases, cleanup, and session-close handling.
+Extends central + project profile. Scope: workflow.
+
+Apply central Git, reporting, validation, and validation reuse rules; add
+workflow-specific gates below.
 
 ## Branch Model
 
-- `main` is the published/released branch.
-- Integrate into `main` through PRs by default.
-- Do not change `main` directly.
-- If active branch is `main` or `master` and file-changing work is requested,
-  stop before editing and create/select a side branch.
-- Only exception: an explicitly requested docs-only TODO update under the
-  project-profile TODO documentation paths.
-- Direct pushes to `main` are forbidden unless explicitly requested.
-- Fast-forward integration to `main` is allowed only when explicitly requested
-  as fast-forward or `ff`.
-- `feature/*` branches are work-in-progress and may be unfinished or broken.
+- `main` is published/released; integrate through PRs by default.
+- Do not edit `main`/`master` directly except explicitly requested docs-only
+  TODO updates under project-profile TODO paths.
+- Direct pushes to `main` require explicit request.
+- Fast-forward to `main` only when explicitly requested as fast-forward/`ff`.
+- `feature/*` branches are work-in-progress and may be unfinished/broken.
 - `release/*` branches are runnable snapshots and must stay buildable/runnable.
-- Use the project-profile release branch example when an example is needed.
-- Before the first release, `release/*` branches are optional.
-- Do not assume a release branch exists. Missing release branches do not block
-  normal PR-based `main` integration unless release sync is explicitly in scope.
-- Create or update release branches only when explicitly requested.
+- Use the project-profile release example when needed.
+- Before first release, `release/*` branches are optional.
+- Do not assume a release branch exists; absence does not block PR-based `main`
+  integration unless release sync is in scope.
+- Create/update release branches only when explicitly requested.
 - Work on one side branch at a time.
 - Never revert user edits unless explicitly asked.
 
-## Git Rules
+## Git And Names
 
-- Read-only git commands may run without asking: `git status`, `git diff`,
-  `git log`, `git show`, `git branch`, `git remote -v`.
-- Mutating git commands require explicit confirmation: `git add`, `git commit`,
-  `git switch`/`git checkout`, `git reset`, `git merge`, `git rebase`,
-  `git clean`, `git stash`, `git cherry-pick`.
-- Stage, commit, and push only on explicit user request or when a named workflow
-  explicitly requires it.
+- Verify branch/status before mutating git.
 - If staging is requested, prefer `git add -A`.
 - Do not prepend `Set-Location` to git commands; use configured workdir.
-- Verify active branch and repository state before mutating git actions.
-- If branch naming does not match the task, warn and propose names instead of
-  silently switching.
-
-## Names And Titles
-
-- Derive branch names, issue titles, PR titles, and task labels from task
-  intent, not raw informal text.
+- If branch name mismatches task, warn and propose names instead of switching.
+- Derive branch/issue/PR/task names from intent, not raw informal text.
 - Correct obvious spelling mistakes when intent is clear.
-- Prefer short, clean English, lowercase, hyphen-separated branch names under
-  the right prefix, usually `feature/`.
+- Prefer short clean English lowercase hyphenated branch names under the right
+  prefix, usually `feature/`.
 - Preserve exact paths, commands, symbols, identifiers, branch names, issue/PR
   numbers, tags, versions, and quoted literals.
-- Preserve exact branch names when the user says to use them exactly.
+- Preserve exact branch names when the user requests exact use.
 - Ask if wording is ambiguous or correction changes scope.
 - Check quoted path casing against repository state.
 - Example: `use workflow.begin [gevernance-sharpenes]` may derive
   `feature/governance-sharpening`.
 
-## GitHub Workflow
+## GitHub And Docs
 
-- Prefer `gh` for PRs, CI checks, issues, and project operations when
-  authenticated and available.
+- Prefer `gh` for PRs, checks, issues, and project operations when authenticated.
 - Keep PRs scoped to one coherent change.
-- Do not claim merge readiness without running or reporting relevant validation.
-- Maintainer-owned PRs do not require external review by governance.
+- Do not claim merge readiness without validation passed/skipped/reused by
+  central policy.
+- Maintainer-owned PRs need no external review by governance.
 - External contributor PRs require review before merge.
 - Owner/admin bypass is explicit-only for the current action.
-- Required status checks MUST NOT be bypassed unless the user explicitly
-  confirms the exception and the reason is reported.
-- If branch protection blocks merge, report the blocker and do not bypass it.
-- GitHub Issues, PRs, and comments created by agents follow the English language
-  policy in `.github/AGENTS.md`.
-- Use GitHub Issues, PRs, and the project-profile GitHub Project only when
-  tracked workflow or project coordination is explicitly in scope.
+- Required checks MUST NOT be bypassed without explicit confirmed exception and
+  reported reason.
+- If branch protection blocks merge, report blocker and do not bypass.
+- GitHub text created by agents follows central English policy.
+- Use GitHub Issues/PRs/project only when tracked workflow is in scope.
 - `workflow.agent.md` owns branches, PRs, merges, releases, checkpoints,
   cleanup, and general issue workflow.
 - `plan.agent.md` owns planning-only issue breakdowns and tracked planning when
   explicitly requested.
+- Before `workflow.toMain`, check docs impact. If docs are affected, route to
+  `docs.agent.md`.
+- If profile changelog exists and change is user-visible or
+  release/dependency/build/version-related, update it or justify no update.
+- Governance/docs-only changes need no version bump.
 
-## Validation And Docs
-
-- Use configured/enabled GitHub Actions or checks when present; do not invent CI.
-- Use project-profile PlatformIO validation commands for root builds, affected
-  examples, affected tests, and explicitly relevant OTA work.
-- Upload and serial monitor commands require explicit user request.
-- If only Markdown/governance files changed, skip PlatformIO unless requested.
-- Before `workflow.toMain`, check documentation impact.
-- If docs are affected, route through `docs.agent.md`.
-- If the project-profile changelog path exists and the change is user-visible,
-  release-relevant, dependency-related, build-related, or version-related,
-  update it or justify no update.
-- Governance-only changes do not require changelog entries unless intentionally
-  tracked there.
-- Documentation-only and governance-only changes do not require a version bump.
-- GitHub Actions-only Dependabot updates do not require a project version bump
-  unless they change produced library output, firmware build output, supported
-  PlatformIO environments, or release artifact behavior.
-
-## Release Branch Workflow
+## Release
 
 - `release/*` branches represent runnable snapshots.
-- If no suitable release branch exists, report it and skip release update unless
-  explicitly asked to create or update one.
-- Prefer fast-forward updates when moving a release branch to verified feature
-  state.
+- If no suitable release branch exists, report and skip release update unless
+  explicitly asked to create/update one.
+- Prefer fast-forward release updates.
 - If fast-forward is impossible, ask before force-pushing; prefer
   `--force-with-lease` if approved.
 - Do not invent non-PlatformIO release steps.
-- Version bumps follow `.github/AGENTS.md` and the project profile.
+- Version bumps follow central + project profile.
 
 ## Shortcuts
 
@@ -114,41 +81,33 @@ checkpoints, releases, cleanup, and session-close handling.
   merge, cleanup, release updates, or destructive actions.
 - Follow-up shortcuts after `workflow.audit` run only when explicitly requested
   and no blockers remain.
-- `workflow.begin`: create/select the proper branch; derive a clean English name
-  from task intent; preserve exact names only when requested; report the branch;
-  do not edit code/build files or run implementation work unless explicitly
-  requested after branch setup.
-- `workflow.checkpoint`: verify branch and status; refuse direct `main`/`master`
-  except the docs-only TODO exception; inspect `git diff --stat`; stage with
-  `git add -A`; create one meaningful English commit; push only the current work
-  branch; run or report relevant validation.
-- `workflow.docs`: perform narrow documentation-only synchronization.
+- `workflow.begin`: create/select proper branch; derive clean English name;
+  preserve exact names only when requested; report branch; do not edit code/build
+  files or run implementation work unless explicitly requested after setup.
+- `workflow.checkpoint`: verify branch/status; refuse direct `main`/`master`
+  except docs-only TODO exception; inspect `git diff --stat`; stage with
+  `git add -A`; create one meaningful English commit; push only current work
+  branch; run, skip, or reuse validation by central validation policy.
+- `workflow.docs`: narrow documentation-only synchronization.
 - `workflow.audit`: strictly read-only; no file changes, branch changes,
   commits, merges, cleanup, release updates, or destructive actions; report
   blockers before follow-up workflow.
-- `workflow.ship`: build and verify artifacts without implicit merge.
-- `workflow.ready`: prepare review/integration; run or report validation; do not
-  merge to `main`, update `release/*`, or push unless explicitly requested or
-  covered by a named workflow.
-- `workflow.toMain`: use PR workflow by default unless fast-forward/`ff` is
-  requested; commit, push, PR creation, PR merge, and cleanup are allowed only as
-  part of this explicit workflow; run/report validation; perform docs impact
-  check; report required reviews, failing checks, conflicts, and branch
-  protection; use bypass only when explicitly requested; never bypass required
-  status checks without explicit confirmed exception and reported reason.
-- `workflow.cleanBranches`: delete only branches verified as integrated; skip
+- `workflow.ship`: build/verify artifacts without implicit merge.
+- `workflow.ready`: prepare review/integration; run/skip/reuse validation; do
+  not merge to `main`, update `release/*`, or push unless explicitly requested
+  or covered by named workflow.
+- `workflow.toMain`: PR workflow by default unless fast-forward/`ff` requested;
+  commit/push/PR creation/merge/cleanup allowed only in this explicit workflow;
+  run/skip/reuse validation; check docs impact; report reviews/checks/conflicts/
+  branch protection; bypass only when explicitly requested; never bypass
+  required checks without explicit confirmed exception and reported reason.
+- `workflow.cleanBranches`: delete only branches verified integrated; skip
   active, unmerged, or ambiguous branches and report reasons.
-- `workflow.end`: inspect state and report current branch, changed files,
-  validation state, and blockers only; do not commit, push, merge, switch
-  branches, update release branches, or claim merge/fix success.
+- `workflow.end`: report branch, changed files, validation state, blockers only;
+  do not commit, push, merge, switch branches, update release branches, or claim
+  merge/fix success.
 - Session close is report-only by default. Do not commit, push, merge, switch
-  branches, or update release branches during session close unless the user
-  explicitly invokes `workflow.checkpoint`, `workflow.toMain`, or explicit
-  release sync.
+  branches, or update release branches unless user invokes
+  `workflow.checkpoint`, `workflow.toMain`, or explicit release sync.
 
-## Reporting
-
-- Report current branch, changed files, git actions, validation run/skipped,
-  release branch updates, and remaining blockers/risks.
-- Inspect relevant diffs before reporting.
-- Do not paste full diffs unless explicitly asked.
+Reporting: central reporting; include PR/merge/release blockers when relevant.
