@@ -67,6 +67,21 @@ void test_bacnet_client_builds_read_property_request() {
   TEST_ASSERT_EQUAL_UINT8_ARRAY(expected, request, sizeof(expected));
 }
 
+void test_bacnet_client_builds_mv_present_value_request() {
+  uint8_t request[BacnetClient::kMaxReadPropertyRequestSize] = {};
+  const uint8_t expected[] = {
+      0x81, 0x0A, 0x00, 0x11, 0x01, 0x04, 0x00, 0x05, 0x02,
+      0x0C, 0x0C, 0x04, 0xC0, 0x00, 0x03, 0x19, 0x55,
+  };
+
+  TEST_ASSERT_EQUAL_UINT32(
+      sizeof(expected),
+      BacnetClient::buildReadPropertyRequest(
+          request, sizeof(request), BacnetObjectId{19, 3},
+          BacnetPropertyId::PresentValue, 2));
+  TEST_ASSERT_EQUAL_UINT8_ARRAY(expected, request, sizeof(expected));
+}
+
 void test_bacnet_client_parses_read_property_ack() {
   const uint8_t response[] = {
       0x81, 0x0A, 0x00, 0x19, 0x01, 0x00, 0x30, 0x01, 0x0C,
@@ -79,6 +94,19 @@ void test_bacnet_client_parses_read_property_ack() {
       response, sizeof(response), 1, BacnetPropertyId::ObjectName, value));
   TEST_ASSERT_EQUAL_STRING("WAGO", value.text);
   TEST_ASSERT_EQUAL_UINT32(4, value.textLength);
+}
+
+void test_bacnet_client_parses_mv_present_value_ack() {
+  const uint8_t response[] = {
+      0x81, 0x0A, 0x00, 0x14, 0x01, 0x00, 0x30, 0x02, 0x0C, 0x0C,
+      0x04, 0xC0, 0x00, 0x03, 0x19, 0x55, 0x3E, 0x21, 0x03, 0x3F,
+  };
+  BacnetValue value;
+
+  TEST_ASSERT_TRUE(BacnetClient::parseReadPropertyAck(
+      response, sizeof(response), 2, BacnetPropertyId::PresentValue, value));
+  TEST_ASSERT_EQUAL_STRING("3", value.text);
+  TEST_ASSERT_EQUAL_UINT32(1, value.textLength);
 }
 
 void test_bacnet_server_lifecycle() {
@@ -101,7 +129,9 @@ void setup() {
   RUN_TEST(test_bacnet_client_parses_i_am_response);
   RUN_TEST(test_bacnet_client_rejects_non_i_am_response);
   RUN_TEST(test_bacnet_client_builds_read_property_request);
+  RUN_TEST(test_bacnet_client_builds_mv_present_value_request);
   RUN_TEST(test_bacnet_client_parses_read_property_ack);
+  RUN_TEST(test_bacnet_client_parses_mv_present_value_ack);
   RUN_TEST(test_bacnet_server_lifecycle);
   UNITY_END();
 }

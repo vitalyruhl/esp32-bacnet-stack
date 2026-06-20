@@ -2,6 +2,13 @@
 
 This changelog is a curated overview.
 
+## 0.4.0
+
+- Added minimal client ReadProperty support for multi-state-value
+  `presentValue` values.
+- Extended the client demo to read WAGO MV `presentValue` values for a small
+  temporary hardware-validation object list.
+
 ## 0.3.0
 
 - Started minimal BACnet/IP client ReadProperty support with request building

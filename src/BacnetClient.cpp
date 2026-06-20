@@ -2,6 +2,7 @@
 
 #include "BacnetClient.h"
 
+#include <cstdio>
 #include <cstring>
 
 namespace {
@@ -19,9 +20,10 @@ constexpr uint8_t kServiceReadProperty = 0x0C;
 constexpr uint16_t kDeviceObjectType = 8;
 constexpr uint32_t kObjectInstanceMask = 0x003FFFFF;
 constexpr uint8_t kApplicationTagUnsigned = 2;
+constexpr uint8_t kApplicationTagReal = 4;
+constexpr uint8_t kApplicationTagCharacterString = 7;
 constexpr uint8_t kApplicationTagEnumerated = 9;
 constexpr uint8_t kApplicationTagObjectIdentifier = 12;
-constexpr uint8_t kApplicationTagCharacterString = 7;
 
 uint16_t readUint16(const uint8_t* buffer) {
   return (static_cast<uint16_t>(buffer[0]) << 8) | buffer[1];
@@ -103,6 +105,111 @@ bool readApplicationTagHeader(const uint8_t* buffer, size_t length,
   }
 
   return offset + valueLength <= length;
+}
+
+bool copyTextValue(BacnetValue& value, const char* text) {
+  if (text == nullptr) {
+    return false;
+  }
+
+  const size_t length = std::strlen(text);
+  const size_t copyLength =
+      length < (BacnetValue::kMaxTextLength - 1)
+          ? length
+          : (BacnetValue::kMaxTextLength - 1);
+
+  std::memcpy(value.text, text, copyLength);
+  value.text[copyLength] = '\0';
+  value.textLength = copyLength;
+  return true;
+}
+
+bool parseApplicationUnsigned(const uint8_t* buffer, size_t length,
+                              size_t& offset, uint8_t expectedTag,
+                              BacnetValue& value) {
+  uint32_t parsedValue = 0;
+  if (!readApplicationValue(buffer, length, offset, expectedTag, parsedValue)) {
+    return false;
+  }
+
+  char text[BacnetValue::kMaxTextLength] = {};
+  std::snprintf(text, sizeof(text), "%lu",
+                static_cast<unsigned long>(parsedValue));
+  return copyTextValue(value, text);
+}
+
+bool parseApplicationReal(const uint8_t* buffer, size_t length, size_t& offset,
+                          BacnetValue& value) {
+  size_t valueLength = 0;
+  if (!readApplicationTagHeader(buffer, length, offset, kApplicationTagReal,
+                                valueLength) ||
+      valueLength != 4 || offset + valueLength > length) {
+    return false;
+  }
+
+  uint32_t raw = 0;
+  for (size_t i = 0; i < valueLength; ++i) {
+    raw = (raw << 8) | buffer[offset++];
+  }
+
+  float parsedValue = 0.0f;
+  static_assert(sizeof(parsedValue) == sizeof(raw),
+                "BACnet real parsing expects 32-bit float");
+  std::memcpy(&parsedValue, &raw, sizeof(parsedValue));
+
+  char text[BacnetValue::kMaxTextLength] = {};
+  std::snprintf(text, sizeof(text), "%.3f", static_cast<double>(parsedValue));
+  return copyTextValue(value, text);
+}
+
+bool parseApplicationCharacterString(const uint8_t* buffer, size_t length,
+                                     size_t& offset, BacnetValue& value) {
+  size_t stringLength = 0;
+  if (!readApplicationTagHeader(buffer, length, offset,
+                                kApplicationTagCharacterString,
+                                stringLength) ||
+      stringLength == 0 || offset + stringLength > length) {
+    return false;
+  }
+
+  ++offset;
+  --stringLength;
+  const size_t copyLength =
+      stringLength < (BacnetValue::kMaxTextLength - 1)
+          ? stringLength
+          : (BacnetValue::kMaxTextLength - 1);
+
+  std::memcpy(value.text, &buffer[offset], copyLength);
+  value.text[copyLength] = '\0';
+  value.textLength = copyLength;
+  offset += stringLength;
+  return true;
+}
+
+bool parseReadPropertyApplicationValue(const uint8_t* buffer, size_t length,
+                                       size_t& offset,
+                                       BacnetPropertyId expectedProperty,
+                                       BacnetValue& value) {
+  if (offset >= length) {
+    return false;
+  }
+
+  if (expectedProperty == BacnetPropertyId::PresentValue) {
+    const uint8_t tagNumber = buffer[offset] >> 4;
+    if (tagNumber == kApplicationTagUnsigned) {
+      return parseApplicationUnsigned(buffer, length, offset,
+                                      kApplicationTagUnsigned, value);
+    }
+    if (tagNumber == kApplicationTagEnumerated) {
+      return parseApplicationUnsigned(buffer, length, offset,
+                                      kApplicationTagEnumerated, value);
+    }
+    if (tagNumber == kApplicationTagReal) {
+      return parseApplicationReal(buffer, length, offset, value);
+    }
+  }
+
+  return parseApplicationCharacterString(buffer, length, offset, value);
 }
 
 bool skipNpduAddress(const uint8_t* buffer, size_t length, size_t& offset);
@@ -407,25 +514,10 @@ bool BacnetClient::parseReadPropertyAck(const uint8_t* buffer, size_t length,
     return false;
   }
 
-  size_t stringLength = 0;
-  if (!readApplicationTagHeader(buffer, length, offset,
-                                kApplicationTagCharacterString,
-                                stringLength) ||
-      stringLength == 0) {
+  if (!parseReadPropertyApplicationValue(buffer, length, offset,
+                                         expectedProperty, value)) {
     return false;
   }
-
-  ++offset;
-  --stringLength;
-  const size_t copyLength =
-      stringLength < (BacnetValue::kMaxTextLength - 1)
-          ? stringLength
-          : (BacnetValue::kMaxTextLength - 1);
-
-  std::memcpy(value.text, &buffer[offset], copyLength);
-  value.text[copyLength] = '\0';
-  value.textLength = copyLength;
-  offset += stringLength;
 
   return offset < length && buffer[offset] == 0x3F;
 }

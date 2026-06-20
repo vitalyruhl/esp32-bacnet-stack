@@ -24,6 +24,7 @@ enum class BacnetPropertyId : uint32_t {
   FirmwareRevision = 44,
   ModelName = 70,
   ObjectName = 77,
+  PresentValue = 85,
   VendorName = 121,
 };
 

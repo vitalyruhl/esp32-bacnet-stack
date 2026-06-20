@@ -56,12 +56,20 @@ static BacnetClient bacnetClient;
 
 static const IPAddress kWhoIsDestination(192, 168, 2, 255);
 static const IPAddress kWagoAddress(192, 168, 2, 101);
+static constexpr uint32_t kWagoDeviceInstance = 9001;
 static constexpr uint32_t kWhoIsIntervalMs = 30000;
 static constexpr uint32_t kReadPropertyTimeoutMs = 5000;
 static constexpr size_t kMaxBacnetDevices = 5;
 static constexpr size_t kMaxBacnetProperties = 5;
+static constexpr size_t kMaxBacnetMvObjects = 5;
 static constexpr size_t kBacnetPreviewPropertyCount = 4;
 static constexpr uint8_t kReadPropertyInvokeId = 1;
+static constexpr uint16_t kBacnetDeviceObjectType = 8;
+static constexpr uint16_t kBacnetMultiStateValueObjectType = 19;
+
+// Temporary WAGO hardware-validation list until objectList parsing is added.
+static constexpr uint32_t kTemporaryWagoMvInstances[kMaxBacnetMvObjects] = {
+    0, 1, 2, 3, 4};
 
 static float temperature = 0.0f;
 static float dewPoint = 0.0f;
@@ -82,6 +90,29 @@ struct BacnetPropertyPreview {
   bool failed = false;
 };
 
+struct BacnetMvPresentValuePreview {
+  bool configured = false;
+  BacnetObjectId object;
+  String value = "";
+  String status = "not read";
+  bool requested = false;
+  bool received = false;
+  bool failed = false;
+};
+
+struct BacnetPropertySpec {
+  const char* name = "";
+  BacnetPropertyId id = BacnetPropertyId::ObjectName;
+};
+
+static constexpr BacnetPropertySpec
+    kBacnetPreviewProperties[kBacnetPreviewPropertyCount] = {
+        {"objectName", BacnetPropertyId::ObjectName},
+        {"vendorName", BacnetPropertyId::VendorName},
+        {"modelName", BacnetPropertyId::ModelName},
+        {"firmwareRevision", BacnetPropertyId::FirmwareRevision},
+};
+
 struct BacnetDevicePreview {
   bool active = false;
   uint32_t deviceId = 0;
@@ -90,11 +121,20 @@ struct BacnetDevicePreview {
   uint32_t maxApdu = 0;
   uint8_t segmentation = 0;
   BacnetPropertyPreview properties[kMaxBacnetProperties];
+  BacnetMvPresentValuePreview mvPresentValues[kMaxBacnetMvObjects];
+};
+
+enum class BacnetReadTarget {
+  None,
+  DeviceProperty,
+  MvPresentValue,
 };
 
 static BacnetDevicePreview bacnetDevices[kMaxBacnetDevices];
+static BacnetReadTarget activeReadTarget = BacnetReadTarget::None;
 static int activeReadDeviceIndex = -1;
 static int activeReadPropertyIndex = -1;
+static int activeReadMvIndex = -1;
 static uint8_t activeReadInvokeId = 0;
 static unsigned long activeReadStartedAt = 0;
 
@@ -162,14 +202,25 @@ static void initializeBacnetProperties(BacnetDevicePreview& device) {
     return;
   }
 
-  device.properties[0].name = "objectName";
-  device.properties[0].id = BacnetPropertyId::ObjectName;
-  device.properties[1].name = "vendorName";
-  device.properties[1].id = BacnetPropertyId::VendorName;
-  device.properties[2].name = "modelName";
-  device.properties[2].id = BacnetPropertyId::ModelName;
-  device.properties[3].name = "firmwareRevision";
-  device.properties[3].id = BacnetPropertyId::FirmwareRevision;
+  for (size_t i = 0; i < kBacnetPreviewPropertyCount; ++i) {
+    device.properties[i].name = kBacnetPreviewProperties[i].name;
+    device.properties[i].id = kBacnetPreviewProperties[i].id;
+  }
+}
+
+static void initializeTemporaryWagoMvObjects(BacnetDevicePreview& device) {
+  if (device.deviceId != kWagoDeviceInstance ||
+      device.mvPresentValues[0].configured) {
+    return;
+  }
+
+  for (size_t i = 0; i < kMaxBacnetMvObjects; ++i) {
+    BacnetMvPresentValuePreview& mv = device.mvPresentValues[i];
+    mv.configured = true;
+    mv.object = BacnetObjectId{kBacnetMultiStateValueObjectType,
+                               kTemporaryWagoMvInstances[i]};
+    mv.status = "pending";
+  }
 }
 
 static String bacnetDeviceSummary(size_t index) {
@@ -188,16 +239,34 @@ static String bacnetDeviceSummary(size_t index) {
   return summary;
 }
 
-static String bacnetPropertySummary(size_t index) {
-  if (!bacnetDevices[0].active || index >= kBacnetPreviewPropertyCount) {
+static String bacnetPropertySummary(size_t deviceIndex, size_t propertyIndex) {
+  if (deviceIndex >= kMaxBacnetDevices ||
+      propertyIndex >= kBacnetPreviewPropertyCount ||
+      !bacnetDevices[deviceIndex].active) {
     return "not discovered";
   }
 
-  const BacnetPropertyPreview& property = bacnetDevices[0].properties[index];
+  const BacnetPropertyPreview& property =
+      bacnetDevices[deviceIndex].properties[propertyIndex];
   if (property.received) {
     return property.value;
   }
   return property.status;
+}
+
+static String bacnetMvPresentValueSummary(size_t deviceIndex, size_t mvIndex) {
+  if (deviceIndex >= kMaxBacnetDevices || mvIndex >= kMaxBacnetMvObjects ||
+      !bacnetDevices[deviceIndex].active ||
+      !bacnetDevices[deviceIndex].mvPresentValues[mvIndex].configured) {
+    return "not configured";
+  }
+
+  const BacnetMvPresentValuePreview& mv =
+      bacnetDevices[deviceIndex].mvPresentValues[mvIndex];
+  if (mv.received) {
+    return mv.value;
+  }
+  return mv.status;
 }
 
 static void setupRuntimeUI() {
@@ -248,46 +317,46 @@ static void setupRuntimeUI() {
                                 "BME280 - Temperature Sensor", "Dewpoint",
                                 "Condensation Risk");
 
-  auto bacnetLive = ConfigManager.liveGroup("bacnet")
-                         .page("Sensors", 10)
-                         .card("BACnet/IP Discovery");
+  for (size_t deviceIndex = 0; deviceIndex < kMaxBacnetDevices;
+       ++deviceIndex) {
+    const String groupName = String("Device ") + String(deviceIndex + 1);
+    auto bacnetDeviceGroup = ConfigManager.liveGroup("bacnet")
+                                  .page("Sensors", 10)
+                                  .card("BACnet/IP Discovery", 20)
+                                  .group(groupName.c_str(), deviceIndex + 1);
 
-  bacnetLive.value("device0", []() { return bacnetDeviceSummary(0); })
-      .label("Device 1")
-      .order(10);
+    const String deviceKey = String("device") + String(deviceIndex);
+    bacnetDeviceGroup
+        .value(deviceKey.c_str(),
+               [deviceIndex]() { return bacnetDeviceSummary(deviceIndex); })
+        .label("Device")
+        .order(10);
 
-  bacnetLive.value("device1", []() { return bacnetDeviceSummary(1); })
-      .label("Device 2")
-      .order(11);
+    for (size_t propertyIndex = 0; propertyIndex < kBacnetPreviewPropertyCount;
+         ++propertyIndex) {
+      const String propertyKey = String("device") + String(deviceIndex) +
+                                 "_" +
+                                 kBacnetPreviewProperties[propertyIndex].name;
+      bacnetDeviceGroup
+          .value(propertyKey.c_str(), [deviceIndex, propertyIndex]() {
+            return bacnetPropertySummary(deviceIndex, propertyIndex);
+          })
+          .label(kBacnetPreviewProperties[propertyIndex].name)
+          .order(20 + propertyIndex);
+    }
 
-  bacnetLive.value("device2", []() { return bacnetDeviceSummary(2); })
-      .label("Device 3")
-      .order(12);
-
-  bacnetLive.value("device3", []() { return bacnetDeviceSummary(3); })
-      .label("Device 4")
-      .order(13);
-
-  bacnetLive.value("device4", []() { return bacnetDeviceSummary(4); })
-      .label("Device 5")
-      .order(14);
-
-  bacnetLive.value("objectName", []() { return bacnetPropertySummary(0); })
-      .label("objectName")
-      .order(20);
-
-  bacnetLive.value("vendorName", []() { return bacnetPropertySummary(1); })
-      .label("vendorName")
-      .order(21);
-
-  bacnetLive.value("modelName", []() { return bacnetPropertySummary(2); })
-      .label("modelName")
-      .order(22);
-
-  bacnetLive
-      .value("firmwareRevision", []() { return bacnetPropertySummary(3); })
-      .label("firmwareRevision")
-      .order(23);
+    for (size_t mvIndex = 0; mvIndex < kMaxBacnetMvObjects; ++mvIndex) {
+      const String mvKey = String("device") + String(deviceIndex) + "_mv" +
+                           String(mvIndex) + "_presentValue";
+      const String mvLabel = String("MV ") + String(mvIndex) + " presentValue";
+      bacnetDeviceGroup
+          .value(mvKey.c_str(), [deviceIndex, mvIndex]() {
+            return bacnetMvPresentValueSummary(deviceIndex, mvIndex);
+          })
+          .label(mvLabel.c_str())
+          .order(40 + mvIndex);
+    }
+  }
 }
 
 static void readBme280() {
@@ -401,12 +470,14 @@ static int recordBacnetDevice(const BacnetIAmDevice& iAm) {
   const bool isNewDevice = !device.active;
   device.active = true;
   device.deviceId = iAm.deviceInstance;
-  device.address =
-      iAm.deviceInstance == 9001 ? kWagoAddress : IPAddress(0, 0, 0, 0);
+  device.address = iAm.deviceInstance == kWagoDeviceInstance
+                       ? kWagoAddress
+                       : IPAddress(0, 0, 0, 0);
   device.vendorId = iAm.vendorId;
   device.maxApdu = iAm.maxApduLengthAccepted;
   device.segmentation = iAm.segmentationSupported;
   initializeBacnetProperties(device);
+  initializeTemporaryWagoMvObjects(device);
 
   if (isNewDevice) {
     for (size_t i = 0; i < kBacnetPreviewPropertyCount; ++i) {
@@ -418,7 +489,7 @@ static int recordBacnetDevice(const BacnetIAmDevice& iAm) {
 }
 
 static void requestNextBacnetProperty() {
-  if (activeReadDeviceIndex >= 0 || !bacnetStarted) {
+  if (activeReadTarget != BacnetReadTarget::None || !bacnetStarted) {
     return;
   }
 
@@ -436,7 +507,9 @@ static void requestNextBacnetProperty() {
       }
 
       activeReadDeviceIndex = static_cast<int>(deviceIndex);
+      activeReadTarget = BacnetReadTarget::DeviceProperty;
       activeReadPropertyIndex = static_cast<int>(propertyIndex);
+      activeReadMvIndex = -1;
       activeReadInvokeId = kReadPropertyInvokeId;
       activeReadStartedAt = millis();
       property.requested = true;
@@ -450,15 +523,63 @@ static void requestNextBacnetProperty() {
       Serial.println(BacnetClient::kDefaultPort);
 
       if (bacnetClient.sendReadProperty(
-              device.address, BacnetObjectId{8, device.deviceId}, property.id,
-              activeReadInvokeId)) {
+              device.address,
+              BacnetObjectId{kBacnetDeviceObjectType, device.deviceId},
+              property.id, activeReadInvokeId)) {
         Serial.println("[I] BACnet ReadProperty sent");
       } else {
         Serial.println("[W] BACnet ReadProperty send failed");
         property.failed = true;
         property.status = "send failed";
+        activeReadTarget = BacnetReadTarget::None;
         activeReadDeviceIndex = -1;
         activeReadPropertyIndex = -1;
+        requestNextBacnetProperty();
+      }
+      return;
+    }
+  }
+
+  for (size_t deviceIndex = 0; deviceIndex < kMaxBacnetDevices; ++deviceIndex) {
+    BacnetDevicePreview& device = bacnetDevices[deviceIndex];
+    if (!device.active || device.address == IPAddress(0, 0, 0, 0)) {
+      continue;
+    }
+
+    for (size_t mvIndex = 0; mvIndex < kMaxBacnetMvObjects; ++mvIndex) {
+      BacnetMvPresentValuePreview& mv = device.mvPresentValues[mvIndex];
+      if (!mv.configured || mv.requested || mv.received || mv.failed) {
+        continue;
+      }
+
+      activeReadDeviceIndex = static_cast<int>(deviceIndex);
+      activeReadTarget = BacnetReadTarget::MvPresentValue;
+      activeReadPropertyIndex = -1;
+      activeReadMvIndex = static_cast<int>(mvIndex);
+      activeReadInvokeId = kReadPropertyInvokeId;
+      activeReadStartedAt = millis();
+      mv.requested = true;
+      mv.status = "reading";
+
+      Serial.print("[I] Sending BACnet ReadProperty presentValue to ");
+      Serial.print("multi-state-value,");
+      Serial.print(mv.object.instance);
+      Serial.print(" at ");
+      Serial.print(device.address);
+      Serial.print(":");
+      Serial.println(BacnetClient::kDefaultPort);
+
+      if (bacnetClient.sendReadProperty(device.address, mv.object,
+                                        BacnetPropertyId::PresentValue,
+                                        activeReadInvokeId)) {
+        Serial.println("[I] BACnet ReadProperty sent");
+      } else {
+        Serial.println("[W] BACnet ReadProperty send failed");
+        mv.failed = true;
+        mv.status = "send failed";
+        activeReadTarget = BacnetReadTarget::None;
+        activeReadDeviceIndex = -1;
+        activeReadMvIndex = -1;
         requestNextBacnetProperty();
       }
       return;
@@ -467,27 +588,58 @@ static void requestNextBacnetProperty() {
 }
 
 static void pollReadProperty() {
-  if (activeReadDeviceIndex < 0 || activeReadPropertyIndex < 0) {
+  if (activeReadTarget == BacnetReadTarget::None ||
+      activeReadDeviceIndex < 0) {
     return;
   }
 
   BacnetDevicePreview& device = bacnetDevices[activeReadDeviceIndex];
-  BacnetPropertyPreview& property =
-      device.properties[activeReadPropertyIndex];
-
-  BacnetValue value;
-  if (bacnetClient.pollReadProperty(value, activeReadInvokeId, property.id)) {
-    property.value = value.text;
-    property.status = "ok";
-    property.received = true;
-
-    Serial.print("[I] BACnet ReadProperty ");
-    Serial.print(property.name);
-    Serial.print("=");
-    Serial.println(property.value);
-
+  BacnetPropertyId expectedProperty = BacnetPropertyId::ObjectName;
+  if (activeReadTarget == BacnetReadTarget::DeviceProperty &&
+      activeReadPropertyIndex >= 0) {
+    expectedProperty = device.properties[activeReadPropertyIndex].id;
+  } else if (activeReadTarget == BacnetReadTarget::MvPresentValue &&
+             activeReadMvIndex >= 0) {
+    expectedProperty = BacnetPropertyId::PresentValue;
+  } else {
+    activeReadTarget = BacnetReadTarget::None;
     activeReadDeviceIndex = -1;
     activeReadPropertyIndex = -1;
+    activeReadMvIndex = -1;
+    return;
+  }
+
+  BacnetValue value;
+  if (bacnetClient.pollReadProperty(value, activeReadInvokeId,
+                                    expectedProperty)) {
+    if (activeReadTarget == BacnetReadTarget::DeviceProperty) {
+      BacnetPropertyPreview& property =
+          device.properties[activeReadPropertyIndex];
+      property.value = value.text;
+      property.status = "ok";
+      property.received = true;
+
+      Serial.print("[I] BACnet ReadProperty ");
+      Serial.print(property.name);
+      Serial.print("=");
+      Serial.println(property.value);
+    } else {
+      BacnetMvPresentValuePreview& mv =
+          device.mvPresentValues[activeReadMvIndex];
+      mv.value = value.text;
+      mv.status = "ok";
+      mv.received = true;
+
+      Serial.print("[I] BACnet ReadProperty multi-state-value,");
+      Serial.print(mv.object.instance);
+      Serial.print(" presentValue=");
+      Serial.println(mv.value);
+    }
+
+    activeReadTarget = BacnetReadTarget::None;
+    activeReadDeviceIndex = -1;
+    activeReadPropertyIndex = -1;
+    activeReadMvIndex = -1;
     requestNextBacnetProperty();
     return;
   }
@@ -496,13 +648,27 @@ static void pollReadProperty() {
     return;
   }
 
-  property.failed = true;
-  property.status = "timeout";
-  Serial.print("[W] BACnet ReadProperty timeout ");
-  Serial.println(property.name);
+  if (activeReadTarget == BacnetReadTarget::DeviceProperty) {
+    BacnetPropertyPreview& property =
+        device.properties[activeReadPropertyIndex];
+    property.failed = true;
+    property.status = "timeout";
+    Serial.print("[W] BACnet ReadProperty timeout ");
+    Serial.println(property.name);
+  } else {
+    BacnetMvPresentValuePreview& mv =
+        device.mvPresentValues[activeReadMvIndex];
+    mv.failed = true;
+    mv.status = "timeout";
+    Serial.print("[W] BACnet ReadProperty timeout multi-state-value,");
+    Serial.print(mv.object.instance);
+    Serial.println(" presentValue");
+  }
 
+  activeReadTarget = BacnetReadTarget::None;
   activeReadDeviceIndex = -1;
   activeReadPropertyIndex = -1;
+  activeReadMvIndex = -1;
   requestNextBacnetProperty();
 }
 
