@@ -8,9 +8,14 @@ shaped. It is intended to become public around the first usable release.
 
 ## Current Status
 
-- Initial library scaffold only.
-- Minimal `BacnetClient` and `BacnetServer` role placeholders are available.
+- Minimal `BacnetClient` discovery support is available for BACnet/IP.
+- `BacnetClient` can build and send Who-Is requests and parse basic I-Am
+  responses.
+- Minimal client-side ReadProperty support is available for device strings,
+  object lists, and selected value object `presentValue` reads.
+- Minimal `BacnetServer` role placeholder is available.
 - BACnet/IP is the first target.
+- WriteProperty is not implemented yet.
 - BACnet MS/TP is planned for later work.
 - No upstream `bacnet-stack` source files are imported yet.
 - ESP32 Configuration Manager is not a core dependency. It may be used later
@@ -53,12 +58,58 @@ BacnetServer server;
 
 void setup() {
   client.begin();
+  client.sendWhoIs();
   server.begin(1234);
 }
 
 void loop() {
+  BacnetIAmDevice device;
+  if (client.pollIAm(device)) {
+    // Discovery result available in device.deviceInstance and related fields.
+  }
 }
 ```
+
+## BACnet/IP Client Discovery
+
+The first client slice supports discovery:
+
+- builds standard BACnet/IP Who-Is requests
+- sends Who-Is on UDP port `47808`
+- parses minimal I-Am responses into `BacnetIAmDevice`
+- exposes discovered device instance, max APDU, segmentation, and vendor ID
+
+The `examples/client-demo` firmware demonstrates discovery on ESP32. It uses
+the optional ConfigurationManager-based example setup to connect WiFi, then
+sends Who-Is to the local BACnet/IP broadcast address every 30 seconds and logs
+received I-Am responses.
+
+Hardware validation for this slice was performed against a WAGO BACnet/IP
+server at `192.168.2.101:47808`; the ESP32 repeatedly discovered device
+instance `9001`.
+
+## BACnet/IP Client ReadProperty
+
+The first ReadProperty slice is intentionally narrow:
+
+- builds minimal confirmed ReadProperty requests
+- sends ReadProperty to a BACnet/IP device
+- parses confirmed ReadProperty ACKs for character string values
+- includes public object, property, and value helper types small enough to reuse
+  later from server-side work
+
+The initial property targets are device `objectName`, `vendorName`,
+`modelName`, and `firmwareRevision`. Hardware validation read those properties
+from the WAGO device instance `9001`.
+
+The `examples/client-demo` firmware also includes a lightweight BACnet/IP
+Discovery card for demo visibility. It shows only the first discovered device,
+keeps the BME280 status card unchanged, and scans configured value-object
+ranges without assuming instance `1` exists. The default demo scan ranges are
+Analog Value `200..999` and Multi-State Value `2000..2999`; up to 10 found AV
+objects and up to 10 found MV objects are displayed with `objectName`,
+optional `description`, and `presentValue` status/value. BACnet scan activity
+is written to both Serial and the ConfigurationManager GUI log.
 
 ## Build
 

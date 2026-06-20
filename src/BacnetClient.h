@@ -2,11 +2,52 @@
 
 #pragma once
 
+#include <Arduino.h>
+#include <WiFiUdp.h>
+
+#include <cstddef>
 #include <cstdint>
+
+struct BacnetIAmDevice {
+  uint32_t deviceInstance = 0;
+  uint32_t maxApduLengthAccepted = 0;
+  uint8_t segmentationSupported = 0;
+  uint16_t vendorId = 0;
+};
+
+struct BacnetObjectId {
+  uint16_t type = 0;
+  uint32_t instance = 0;
+};
+
+enum class BacnetPropertyId : uint32_t {
+  FirmwareRevision = 44,
+  ModelName = 70,
+  ObjectList = 76,
+  ObjectName = 77,
+  PresentValue = 85,
+  VendorName = 121,
+};
+
+struct BacnetValue {
+  static constexpr size_t kMaxTextLength = 512;
+
+  char text[kMaxTextLength] = {};
+  size_t textLength = 0;
+};
+
+enum class BacnetReadPropertyPollStatus {
+  None,
+  Ack,
+  Error,
+};
 
 class BacnetClient {
  public:
   static constexpr uint16_t kDefaultPort = 47808;
+  static constexpr size_t kWhoIsRequestSize = 8;
+  static constexpr size_t kMaxReadPropertyRequestSize = 25;
+  static constexpr uint32_t kNoArrayIndex = 0xFFFFFFFF;
 
   BacnetClient() = default;
 
@@ -16,7 +57,39 @@ class BacnetClient {
   bool isRunning() const;
   uint16_t localPort() const;
 
+  bool sendWhoIs(IPAddress address = IPAddress(255, 255, 255, 255),
+                 uint16_t port = kDefaultPort);
+  bool pollIAm(BacnetIAmDevice& device);
+  bool sendReadProperty(IPAddress address, BacnetObjectId object,
+                        BacnetPropertyId property, uint8_t invokeId = 1,
+                        uint16_t port = kDefaultPort,
+                        uint32_t arrayIndex = kNoArrayIndex);
+  bool pollReadProperty(BacnetValue& value, uint8_t expectedInvokeId,
+                        BacnetPropertyId expectedProperty);
+  BacnetReadPropertyPollStatus pollReadPropertyStatus(
+      BacnetValue& value, uint8_t expectedInvokeId,
+      BacnetPropertyId expectedProperty);
+
+  static size_t buildWhoIsRequest(uint8_t* buffer, size_t bufferSize);
+  static bool parseIAmResponse(const uint8_t* buffer, size_t length,
+                               BacnetIAmDevice& device);
+  static size_t buildReadPropertyRequest(uint8_t* buffer, size_t bufferSize,
+                                         BacnetObjectId object,
+                                         BacnetPropertyId property,
+                                         uint8_t invokeId = 1,
+                                         uint32_t arrayIndex = kNoArrayIndex);
+  static bool parseReadPropertyAck(const uint8_t* buffer, size_t length,
+                                   uint8_t expectedInvokeId,
+                                   BacnetPropertyId expectedProperty,
+                                   BacnetValue& value);
+  static bool parseReadPropertyError(const uint8_t* buffer, size_t length,
+                                     uint8_t expectedInvokeId,
+                                     BacnetValue& value);
+
  private:
+  static constexpr size_t kMaxDiscoveryPacketSize = 512;
+
+  WiFiUDP udp_;
   bool running_ = false;
   uint16_t localPort_ = kDefaultPort;
 };

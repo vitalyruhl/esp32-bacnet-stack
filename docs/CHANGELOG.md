@@ -2,6 +2,35 @@
 
 This changelog is a curated overview.
 
+## 0.5.0
+
+- Added narrow client ReadProperty array-index support for `objectList`.
+- Updated the client demo BACnet/IP Discovery card to show the first
+  discovered device only, scan Analog Value and Multi-State Value instance
+  ranges, and display found `presentValue` values/status without fixed MV
+  placeholders.
+- Added a client-demo compatibility include for Linux CI builds of the
+  ConfigurationManager dependency.
+
+## 0.4.0
+
+- Added minimal client ReadProperty support for multi-state-value
+  `presentValue` values.
+- Extended the client demo to read WAGO MV `presentValue` values for a small
+  temporary hardware-validation object list.
+
+## 0.3.0
+
+- Started minimal BACnet/IP client ReadProperty support with request building
+  and narrow ACK parsing for simple character string properties.
+
+## 0.2.0
+
+- Started GitHub Issue #4 with minimal BACnet/IP client discovery support.
+- Added BACnet/IP Who-Is request building and sending.
+- Added minimal BACnet/IP I-Am response parsing for device discovery.
+- Added ESP32 client demo hardware validation against a WAGO BACnet/IP device
+  with device instance `9001`.
 
 ## 0.1.0
 
