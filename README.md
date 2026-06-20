@@ -11,8 +11,8 @@ shaped. It is intended to become public around the first usable release.
 - Minimal `BacnetClient` discovery support is available for BACnet/IP.
 - `BacnetClient` can build and send Who-Is requests and parse basic I-Am
   responses.
-- Minimal client-side ReadProperty support is available for simple character
-  string properties.
+- Minimal client-side ReadProperty support is available for device strings,
+  object lists, and selected value object `presentValue` reads.
 - Minimal `BacnetServer` role placeholder is available.
 - BACnet/IP is the first target.
 - WriteProperty is not implemented yet.
@@ -99,8 +99,17 @@ The first ReadProperty slice is intentionally narrow:
   later from server-side work
 
 The initial property targets are device `objectName`, `vendorName`,
-`modelName`, and `firmwareRevision`. Hardware validation read `objectName` from
-the WAGO device instance `9001`.
+`modelName`, and `firmwareRevision`. Hardware validation read those properties
+from the WAGO device instance `9001`.
+
+The `examples/client-demo` firmware also includes a lightweight BACnet/IP
+Discovery card for demo visibility. It shows only the first discovered device,
+keeps the BME280 status card unchanged, and scans configured value-object
+ranges without assuming instance `1` exists. The default demo scan ranges are
+Analog Value `200..999` and Multi-State Value `2000..2999`; up to 10 found AV
+objects and up to 10 found MV objects are displayed with `objectName`,
+optional `description`, and `presentValue` status/value. BACnet scan activity
+is written to both Serial and the ConfigurationManager GUI log.
 
 ## Build
 
