@@ -2,6 +2,19 @@
 
 This changelog is a curated overview.
 
+## 0.7.0
+
+- Added a reusable BACnet logging layer with `BacnetLogLevel`,
+  `BacnetLogRecord`, `BacnetLogOutput`, `BacnetLogger`, scoped tags, global and
+  per-output levels, per-output filters, timestamp modes, and rate limits.
+- Added compile-time logging switches `BACNET_ENABLE_LOGGING` and
+  `BACNET_ENABLE_VERBOSE_LOGGING`.
+- Wired compact client logs for begin/end, Who-Is, I-Am, ReadProperty send,
+  ACK, error, decode rejection, and timeout notifications.
+- Added a small client-demo adapter that forwards BACnet library logs to the
+  existing ConfigurationManager logging output without adding a ConfigManager
+  dependency to the BACnet library.
+
 ## 0.6.0
 
 - Added a generic client ReadProperty request model with object identifier,

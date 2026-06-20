@@ -4,6 +4,35 @@
 #include <BacnetServer.h>
 #include <unity.h>
 
+#include <cstdio>
+#include <cstring>
+
+class CapturingBacnetLogOutput : public BacnetLogOutput {
+ public:
+  void log(const BacnetLogRecord& record) override {
+    ++count;
+    lastLevel = record.level;
+    lastTimestampMs = record.timestampMs;
+    snprintf(lastTag, sizeof(lastTag), "%s",
+             record.tag != nullptr ? record.tag : "");
+    snprintf(lastMessage, sizeof(lastMessage), "%s",
+             record.message != nullptr ? record.message : "");
+  }
+
+  size_t count = 0;
+  BacnetLogLevel lastLevel = BacnetLogLevel::Off;
+  uint32_t lastTimestampMs = 0;
+  char lastTag[96] = {};
+  char lastMessage[192] = {};
+};
+
+static bool acceptMatchingTag(const BacnetLogRecord& record,
+                              const void* userData) {
+  const char* expected = static_cast<const char*>(userData);
+  return expected != nullptr && record.tag != nullptr &&
+         strcmp(record.tag, expected) == 0;
+}
+
 void test_bacnet_client_lifecycle() {
   BacnetClient client;
 
@@ -14,6 +43,138 @@ void test_bacnet_client_lifecycle() {
 
   client.end();
   TEST_ASSERT_FALSE(client.isRunning());
+}
+
+void test_bacnet_logger_filters_global_and_output_levels() {
+  BacnetLogger logger;
+  CapturingBacnetLogOutput infoOutput;
+  CapturingBacnetLogOutput warnOutput;
+
+  infoOutput.setLevel(BacnetLogLevel::Info);
+  warnOutput.setLevel(BacnetLogLevel::Warn);
+  logger.setGlobalLevel(BacnetLogLevel::Info);
+  logger.addOutput(infoOutput);
+  logger.addOutput(warnOutput);
+
+  logger.info("BACnet/Test", "visible info");
+  TEST_ASSERT_EQUAL_UINT32(1, infoOutput.count);
+  TEST_ASSERT_EQUAL_UINT32(0, warnOutput.count);
+  TEST_ASSERT_EQUAL_STRING("BACnet/Test", infoOutput.lastTag);
+  TEST_ASSERT_EQUAL_STRING("visible info", infoOutput.lastMessage);
+
+  logger.error("BACnet/Test", "visible error");
+  TEST_ASSERT_EQUAL_UINT32(2, infoOutput.count);
+  TEST_ASSERT_EQUAL_UINT32(1, warnOutput.count);
+
+  logger.setGlobalLevel(BacnetLogLevel::Error);
+  logger.info("BACnet/Test", "hidden info");
+  TEST_ASSERT_EQUAL_UINT32(2, infoOutput.count);
+  TEST_ASSERT_EQUAL_UINT32(1, warnOutput.count);
+}
+
+void test_bacnet_logger_filters_tags_and_rate_limits() {
+  BacnetLogger logger;
+  CapturingBacnetLogOutput output;
+  const char expectedTag[] = "BACnet/Discovery";
+
+  output.setLevel(BacnetLogLevel::Info);
+  output.setFilter(acceptMatchingTag, expectedTag);
+  output.setMinIntervalMs(100);
+  logger.addOutput(output);
+
+  logger.emit(BacnetLogRecord{BacnetLogLevel::Info, "BACnet/ReadProperty",
+                              "filtered", 100, "BACnet", nullptr});
+  TEST_ASSERT_EQUAL_UINT32(0, output.count);
+
+  logger.emit(BacnetLogRecord{BacnetLogLevel::Info, "BACnet/Discovery",
+                              "first", 100, "BACnet", nullptr});
+  logger.emit(BacnetLogRecord{BacnetLogLevel::Info, "BACnet/Discovery",
+                              "rate limited", 150, "BACnet", nullptr});
+  logger.emit(BacnetLogRecord{BacnetLogLevel::Info, "BACnet/Discovery",
+                              "second", 220, "BACnet", nullptr});
+
+  TEST_ASSERT_EQUAL_UINT32(2, output.count);
+  TEST_ASSERT_EQUAL_STRING("second", output.lastMessage);
+}
+
+void test_bacnet_logger_scoped_tags_and_no_output_mode() {
+  BacnetLogger logger;
+  CapturingBacnetLogOutput output;
+  output.setLevel(BacnetLogLevel::Info);
+
+  logger.info("BACnet/Test", "no output attached");
+
+  logger.addOutput(output);
+  logger.setTag("BACnet");
+  {
+    auto scoped = logger.scopedTag("ReadProperty");
+    logger.info("ACK", "value %d", 7);
+  }
+
+  TEST_ASSERT_EQUAL_UINT32(1, output.count);
+  TEST_ASSERT_EQUAL_STRING("BACnet/ReadProperty/ACK", output.lastTag);
+  TEST_ASSERT_EQUAL_STRING("value 7", output.lastMessage);
+}
+
+void test_bacnet_logger_uses_bounded_output_storage() {
+  BacnetLogger logger;
+  CapturingBacnetLogOutput outputs[BacnetLogger::kMaxOutputs + 1];
+
+  for (size_t i = 0; i < BacnetLogger::kMaxOutputs + 1; ++i) {
+    logger.addOutput(outputs[i]);
+  }
+
+  TEST_ASSERT_EQUAL_UINT32(static_cast<uint32_t>(BacnetLogger::kMaxOutputs),
+                           static_cast<uint32_t>(logger.outputCount()));
+
+  if (BacnetLogger::kMaxOutputs > 0) {
+    TEST_ASSERT_TRUE(logger.removeOutput(outputs[0]));
+    TEST_ASSERT_EQUAL_UINT32(
+        static_cast<uint32_t>(BacnetLogger::kMaxOutputs - 1),
+        static_cast<uint32_t>(logger.outputCount()));
+
+    logger.addOutput(outputs[BacnetLogger::kMaxOutputs]);
+    TEST_ASSERT_EQUAL_UINT32(static_cast<uint32_t>(BacnetLogger::kMaxOutputs),
+                             static_cast<uint32_t>(logger.outputCount()));
+  }
+}
+
+void test_bacnet_logger_ignores_extra_scoped_tags() {
+  BacnetLogger logger;
+  CapturingBacnetLogOutput output;
+  output.setLevel(BacnetLogLevel::Info);
+  logger.addOutput(output);
+  logger.setTag("BACnet");
+
+  for (size_t i = 0; i < BacnetLogger::kMaxTagDepth + 2; ++i) {
+    logger.pushTag("Scope");
+  }
+
+  logger.info("ACK", "done");
+
+  char expected[BacnetLogger::kMaxTagLength] = {};
+  snprintf(expected, sizeof(expected), "BACnet");
+  for (size_t i = 0; i < BacnetLogger::kMaxTagDepth; ++i) {
+    strncat(expected, "/Scope", sizeof(expected) - strlen(expected) - 1);
+  }
+  strncat(expected, "/ACK", sizeof(expected) - strlen(expected) - 1);
+
+  TEST_ASSERT_EQUAL_STRING(expected, output.lastTag);
+}
+
+void test_bacnet_logger_verbose_compile_gate() {
+  BacnetLogger logger;
+  CapturingBacnetLogOutput output;
+  output.setLevel(BacnetLogLevel::Trace);
+  logger.setGlobalLevel(BacnetLogLevel::Trace);
+  logger.addOutput(output);
+
+  logger.debug("BACnet/Test", "debug message");
+  if (BacnetLogger::isEnabledFor(BacnetLogLevel::Debug)) {
+    TEST_ASSERT_EQUAL_UINT32(1, output.count);
+  } else {
+    TEST_ASSERT_EQUAL_UINT32(0, output.count);
+  }
 }
 
 void test_bacnet_client_builds_who_is_request() {
@@ -255,6 +416,12 @@ void test_bacnet_server_lifecycle() {
 void setup() {
   UNITY_BEGIN();
   RUN_TEST(test_bacnet_client_lifecycle);
+  RUN_TEST(test_bacnet_logger_filters_global_and_output_levels);
+  RUN_TEST(test_bacnet_logger_filters_tags_and_rate_limits);
+  RUN_TEST(test_bacnet_logger_scoped_tags_and_no_output_mode);
+  RUN_TEST(test_bacnet_logger_uses_bounded_output_storage);
+  RUN_TEST(test_bacnet_logger_ignores_extra_scoped_tags);
+  RUN_TEST(test_bacnet_logger_verbose_compile_gate);
   RUN_TEST(test_bacnet_client_builds_who_is_request);
   RUN_TEST(test_bacnet_client_parses_i_am_response);
   RUN_TEST(test_bacnet_client_rejects_non_i_am_response);

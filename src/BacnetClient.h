@@ -5,6 +5,8 @@
 #include <Arduino.h>
 #include <WiFiUdp.h>
 
+#include "BacnetLogger.h"
+
 #include <cstddef>
 #include <cstdint>
 
@@ -102,6 +104,8 @@ class BacnetClient {
 
   bool isRunning() const;
   uint16_t localPort() const;
+  BacnetLogger& logger();
+  const BacnetLogger& logger() const;
 
   bool sendWhoIs(IPAddress address = IPAddress(255, 255, 255, 255),
                  uint16_t port = kDefaultPort);
@@ -117,6 +121,8 @@ class BacnetClient {
                         const BacnetPropertyRequest& expectedRequest);
   bool pollReadProperty(BacnetValue& value, uint8_t expectedInvokeId,
                         BacnetPropertyId expectedProperty);
+  void logReadPropertyTimeout(uint8_t invokeId,
+                              const BacnetPropertyRequest& request);
   BacnetReadPropertyPollStatus pollReadPropertyStatus(
       BacnetValue& value, uint8_t expectedInvokeId,
       const BacnetPropertyRequest& expectedRequest);
@@ -151,6 +157,7 @@ class BacnetClient {
   static constexpr size_t kMaxDiscoveryPacketSize = 512;
 
   WiFiUDP udp_;
+  BacnetLogger logger_;
   bool running_ = false;
   uint16_t localPort_ = kDefaultPort;
 };

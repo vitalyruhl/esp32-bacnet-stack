@@ -189,6 +189,36 @@ static void bacnetGuiLog(LogLevel level, const char* format, ...) {
   cm::LoggingManager::instance().logTag(level, "BACnet", "%s", message);
 }
 
+static LogLevel toCmLogLevel(BacnetLogLevel level) {
+  switch (level) {
+    case BacnetLogLevel::Fatal:
+      return LogLevel::Fatal;
+    case BacnetLogLevel::Error:
+      return LogLevel::Error;
+    case BacnetLogLevel::Warn:
+      return LogLevel::Warn;
+    case BacnetLogLevel::Debug:
+      return LogLevel::Debug;
+    case BacnetLogLevel::Trace:
+      return LogLevel::Trace;
+    case BacnetLogLevel::Info:
+    case BacnetLogLevel::Off:
+    default:
+      return LogLevel::Info;
+  }
+}
+
+class ClientDemoBacnetLogOutput : public BacnetLogOutput {
+ public:
+  void log(const BacnetLogRecord& record) override {
+    cm::LoggingManager::instance().logTag(
+        toCmLogLevel(record.level), record.tag != nullptr ? record.tag : "BACnet",
+        "%s", record.message != nullptr ? record.message : "");
+  }
+};
+
+static ClientDemoBacnetLogOutput bacnetLogOutput;
+
 static void setupGuiLogging() {
 #if !CM_DISABLE_GUI_LOGGING
   auto guiOut = std::make_unique<cm::LoggingManager::GuiOutput>(
@@ -201,6 +231,10 @@ static void setupGuiLogging() {
   cm::LoggingManager::instance().addOutput(std::move(guiOut));
 #endif
   cm::LoggingManager::instance().setGlobalLevel(LogLevel::Info);
+  bacnetLogOutput.setLevel(BacnetLogLevel::Info);
+  bacnetLogOutput.setTimestampMode(BacnetLogTimestampMode::Millis);
+  bacnetLogOutput.setMinIntervalMs(2);
+  bacnetClient.logger().addOutput(bacnetLogOutput);
 }
 
 struct TempSettings {
@@ -1190,6 +1224,8 @@ static void pollReadProperty() {
   if (millis() - activeReadStartedAt < activeReadTimeoutMs) {
     return;
   }
+
+  bacnetClient.logReadPropertyTimeout(activeReadInvokeId, activeReadRequest);
 
   if (activeReadTarget == BacnetReadTarget::DeviceProperty) {
     BacnetPropertyPreview& property =

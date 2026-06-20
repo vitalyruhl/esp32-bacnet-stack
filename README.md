@@ -13,6 +13,7 @@ shaped. It is intended to become public around the first usable release.
   responses.
 - Minimal client-side ReadProperty support is available for device strings,
   object lists, and selected value object `presentValue` reads.
+- A reusable BACnet logging layer is available with application-owned outputs.
 - Minimal `BacnetServer` role placeholder is available.
 - BACnet/IP is the first target.
 - WriteProperty is not implemented yet.
@@ -114,6 +115,29 @@ Analog Value `200..299` and Multi-State Value `2000..2099`; up to 10 found AV
 objects and up to 10 found MV objects are displayed with `objectName`,
 optional `description`, and `presentValue` status/value. BACnet scan activity
 is written to both Serial and the ConfigurationManager GUI log.
+
+## BACnet Logging
+
+The library exposes a small structured logging layer:
+
+- `BacnetLogLevel`
+- `BacnetLogRecord`
+- `BacnetLogOutput`
+- `BacnetLogger`
+- `BacnetScopedLogTag`
+
+Applications attach zero, one, or multiple outputs to
+`BacnetClient::logger()`. The core library does not depend on Serial,
+ConfigurationManager, MQTT, or file output. Outputs can define their own level,
+filter, timestamp mode, and rate limit.
+
+`BacnetLogRecord::message` and `BacnetLogRecord::tag` pointers are valid only
+during the `BacnetLogOutput::log()` callback. Buffered outputs must copy those
+fields if they keep records for later `tick()` processing.
+
+Logging callsites are controlled by `BACNET_ENABLE_LOGGING`. Debug and trace
+style verbose logs are additionally controlled by
+`BACNET_ENABLE_VERBOSE_LOGGING`.
 
 ## Build
 
