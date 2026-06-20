@@ -9,6 +9,8 @@ This changelog is a curated overview.
   discovered device only, scan Analog Value and Multi-State Value instance
   ranges, and display found `presentValue` values/status without fixed MV
   placeholders.
+- Added a client-demo compatibility include for Linux CI builds of the
+  ConfigurationManager dependency.
 
 ## 0.4.0
 
