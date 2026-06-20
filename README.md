@@ -90,13 +90,17 @@ instance `9001`.
 
 ## BACnet/IP Client ReadProperty
 
-The first ReadProperty slice is intentionally narrow:
+The client ReadProperty layer is still intentionally compact, but now uses a
+generic property-access model:
 
 - builds minimal confirmed ReadProperty requests
+- accepts object type, object instance, property identifier, and optional array
+  index through `BacnetPropertyRequest`
 - sends ReadProperty to a BACnet/IP device
-- parses confirmed ReadProperty ACKs for character string values
-- includes public object, property, and value helper types small enough to reuse
-  later from server-side work
+- parses confirmed ReadProperty ACKs into typed `BacnetValue` results with
+  display text conversion for demos and logs
+- includes public object, property, request, and value helper types small
+  enough to reuse later from server-side work
 
 The initial property targets are device `objectName`, `vendorName`,
 `modelName`, and `firmwareRevision`. Hardware validation read those properties
@@ -106,7 +110,7 @@ The `examples/client-demo` firmware also includes a lightweight BACnet/IP
 Discovery card for demo visibility. It shows only the first discovered device,
 keeps the BME280 status card unchanged, and scans configured value-object
 ranges without assuming instance `1` exists. The default demo scan ranges are
-Analog Value `200..999` and Multi-State Value `2000..2999`; up to 10 found AV
+Analog Value `200..299` and Multi-State Value `2000..2099`; up to 10 found AV
 objects and up to 10 found MV objects are displayed with `objectName`,
 optional `description`, and `presentValue` status/value. BACnet scan activity
 is written to both Serial and the ConfigurationManager GUI log.

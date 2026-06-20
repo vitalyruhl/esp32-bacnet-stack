@@ -2,6 +2,16 @@
 
 This changelog is a curated overview.
 
+## 0.6.0
+
+- Added a generic client ReadProperty request model with object identifier,
+  property identifier, and optional array-index fields.
+- Added typed `BacnetValue` decoding for the supported client ReadProperty
+  slice while preserving display text conversion for demos and logs.
+- Updated the client demo to scan Analog Value `200..299` and Multi-State Value
+  `2000..2099` objects on the first discovered device and display up to 10
+  found values for each type.
+
 ## 0.5.0
 
 - Added narrow client ReadProperty array-index support for `objectList`.

@@ -73,15 +73,16 @@ static constexpr size_t kMaxBacnetProperties = 5;
 static constexpr size_t kMaxBacnetAnalogValues = 10;
 static constexpr size_t kMaxBacnetMultiStateValues = 10;
 static constexpr size_t kBacnetPreviewPropertyCount = 4;
-static constexpr uint16_t kBacnetDeviceObjectType = 8;
-static constexpr uint16_t kBacnetAnalogValueObjectType = 2;
-static constexpr uint16_t kBacnetMultiStateValueObjectType = 19;
+static constexpr uint16_t kBacnetDeviceObjectType =
+    static_cast<uint16_t>(BacnetObjectType::Device);
+static constexpr uint16_t kBacnetAnalogValueObjectType =
+    static_cast<uint16_t>(BacnetObjectType::AnalogValue);
+static constexpr uint16_t kBacnetMultiStateValueObjectType =
+    static_cast<uint16_t>(BacnetObjectType::MultiStateValue);
 static constexpr uint32_t kAnalogValueScanStart = 200;
-static constexpr uint32_t kAnalogValueScanEnd = 999;
+static constexpr uint32_t kAnalogValueScanEnd = 299;
 static constexpr uint32_t kMultiStateValueScanStart = 2000;
-static constexpr uint32_t kMultiStateValueScanEnd = 2999;
-static constexpr BacnetPropertyId kBacnetDescriptionProperty =
-    static_cast<BacnetPropertyId>(28);
+static constexpr uint32_t kMultiStateValueScanEnd = 2099;
 
 static float temperature = 0.0f;
 static float dewPoint = 0.0f;
@@ -161,6 +162,7 @@ static int activeReadPropertyIndex = -1;
 static int activeReadValueIndex = -1;
 static uint16_t activeReadObjectType = 0;
 static uint32_t activeReadObjectInstance = 0;
+static BacnetPropertyRequest activeReadRequest;
 static uint8_t activeReadInvokeId = 0;
 static uint8_t nextReadInvokeId = 1;
 static unsigned long activeReadStartedAt = 0;
@@ -714,15 +716,15 @@ static void markValueScanFinished(BacnetDevicePreview& device,
 }
 
 static bool sendReadPropertyRequest(BacnetDevicePreview& device,
-                                    BacnetObjectId object,
-                                    BacnetPropertyId property,
+                                    const BacnetPropertyRequest& request,
                                     BacnetReadTarget target,
                                     uint32_t timeoutMs) {
   activeReadTarget = target;
   activeReadInvokeId = allocateReadPropertyInvokeId();
   activeReadStartedAt = millis();
   activeReadTimeoutMs = timeoutMs;
-  if (!bacnetClient.sendReadProperty(device.address, object, property,
+  activeReadRequest = request;
+  if (!bacnetClient.sendReadProperty(device.address, request,
                                      activeReadInvokeId)) {
     activeReadTarget = BacnetReadTarget::None;
     return false;
@@ -737,6 +739,7 @@ static void clearActiveReadState() {
   activeReadValueIndex = -1;
   activeReadObjectType = 0;
   activeReadObjectInstance = 0;
+  activeReadRequest = BacnetPropertyRequest{};
   activeReadTimeoutMs = kReadPropertyTimeoutMs;
 }
 
@@ -748,7 +751,8 @@ static bool startValueObjectProbe(size_t deviceIndex, uint16_t objectType,
   activeReadValueIndex = -1;
   activeReadObjectType = objectType;
   activeReadObjectInstance = instance;
-  const BacnetObjectId object{objectType, instance};
+  const BacnetPropertyRequest request{
+      BacnetObjectId{objectType, instance}, BacnetPropertyId::ObjectName};
 
   if (shouldLogScanProgress(objectType, instance)) {
     Serial.print("[I] BACnet scan progress ");
@@ -760,7 +764,7 @@ static bool startValueObjectProbe(size_t deviceIndex, uint16_t objectType,
                  static_cast<unsigned long>(instance));
   }
 
-  if (!sendReadPropertyRequest(device, object, BacnetPropertyId::ObjectName,
+  if (!sendReadPropertyRequest(device, request,
                                BacnetReadTarget::ScanObjectName,
                                kBacnetScanReadTimeoutMs)) {
     Serial.print("[W] BACnet scan send failed ");
@@ -863,7 +867,9 @@ static bool startValueObjectPresentValueRead(size_t deviceIndex,
                objectTypeName(objectType),
                static_cast<unsigned long>(object.object.instance));
 
-  if (!sendReadPropertyRequest(device, object.object, BacnetPropertyId::PresentValue,
+  const BacnetPropertyRequest request{object.object,
+                                      BacnetPropertyId::PresentValue};
+  if (!sendReadPropertyRequest(device, request,
                                target, kReadPropertyTimeoutMs)) {
     object.presentValueStatus = "send failed";
     bacnetGuiLog(LogLevel::Warn, "%s,%lu presentValue send failed",
@@ -890,8 +896,9 @@ static bool startValueObjectDescriptionRead(size_t deviceIndex,
   activeReadPropertyIndex = -1;
   activeReadObjectType = objectType;
   activeReadObjectInstance = objects[valueIndex].object.instance;
-  if (!sendReadPropertyRequest(device, objects[valueIndex].object,
-                               kBacnetDescriptionProperty,
+  const BacnetPropertyRequest request{objects[valueIndex].object,
+                                      BacnetPropertyId::Description};
+  if (!sendReadPropertyRequest(device, request,
                                BacnetReadTarget::ScanDescription,
                                kReadPropertyTimeoutMs)) {
     return false;
@@ -935,10 +942,12 @@ static void requestNextBacnetProperty() {
                    "ReadProperty device,%lu %s sent invoke next",
                    static_cast<unsigned long>(device.deviceId), property.name);
 
-      if (!sendReadPropertyRequest(
-              device, BacnetObjectId{kBacnetDeviceObjectType, device.deviceId},
-              property.id, BacnetReadTarget::DeviceProperty,
-              kReadPropertyTimeoutMs)) {
+      const BacnetPropertyRequest request{
+          BacnetObjectId{kBacnetDeviceObjectType, device.deviceId},
+          property.id};
+      if (!sendReadPropertyRequest(device, request,
+                                   BacnetReadTarget::DeviceProperty,
+                                   kReadPropertyTimeoutMs)) {
         property.failed = true;
         property.status = "send failed";
         bacnetGuiLog(LogLevel::Warn, "ReadProperty device,%lu %s send failed",
@@ -994,18 +1003,9 @@ static void pollReadProperty() {
   }
 
   BacnetDevicePreview& device = bacnetDevices[activeReadDeviceIndex];
-  BacnetPropertyId expectedProperty = BacnetPropertyId::ObjectName;
-  if (activeReadTarget == BacnetReadTarget::DeviceProperty &&
-      activeReadPropertyIndex >= 0) {
-    expectedProperty = device.properties[activeReadPropertyIndex].id;
-  } else if (activeReadTarget == BacnetReadTarget::ScanObjectName) {
-    expectedProperty = BacnetPropertyId::ObjectName;
-  } else if (activeReadTarget == BacnetReadTarget::ScanDescription) {
-    expectedProperty = kBacnetDescriptionProperty;
-  } else if (activeReadTarget == BacnetReadTarget::ScanPresentValue ||
-             activeReadTarget == BacnetReadTarget::RefreshPresentValue) {
-    expectedProperty = BacnetPropertyId::PresentValue;
-  } else {
+  if ((activeReadTarget == BacnetReadTarget::DeviceProperty &&
+       activeReadPropertyIndex < 0) ||
+      activeReadTarget == BacnetReadTarget::None) {
     activeReadTarget = BacnetReadTarget::None;
     activeReadDeviceIndex = -1;
     activeReadPropertyIndex = -1;
@@ -1016,12 +1016,12 @@ static void pollReadProperty() {
   BacnetValue value;
   const BacnetReadPropertyPollStatus pollStatus =
       bacnetClient.pollReadPropertyStatus(value, activeReadInvokeId,
-                                          expectedProperty);
+                                          activeReadRequest);
   if (pollStatus == BacnetReadPropertyPollStatus::Ack) {
     if (activeReadTarget == BacnetReadTarget::DeviceProperty) {
       BacnetPropertyPreview& property =
           device.properties[activeReadPropertyIndex];
-      property.value = value.text;
+      property.value = value.displayText();
       property.status = "ok";
       property.received = true;
 
@@ -1043,7 +1043,7 @@ static void pollReadProperty() {
             objects[i].discovered = true;
             objects[i].object =
                 BacnetObjectId{activeReadObjectType, activeReadObjectInstance};
-            objects[i].objectName = value.text;
+            objects[i].objectName = value.displayText();
             objects[i].label = selectBacnetLabel(objects[i]);
             activeReadValueIndex = static_cast<int>(i);
             Serial.print("[I] BACnet found ");
@@ -1075,7 +1075,7 @@ static void pollReadProperty() {
       if (objects != nullptr && activeReadValueIndex >= 0 &&
           static_cast<size_t>(activeReadValueIndex) < limit) {
         BacnetValueObjectPreview& object = objects[activeReadValueIndex];
-        object.description = value.text;
+        object.description = value.displayText();
         object.label = selectBacnetLabel(object);
         if (!startValueObjectPresentValueRead(activeReadDeviceIndex,
                                               activeReadObjectType,
@@ -1094,7 +1094,7 @@ static void pollReadProperty() {
       if (objects != nullptr && activeReadValueIndex >= 0 &&
           static_cast<size_t>(activeReadValueIndex) < limit) {
         BacnetValueObjectPreview& object = objects[activeReadValueIndex];
-        object.presentValue = value.text;
+        object.presentValue = value.displayText();
         object.presentValueStatus = "ok";
         object.lastPresentValueRefreshAt = millis();
         object.label = selectBacnetLabel(object);
@@ -1124,7 +1124,7 @@ static void pollReadProperty() {
   }
 
   if (pollStatus == BacnetReadPropertyPollStatus::Error) {
-    const String status = String("failed: ") + value.text;
+    const String status = String("failed: ") + value.displayText();
     if (activeReadTarget == BacnetReadTarget::DeviceProperty) {
       BacnetPropertyPreview& property =
           device.properties[activeReadPropertyIndex];
@@ -1133,22 +1133,22 @@ static void pollReadProperty() {
       Serial.print("[W] BACnet ReadProperty ");
       Serial.print(property.name);
       Serial.print(" failed: ");
-      Serial.println(value.text);
+      Serial.println(value.displayText());
       bacnetGuiLog(LogLevel::Warn,
                    "ReadProperty device,%lu %s failed invoke %u: %s",
                    static_cast<unsigned long>(device.deviceId),
-                   property.name, activeReadInvokeId, value.text);
+                   property.name, activeReadInvokeId, value.displayText());
     } else if (activeReadTarget == BacnetReadTarget::ScanDescription) {
       Serial.print("[W] BACnet ReadProperty ");
       Serial.print(objectTypeName(activeReadObjectType));
       Serial.print(",");
       Serial.print(activeReadObjectInstance);
       Serial.print(" description failed: ");
-      Serial.println(value.text);
+      Serial.println(value.displayText());
       bacnetGuiLog(LogLevel::Warn, "%s,%lu description failed: %s",
                    objectTypeName(activeReadObjectType),
                    static_cast<unsigned long>(activeReadObjectInstance),
-                   value.text);
+                   value.displayText());
       if (!startValueObjectPresentValueRead(
               activeReadDeviceIndex, activeReadObjectType,
               activeReadValueIndex, BacnetReadTarget::ScanPresentValue)) {
@@ -1172,11 +1172,11 @@ static void pollReadProperty() {
       Serial.print(",");
       Serial.print(activeReadObjectInstance);
       Serial.print(" presentValue failed: ");
-      Serial.println(value.text);
+      Serial.println(value.displayText());
       bacnetGuiLog(LogLevel::Warn, "%s,%lu presentValue failed: %s",
                    objectTypeName(activeReadObjectType),
                    static_cast<unsigned long>(activeReadObjectInstance),
-                   value.text);
+                   value.displayText());
     }
 
     activeReadTarget = BacnetReadTarget::None;
