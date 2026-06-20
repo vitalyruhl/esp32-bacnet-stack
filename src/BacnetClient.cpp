@@ -13,6 +13,7 @@ constexpr uint8_t kNpduVersion = 0x01;
 constexpr uint8_t kNpduExpectingReply = 0x04;
 constexpr uint8_t kApduConfirmedRequest = 0x00;
 constexpr uint8_t kApduComplexAck = 0x30;
+constexpr uint8_t kApduError = 0x50;
 constexpr uint8_t kApduUnconfirmedRequest = 0x10;
 constexpr uint8_t kServiceIAm = 0x00;
 constexpr uint8_t kServiceWhoIs = 0x08;
@@ -162,6 +163,66 @@ bool parseApplicationReal(const uint8_t* buffer, size_t length, size_t& offset,
   return copyTextValue(value, text);
 }
 
+bool parseApplicationObjectIdentifier(const uint8_t* buffer, size_t length,
+                                      size_t& offset, BacnetValue& value) {
+  uint32_t objectIdentifier = 0;
+  if (!readApplicationValue(buffer, length, offset,
+                            kApplicationTagObjectIdentifier,
+                            objectIdentifier)) {
+    return false;
+  }
+
+  const uint16_t objectType = static_cast<uint16_t>(objectIdentifier >> 22);
+  const uint32_t instance = objectIdentifier & kObjectInstanceMask;
+  char text[BacnetValue::kMaxTextLength] = {};
+  std::snprintf(text, sizeof(text), "%u,%lu", objectType,
+                static_cast<unsigned long>(instance));
+  return copyTextValue(value, text);
+}
+
+bool appendText(char* target, size_t targetSize, size_t& used,
+                const char* text) {
+  if (target == nullptr || targetSize == 0 || text == nullptr) {
+    return false;
+  }
+
+  const size_t textLength = std::strlen(text);
+  if (used + textLength >= targetSize) {
+    return false;
+  }
+
+  std::memcpy(&target[used], text, textLength);
+  used += textLength;
+  target[used] = '\0';
+  return true;
+}
+
+bool parseApplicationObjectIdentifierList(const uint8_t* buffer, size_t length,
+                                          size_t& offset, BacnetValue& value) {
+  char text[BacnetValue::kMaxTextLength] = {};
+  size_t used = 0;
+
+  while (offset < length && buffer[offset] != 0x3F) {
+    uint32_t objectIdentifier = 0;
+    if (!readApplicationValue(buffer, length, offset,
+                              kApplicationTagObjectIdentifier,
+                              objectIdentifier)) {
+      return false;
+    }
+
+    const uint16_t objectType = static_cast<uint16_t>(objectIdentifier >> 22);
+    const uint32_t instance = objectIdentifier & kObjectInstanceMask;
+    char entry[24] = {};
+    std::snprintf(entry, sizeof(entry), "%s%u,%lu", used == 0 ? "" : ";",
+                  objectType, static_cast<unsigned long>(instance));
+    if (!appendText(text, sizeof(text), used, entry)) {
+      break;
+    }
+  }
+
+  return used > 0 && copyTextValue(value, text);
+}
+
 bool parseApplicationCharacterString(const uint8_t* buffer, size_t length,
                                      size_t& offset, BacnetValue& value) {
   size_t stringLength = 0;
@@ -206,6 +267,18 @@ bool parseReadPropertyApplicationValue(const uint8_t* buffer, size_t length,
     }
     if (tagNumber == kApplicationTagReal) {
       return parseApplicationReal(buffer, length, offset, value);
+    }
+  }
+
+  if (expectedProperty == BacnetPropertyId::ObjectList) {
+    const uint8_t tagNumber = buffer[offset] >> 4;
+    if (tagNumber == kApplicationTagUnsigned) {
+      return parseApplicationUnsigned(buffer, length, offset,
+                                      kApplicationTagUnsigned, value);
+    }
+    if (tagNumber == kApplicationTagObjectIdentifier) {
+      return parseApplicationObjectIdentifierList(buffer, length, offset,
+                                                 value);
     }
   }
 
@@ -337,11 +410,11 @@ bool BacnetClient::pollIAm(BacnetIAmDevice& device) {
 
 bool BacnetClient::sendReadProperty(IPAddress address, BacnetObjectId object,
                                     BacnetPropertyId property, uint8_t invokeId,
-                                    uint16_t port) {
+                                    uint16_t port, uint32_t arrayIndex) {
   uint8_t request[kMaxReadPropertyRequestSize] = {};
   const size_t requestSize =
       buildReadPropertyRequest(request, sizeof(request), object, property,
-                               invokeId);
+                               invokeId, arrayIndex);
 
   if (!running_ || requestSize == 0) {
     return false;
@@ -358,24 +431,38 @@ bool BacnetClient::sendReadProperty(IPAddress address, BacnetObjectId object,
 bool BacnetClient::pollReadProperty(BacnetValue& value,
                                     uint8_t expectedInvokeId,
                                     BacnetPropertyId expectedProperty) {
+  return pollReadPropertyStatus(value, expectedInvokeId, expectedProperty) ==
+         BacnetReadPropertyPollStatus::Ack;
+}
+
+BacnetReadPropertyPollStatus BacnetClient::pollReadPropertyStatus(
+    BacnetValue& value, uint8_t expectedInvokeId,
+    BacnetPropertyId expectedProperty) {
   if (!running_) {
-    return false;
+    return BacnetReadPropertyPollStatus::None;
   }
 
   const int packetSize = udp_.parsePacket();
   if (packetSize <= 0 ||
       static_cast<size_t>(packetSize) > kMaxDiscoveryPacketSize) {
-    return false;
+    return BacnetReadPropertyPollStatus::None;
   }
 
   uint8_t packet[kMaxDiscoveryPacketSize] = {};
   const int bytesRead = udp_.read(packet, packetSize);
   if (bytesRead != packetSize) {
-    return false;
+    return BacnetReadPropertyPollStatus::None;
   }
 
-  return parseReadPropertyAck(packet, static_cast<size_t>(bytesRead),
-                              expectedInvokeId, expectedProperty, value);
+  if (parseReadPropertyAck(packet, static_cast<size_t>(bytesRead),
+                           expectedInvokeId, expectedProperty, value)) {
+    return BacnetReadPropertyPollStatus::Ack;
+  }
+  if (parseReadPropertyError(packet, static_cast<size_t>(bytesRead),
+                             expectedInvokeId, value)) {
+    return BacnetReadPropertyPollStatus::Error;
+  }
+  return BacnetReadPropertyPollStatus::None;
 }
 
 size_t BacnetClient::buildWhoIsRequest(uint8_t* buffer, size_t bufferSize) {
@@ -458,7 +545,8 @@ size_t BacnetClient::buildReadPropertyRequest(uint8_t* buffer,
                                               size_t bufferSize,
                                               BacnetObjectId object,
                                               BacnetPropertyId property,
-                                              uint8_t invokeId) {
+                                              uint8_t invokeId,
+                                              uint32_t arrayIndex) {
   if (buffer == nullptr || bufferSize < kMaxReadPropertyRequestSize ||
       object.instance > kObjectInstanceMask) {
     return 0;
@@ -479,6 +567,9 @@ size_t BacnetClient::buildReadPropertyRequest(uint8_t* buffer,
   offset = writeContextUnsigned(buffer, offset, 0, encodeObjectId(object));
   offset = writeContextUnsigned(buffer, offset, 1,
                                 static_cast<uint32_t>(property));
+  if (arrayIndex != kNoArrayIndex) {
+    offset = writeContextUnsigned(buffer, offset, 2, arrayIndex);
+  }
 
   buffer[2] = static_cast<uint8_t>(offset >> 8);
   buffer[3] = static_cast<uint8_t>(offset);
@@ -520,4 +611,37 @@ bool BacnetClient::parseReadPropertyAck(const uint8_t* buffer, size_t length,
   }
 
   return offset < length && buffer[offset] == 0x3F;
+}
+
+bool BacnetClient::parseReadPropertyError(const uint8_t* buffer, size_t length,
+                                          uint8_t expectedInvokeId,
+                                          BacnetValue& value) {
+  if (buffer == nullptr || length < 13 || buffer[0] != kBvlcTypeBacnetIp ||
+      buffer[1] != kBvlcOriginalUnicastNpdu || readUint16(&buffer[2]) != length) {
+    return false;
+  }
+
+  size_t offset = 4;
+  if (!readNpduHeader(buffer, length, offset) || offset + 3 > length ||
+      (buffer[offset++] & 0xF0) != kApduError ||
+      buffer[offset++] != expectedInvokeId ||
+      buffer[offset++] != kServiceReadProperty) {
+    return false;
+  }
+
+  uint32_t errorClass = 0;
+  uint32_t errorCode = 0;
+  char text[BacnetValue::kMaxTextLength] = {};
+  if (readApplicationValue(buffer, length, offset, kApplicationTagEnumerated,
+                           errorClass) &&
+      readApplicationValue(buffer, length, offset, kApplicationTagEnumerated,
+                           errorCode)) {
+    std::snprintf(text, sizeof(text), "error class %lu code %lu",
+                  static_cast<unsigned long>(errorClass),
+                  static_cast<unsigned long>(errorCode));
+  } else {
+    std::snprintf(text, sizeof(text), "error");
+  }
+
+  return copyTextValue(value, text);
 }

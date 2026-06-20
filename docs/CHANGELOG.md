@@ -2,6 +2,12 @@
 
 This changelog is a curated overview.
 
+## 0.5.0
+
+- Added narrow client ReadProperty array-index support for `objectList`.
+- Updated the client demo to discover WAGO multi-state-value objects from
+  `objectList` before reading `presentValue`.
+
 ## 0.4.0
 
 - Added minimal client ReadProperty support for multi-state-value
