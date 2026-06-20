@@ -73,6 +73,7 @@ static constexpr uint32_t kBacnetObjectListReadTimeoutMs = 3000;
 static constexpr uint32_t kBacnetScanReadTimeoutMs = kReadPropertyTimeoutMs;
 static constexpr uint32_t kBacnetScanProbeDelayMs = 50;
 static constexpr uint32_t kBacnetMaxObjectListEntriesToInspect = 600;
+static constexpr uint8_t kBacnetObjectListCountMaxRetries = 3;
 static constexpr uint32_t kBacnetMaxMissingObjectsInRow = 20;
 static constexpr bool kBacnetEnableFallbackRangeScan = false;
 // Fallback range probing is disabled by default and is only for local debug if
@@ -164,6 +165,7 @@ struct BacnetDevicePreview {
   uint32_t objectListCount = 0;
   uint32_t nextObjectListIndex = 1;
   uint32_t objectListEntriesInspected = 0;
+  uint8_t objectListCountFailures = 0;
   uint32_t nextAnalogValueInstance = kAnalogValueScanStart;
   uint32_t nextMultiStateValueInstance = kMultiStateValueScanStart;
   uint32_t analogMissingInRow = 0;
@@ -1385,6 +1387,16 @@ static void requestNextBacnetProperty() {
   }
 }
 
+static bool isObjectListScanActive() {
+  if (!bacnetDevices[0].active) {
+    return false;
+  }
+
+  const BacnetDevicePreview& device = bacnetDevices[0];
+  return device.valueScanStarted && !device.valueScanFinished &&
+         !device.objectListScanFinished;
+}
+
 static void pollReadProperty() {
   if (activeReadTarget == BacnetReadTarget::None ||
       activeReadDeviceIndex < 0) {
@@ -1428,6 +1440,7 @@ static void pollReadProperty() {
         device.objectListCountKnown = true;
         device.nextObjectListIndex = 1;
         device.objectListEntriesInspected = 0;
+        device.objectListCountFailures = 0;
         const uint32_t effectiveObjectListLimit =
             device.objectListCount < kBacnetMaxObjectListEntriesToInspect
                 ? device.objectListCount
@@ -1628,10 +1641,18 @@ static void pollReadProperty() {
                    static_cast<unsigned long>(device.deviceId),
                    property.name, activeReadInvokeId, value.displayText());
     } else if (activeReadTarget == BacnetReadTarget::ScanObjectListCount) {
-      device.objectListScanFinished = true;
+      ++device.objectListCountFailures;
       bacnetClient.logger().warn(
-          "BACnet/Scan", "objectList count read failed: %s",
-          value.displayText());
+          "BACnet/Scan",
+          "objectList count read failed: %s retry %u/%u",
+          value.displayText(),
+          static_cast<unsigned>(device.objectListCountFailures),
+          static_cast<unsigned>(kBacnetObjectListCountMaxRetries));
+      if (device.objectListCountFailures < kBacnetObjectListCountMaxRetries) {
+        device.objectListScanStarted = false;
+      } else {
+        device.objectListScanFinished = true;
+      }
     } else if (activeReadTarget == BacnetReadTarget::ScanObjectListEntry) {
       bacnetClient.logger().warn(
           "BACnet/Scan", "objectList[%lu] read failed: %s",
@@ -1742,10 +1763,17 @@ static void pollReadProperty() {
                  static_cast<unsigned long>(device.deviceId), property.name,
                  activeReadInvokeId);
   } else if (activeReadTarget == BacnetReadTarget::ScanObjectListCount) {
-    device.objectListScanFinished = true;
+    ++device.objectListCountFailures;
     bacnetClient.logger().warn(
-        "BACnet/Scan", "objectList count timeout invoke %u",
-        activeReadInvokeId);
+        "BACnet/Scan", "objectList count timeout invoke %u retry %u/%u",
+        activeReadInvokeId,
+        static_cast<unsigned>(device.objectListCountFailures),
+        static_cast<unsigned>(kBacnetObjectListCountMaxRetries));
+    if (device.objectListCountFailures < kBacnetObjectListCountMaxRetries) {
+      device.objectListScanStarted = false;
+    } else {
+      device.objectListScanFinished = true;
+    }
   } else if (activeReadTarget == BacnetReadTarget::ScanObjectListEntry) {
     bacnetClient.logger().warn(
         "BACnet/Scan", "objectList[%lu] timeout invoke %u",
@@ -1860,6 +1888,8 @@ static void pollBacnetDiscovery() {
     requestNextBacnetProperty();
   }
 
+  requestNextBacnetProperty();
+
   if (!receivedIAmSinceLastWhoIs && !discoveryWaitWarningLogged &&
       millis() - lastWhoIsAt >= kBacnetDiscoveryWaitMs) {
     discoveryWaitWarningLogged = true;
@@ -1869,7 +1899,7 @@ static void pollBacnetDiscovery() {
         static_cast<unsigned long>(kBacnetDiscoveryWaitMs));
   }
 
-  if (millis() - lastWhoIsAt >= kWhoIsIntervalMs) {
+  if (!isObjectListScanActive() && millis() - lastWhoIsAt >= kWhoIsIntervalMs) {
     sendWhoIs();
   }
 }

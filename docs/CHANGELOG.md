@@ -13,6 +13,10 @@ This changelog is a curated overview.
   object-list entries, and displayed objects.
 - Set the default client-demo object-list inspection cap to 600 entries so
   later WAGO MV objects can be reached while enumeration remains bounded.
+- Decoupled the client-demo object-list scan scheduler from periodic Who-Is
+  rediscovery so enumeration advances on normal loop ticks.
+- Added bounded retries for the client-demo object-list count read so a single
+  WiFi timeout does not finish discovery prematurely.
 - Documented that object browsing state stays outside the low-level
   `BacnetClient` core.
 
