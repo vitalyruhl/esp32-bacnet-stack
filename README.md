@@ -109,12 +109,15 @@ from the WAGO device instance `9001`.
 
 The `examples/client-demo` firmware also includes a lightweight BACnet/IP
 Discovery card for demo visibility. It shows only the first discovered device,
-keeps the BME280 status card unchanged, and scans configured value-object
-ranges without assuming instance `1` exists. The default demo scan ranges are
-Analog Value `200..299` and Multi-State Value `2000..2099`; up to 10 found AV
-objects and up to 10 found MV objects are displayed with `objectName`,
-optional `description`, and `presentValue` status/value. BACnet scan activity
-is written to both Serial and the ConfigurationManager GUI log.
+keeps the BME280 status card unchanged, and uses the Device Object
+`object-list` property as the primary path for AV/MV discovery. Up to 10 found
+Analog Value objects and up to 10 found Multi-State Value objects are displayed
+with `description` or `objectName` plus `presentValue` status/value.
+WiFi-friendly discovery, object-list, ReadProperty, and inter-request timing
+values are configurable near the top of `examples/client-demo/src/main.cpp`.
+AV200/MV2000 range probing remains a disabled debug fallback, not the normal
+discovery strategy. BACnet scan activity is written through the BACnet logger
+and forwarded to the ConfigurationManager GUI log by the demo adapter.
 
 ## BACnet Logging
 

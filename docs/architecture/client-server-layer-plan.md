@@ -94,19 +94,24 @@ cached property state.
 
 ### 4. Reusable Client API
 
-`BacnetClient` should become the application-facing owner of client runtime
-state.
+`BacnetClient` should stay the small application-facing owner of core client
+runtime state. Object enumeration and browser-style state should be optional
+layers, not mandatory `BacnetClient` behavior.
 
 Responsibilities:
 
-- Own transport, codec usage, transaction manager, discovered devices, sessions,
-  scans, subscriptions, and BACnet logger attachment.
+- Own transport, codec usage, transaction manager, discovered devices, and
+  BACnet logger attachment.
 - Provide `begin()`, `end()`, `poll()`, `isRunning()`, `sendWhoIs()`, discovery
-  callbacks, and session lookup/creation.
+  callbacks, and low-level ReadProperty operations.
 - Dispatch incoming datagrams to discovery or transaction paths.
-- Tick scans, subscriptions, transaction timeouts, and log outputs from `poll()`.
+- Tick transaction timeouts and log outputs from `poll()`.
 - Keep low-level encode/decode helpers available where useful for tests, but
   keep normal application code on higher-level APIs.
+
+The core client should not automatically enumerate all objects, own GUI scan
+state, or require object caches for users that only read or write known BACnet
+points.
 
 ### 5. Device Session API
 
@@ -169,16 +174,19 @@ Property handle helpers:
 Unsupported or missing properties should fail only the specific property read,
 not the whole object or scan.
 
-### 7. Scan API
+### 7. Optional Object Discovery / Scan API
 
-`BacnetScanJob` should move object scanning out of the demo.
+Object discovery should live in an optional bounded helper layer such as
+`BacnetObjectDiscovery`, `BacnetObjectEnumerator`, or a future session-owned
+scan job. It must not become mandatory `BacnetClient` core behavior.
 
 Configuration:
 
 - Device session.
-- One or more object types.
-- Instance ranges per object type.
+- Primary discovery source: Device Object `object-list` when available.
+- Optional debug/fallback instance ranges per object type.
 - Maximum result count per type and total if needed.
+- Maximum `object-list` entries to inspect.
 - Probe delay/yield interval.
 - Read timeout.
 - Optional properties to read for each found object.
@@ -187,18 +195,20 @@ Configuration:
 State representation:
 
 - Scan status: idle, running, complete, canceled, failed.
-- Current object type, current instance, current property, and pending
-  transaction handle.
+- Current object-list index or fallback object type/instance, current property,
+  and pending transaction handle.
 - Found objects as `BacnetScannedObject` records with object ID, selected label,
   property values, and per-property statuses.
 - Counters for probed instances, found objects, timeouts, unsupported responses,
   and decode failures.
 
-The scan should be non-blocking and advanced from `BacnetClient::poll()`.
+The scan should be non-blocking and advanced by the optional helper or the
+application demo loop. The core client only supplies ReadProperty and logging
+operations.
 
-For the WAGO validation demo, the example can configure ranges such as AV
-200..299 and MV 2000..2099. The library should work with any configured ranges
-and must not assume object instances start at 1.
+For the WAGO validation demo, AV200 and MV2000 are examples of existing object
+IDs, not the normal discovery strategy. Range probing may remain disabled
+fallback/debug logic only.
 
 ### 8. Subscription / Fallback Polling API
 

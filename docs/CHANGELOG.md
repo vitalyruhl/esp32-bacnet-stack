@@ -2,6 +2,20 @@
 
 This changelog is a curated overview.
 
+## 0.8.0
+
+- Updated the client demo to discover Analog Value and Multi-State Value
+  objects from the selected device's Device Object `object-list` property.
+- Kept AV200/MV2000 range probing as a disabled debug fallback instead of the
+  normal discovery strategy.
+- Added WiFi-friendly, demo-local scan timing constants for discovery wait,
+  object-list reads, ReadProperty reads, inter-request delay, inspected
+  object-list entries, and displayed objects.
+- Set the default client-demo object-list inspection cap to 600 entries so
+  later WAGO MV objects can be reached while enumeration remains bounded.
+- Documented that object browsing state stays outside the low-level
+  `BacnetClient` core.
+
 ## 0.7.0
 
 - Added a reusable BACnet logging layer with `BacnetLogLevel`,
