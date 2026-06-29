@@ -36,6 +36,11 @@ coverage are still evolving.
 - PlatformIO with the Arduino framework.
 - C++17 enabled through `-std=gnu++17`.
 
+## screenshots
+
+![alt text](docs/screenshots/bnm-V0.8.2.jpg)
+
+
 ## Repository Layout
 
 | Path | Purpose |

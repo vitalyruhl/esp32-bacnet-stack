@@ -30,7 +30,7 @@
 #define BME280_ADDRESS 0x76
 #endif
 
-#define VERSION CONFIGMANAGER_VERSION
+#define VERSION "0.8.2"
 #ifndef APP_NAME
 #define APP_NAME "BACnet Client Discovery Demo"
 #endif
@@ -216,14 +216,33 @@ static uint32_t activeReadTimeoutMs = kReadPropertyTimeoutMs;
 
 static const char GLOBAL_THEME_OVERRIDE[] PROGMEM = R"CSS(
 .myCSSTempClass { color:rgb(198, 16, 16) !important; font-weight:900!important; font-size: 1.2rem!important; }
-.bacnetObjectListValue {
+.live-cards {
+  align-items: flex-start !important;
+  grid-template-columns: minmax(620px, 820px) minmax(280px, 1fr) !important;
+}
+
+.live-cards > .card:first-child {
+  flex: 1 1 680px !important;
+  min-width: 620px !important;
+  max-width: 820px !important;
+}
+
+.live-cards > .card:first-child .rw {
+  display: grid !important;
+  grid-template-columns: 140px minmax(0, 1fr) auto !important;
+  column-gap: 12px !important;
+  align-items: start !important;
+}
+
+.dv[data-label="Analog Values"] + .rw .val,
+.dv[data-label="Multi-State Values"] + .rw .val {
   display: block !important;
   text-align: left !important;
   white-space: pre-line !important;
-  overflow-wrap: anywhere;
-  line-height: 1.35;
-  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
-  font-size: 0.88rem;
+  overflow-wrap: anywhere !important;
+  line-height: 1.35 !important;
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace !important;
+  font-size: 0.88rem !important;
 }
 )CSS";
 
