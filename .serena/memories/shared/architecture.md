@@ -39,12 +39,12 @@
 
 ### WAGO Object-List Validation Facts
 
-- Local validation target: WAGO BACnet device ID 9001, vendor 222, model
+- Local validation target: WAGO BACnet device ID `<DEVICE_INSTANCE>`, vendor 222, model
   `750-8212/0000-0100`.
 - Runtime Device Object `object-list` count observed: 544.
-- Local validation export `.Temp/basic-export.csv` also contains 544 BACnet
-  objects. The export is local validation input only and must not be committed
-  or copied wholesale into tracked documentation.
+- The local ignored validation export also contains 544 BACnet objects. The
+  export is local validation input only and must not be committed or copied
+  wholesale into tracked documentation.
 - Relevant object distribution from the export:
   - `ANALOG_INPUT`: 22 objects; first `AI0`; object-list starts around position
     1.

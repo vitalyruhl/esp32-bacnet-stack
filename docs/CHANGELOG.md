@@ -71,7 +71,7 @@ This changelog is a curated overview.
 - Added BACnet/IP Who-Is request building and sending.
 - Added minimal BACnet/IP I-Am response parsing for device discovery.
 - Added ESP32 client demo hardware validation against a WAGO BACnet/IP device
-  with device instance `9001`.
+  with device instance `<DEVICE_INSTANCE>`.
 
 ## 0.1.0
 

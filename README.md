@@ -3,8 +3,8 @@
 ESP32 BACnet Stack is an early-stage Arduino/PlatformIO library for BACnet/IP
 client and server experiments on ESP32 boards.
 
-The project is private while the initial API and protocol integration are being
-shaped. It is intended to become public around the first usable release.
+The project is published as open-source work in progress. APIs and protocol
+coverage are still evolving.
 
 ## Current Status
 
@@ -86,8 +86,8 @@ sends Who-Is to the local BACnet/IP broadcast address every 30 seconds and logs
 received I-Am responses.
 
 Hardware validation for this slice was performed against a WAGO BACnet/IP
-server at `192.168.2.101:47808`; the ESP32 repeatedly discovered device
-instance `9001`.
+server at `<BACNET_DEVICE_IP>:47808`; the ESP32 repeatedly discovered device
+instance `<DEVICE_INSTANCE>`.
 
 ## BACnet/IP Client ReadProperty
 
@@ -105,7 +105,7 @@ generic property-access model:
 
 The initial property targets are device `objectName`, `vendorName`,
 `modelName`, and `firmwareRevision`. Hardware validation read those properties
-from the WAGO device instance `9001`.
+from a WAGO device instance `<DEVICE_INSTANCE>`.
 
 The `examples/client-demo` firmware also includes a lightweight BACnet/IP
 Discovery card for demo visibility. It shows only the first discovered device,
@@ -141,6 +141,19 @@ fields if they keep records for later `tick()` processing.
 Logging callsites are controlled by `BACNET_ENABLE_LOGGING`. Debug and trace
 style verbose logs are additionally controlled by
 `BACNET_ENABLE_VERBOSE_LOGGING`.
+
+## Example Local Configuration
+
+The client demo can read local WiFi and BACnet validation values from an ignored
+local secrets file:
+
+```sh
+cp examples/client-demo/src/secret/secrets.example.h examples/client-demo/src/secret/secrets.h
+```
+
+Edit `examples/client-demo/src/secret/secrets.h` for local WiFi, optional
+static IP, optional MAC-priority, and BACnet target values. The `secrets.h` file
+is intentionally ignored by Git and must not be committed.
 
 ## Build
 

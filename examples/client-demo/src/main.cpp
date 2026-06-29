@@ -60,9 +60,21 @@ static BME280_I2C bme280;
 static Ticker temperatureTicker;
 static BacnetClient bacnetClient;
 
-static const IPAddress kWhoIsDestination(192, 168, 2, 255);
-static const IPAddress kWagoAddress(192, 168, 2, 101);
-static constexpr uint32_t kWagoDeviceInstance = 9001;
+#ifndef BACNET_WHOIS_DESTINATION_OCTETS
+#define BACNET_WHOIS_DESTINATION_OCTETS 192, 0, 2, 255
+#endif
+
+#ifndef BACNET_TARGET_ADDRESS_OCTETS
+#define BACNET_TARGET_ADDRESS_OCTETS 192, 0, 2, 101
+#endif
+
+#ifndef BACNET_TARGET_DEVICE_INSTANCE
+#define BACNET_TARGET_DEVICE_INSTANCE 4194303
+#endif
+
+static const IPAddress kWhoIsDestination(BACNET_WHOIS_DESTINATION_OCTETS);
+static const IPAddress kWagoAddress(BACNET_TARGET_ADDRESS_OCTETS);
+static constexpr uint32_t kWagoDeviceInstance = BACNET_TARGET_DEVICE_INSTANCE;
 static constexpr uint32_t kWhoIsIntervalMs = 30000;
 static constexpr uint32_t kBacnetPresentValueRefreshMs = 30000;
 // WiFi-friendly BACnet demo scan tuning. Keep these bounded so the web UI and
