@@ -11,6 +11,7 @@
 #include <cstdint>
 
 struct BacnetIAmDevice {
+  IPAddress address;
   uint32_t deviceInstance = 0;
   uint32_t maxApduLengthAccepted = 0;
   uint8_t segmentationSupported = 0;

@@ -68,13 +68,15 @@ static BacnetClient bacnetClient;
 #define BACNET_TARGET_ADDRESS_OCTETS 192, 0, 2, 101
 #endif
 
-#ifndef BACNET_TARGET_DEVICE_INSTANCE
-#define BACNET_TARGET_DEVICE_INSTANCE 4194303
+#ifndef BACNET_ALLOW_CONFIGURED_TARGET_FALLBACK
+#define BACNET_ALLOW_CONFIGURED_TARGET_FALLBACK 0
 #endif
 
 static const IPAddress kWhoIsDestination(BACNET_WHOIS_DESTINATION_OCTETS);
-static const IPAddress kWagoAddress(BACNET_TARGET_ADDRESS_OCTETS);
-static constexpr uint32_t kWagoDeviceInstance = BACNET_TARGET_DEVICE_INSTANCE;
+static const IPAddress kConfiguredBacnetTargetAddress(
+    BACNET_TARGET_ADDRESS_OCTETS);
+static constexpr bool kAllowConfiguredBacnetTargetFallback =
+    BACNET_ALLOW_CONFIGURED_TARGET_FALLBACK != 0;
 static constexpr uint32_t kWhoIsIntervalMs = 30000;
 static constexpr uint32_t kBacnetPresentValueRefreshMs = 30000;
 // WiFi-friendly BACnet demo scan tuning. Keep these bounded so the web UI and
@@ -183,6 +185,8 @@ struct BacnetDevicePreview {
   uint32_t analogMissingInRow = 0;
   uint32_t multiStateMissingInRow = 0;
   unsigned long lastScanProbeAt = 0;
+  bool invalidTargetLogged = false;
+  bool selectedDeviceLogged = false;
 };
 
 enum class BacnetReadTarget {
@@ -229,6 +233,41 @@ static void bacnetGuiLog(LogLevel level, const char* format, ...) {
   va_end(args);
 
   cm::LoggingManager::instance().logTag(level, "BACnet", "%s", message);
+}
+
+static bool isZeroBacnetAddress(const IPAddress& address) {
+  return address[0] == 0 && address[1] == 0 && address[2] == 0 &&
+         address[3] == 0;
+}
+
+static bool isSameBacnetAddress(const IPAddress& left,
+                                const IPAddress& right) {
+  return left[0] == right[0] && left[1] == right[1] && left[2] == right[2] &&
+         left[3] == right[3];
+}
+
+static bool ensureBacnetTargetAddress(BacnetDevicePreview& device,
+                                      const char* context) {
+  if (!isZeroBacnetAddress(device.address)) {
+    device.invalidTargetLogged = false;
+    return true;
+  }
+
+  if (!device.invalidTargetLogged) {
+    device.invalidTargetLogged = true;
+    Serial.print("[W] BACnet ");
+    Serial.print(context);
+    Serial.print(" skipped for device ");
+    Serial.print(device.deviceId);
+    Serial.println(": target address is 0.0.0.0");
+    bacnetClient.logger().warn(
+        "BACnet/Scan", "%s skipped device %lu: target address is 0.0.0.0",
+        context, static_cast<unsigned long>(device.deviceId));
+    bacnetGuiLog(LogLevel::Warn, "%s skipped device,%lu target address 0.0.0.0",
+                 context, static_cast<unsigned long>(device.deviceId));
+  }
+
+  return false;
 }
 
 static LogLevel toCmLogLevel(BacnetLogLevel level) {
@@ -672,15 +711,59 @@ static int recordBacnetDevice(const BacnetIAmDevice& iAm) {
 
   BacnetDevicePreview& device = bacnetDevices[slot];
   const bool isNewDevice = !device.active;
+  const IPAddress previousAddress = device.address;
   device.active = true;
   device.deviceId = iAm.deviceInstance;
-  device.address = iAm.deviceInstance == kWagoDeviceInstance
-                       ? kWagoAddress
-                       : IPAddress(0, 0, 0, 0);
+  if (!isZeroBacnetAddress(iAm.address)) {
+    device.address = iAm.address;
+    device.invalidTargetLogged = false;
+  } else {
+    bacnetClient.logger().warn(
+        "BACnet/Discovery",
+        "I-Am device %lu has no usable source address",
+        static_cast<unsigned long>(iAm.deviceInstance));
+    bacnetGuiLog(LogLevel::Warn,
+                 "I-Am device %lu has source address 0.0.0.0",
+                 static_cast<unsigned long>(iAm.deviceInstance));
+
+    if (!isZeroBacnetAddress(device.address)) {
+      bacnetClient.logger().warn(
+          "BACnet/Discovery",
+          "keeping previous target %s for device %lu",
+          device.address.toString().c_str(),
+          static_cast<unsigned long>(iAm.deviceInstance));
+    } else if (kAllowConfiguredBacnetTargetFallback &&
+               !isZeroBacnetAddress(kConfiguredBacnetTargetAddress)) {
+      device.address = kConfiguredBacnetTargetAddress;
+      device.invalidTargetLogged = false;
+      bacnetClient.logger().warn(
+          "BACnet/Discovery",
+          "using configured fallback target %s for device %lu",
+          device.address.toString().c_str(),
+          static_cast<unsigned long>(iAm.deviceInstance));
+    } else {
+      device.address = IPAddress(0, 0, 0, 0);
+    }
+  }
   device.vendorId = iAm.vendorId;
   device.maxApdu = iAm.maxApduLengthAccepted;
   device.segmentation = iAm.segmentationSupported;
   initializeBacnetProperties(device);
+
+  if (!device.selectedDeviceLogged) {
+    device.selectedDeviceLogged = true;
+    bacnetClient.logger().info(
+        "BACnet/Discovery", "recorded first device %lu at %s vendor %u",
+        static_cast<unsigned long>(device.deviceId),
+        device.address.toString().c_str(),
+        static_cast<unsigned>(device.vendorId));
+  } else if (!isSameBacnetAddress(previousAddress, device.address)) {
+    bacnetClient.logger().info(
+        "BACnet/Discovery", "updated device %lu target to %s vendor %u",
+        static_cast<unsigned long>(device.deviceId),
+        device.address.toString().c_str(),
+        static_cast<unsigned>(device.vendorId));
+  }
 
   if (isNewDevice) {
     for (size_t i = 0; i < kBacnetPreviewPropertyCount; ++i) {
@@ -937,6 +1020,10 @@ static bool sendReadPropertyRequest(BacnetDevicePreview& device,
                                     const BacnetPropertyRequest& request,
                                     BacnetReadTarget target,
                                     uint32_t timeoutMs) {
+  if (!ensureBacnetTargetAddress(device, "ReadProperty")) {
+    return false;
+  }
+
   activeReadTarget = target;
   activeReadInvokeId = allocateReadPropertyInvokeId();
   activeReadStartedAt = millis();
@@ -1083,6 +1170,10 @@ static bool startValueObjectProbe(size_t deviceIndex, uint16_t objectType,
 
 static bool startNextValueScanProbe(size_t deviceIndex) {
   BacnetDevicePreview& device = bacnetDevices[deviceIndex];
+  if (!ensureBacnetTargetAddress(device, "value scan")) {
+    return false;
+  }
+
   if (!device.valueScanStarted) {
     device.valueScanStarted = true;
     Serial.print("[I] BACnet value scan start device ");
@@ -1316,7 +1407,10 @@ static void requestNextBacnetProperty() {
 
   for (size_t deviceIndex = 0; deviceIndex < kMaxBacnetDevices; ++deviceIndex) {
     BacnetDevicePreview& device = bacnetDevices[deviceIndex];
-    if (!device.active || device.address == IPAddress(0, 0, 0, 0)) {
+    if (!device.active) {
+      continue;
+    }
+    if (!ensureBacnetTargetAddress(device, "device property reads")) {
       continue;
     }
 
@@ -1365,6 +1459,9 @@ static void requestNextBacnetProperty() {
   }
 
   if (bacnetDevices[0].active && !bacnetDevices[0].valueScanFinished) {
+    if (!ensureBacnetTargetAddress(bacnetDevices[0], "value scan")) {
+      return;
+    }
     if (startNextValueScanProbe(0)) {
       return;
     }
@@ -1895,7 +1992,7 @@ static void pollBacnetDiscovery() {
     bacnetGuiLog(LogLevel::Info,
                  "I-Am device %lu from %s vendor %u",
                  static_cast<unsigned long>(device.deviceInstance),
-                 kWagoAddress.toString().c_str(), device.vendorId);
+                 device.address.toString().c_str(), device.vendorId);
     recordBacnetDevice(device);
     requestNextBacnetProperty();
   }

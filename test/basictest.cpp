@@ -198,6 +198,7 @@ void test_bacnet_client_parses_i_am_response() {
 
   TEST_ASSERT_TRUE(BacnetClient::parseIAmResponse(response, sizeof(response),
                                                   device));
+  TEST_ASSERT_EQUAL_STRING("0.0.0.0", device.address.toString().c_str());
   TEST_ASSERT_EQUAL_UINT32(1234, device.deviceInstance);
   TEST_ASSERT_EQUAL_UINT32(1476, device.maxApduLengthAccepted);
   TEST_ASSERT_EQUAL_UINT8(0, device.segmentationSupported);

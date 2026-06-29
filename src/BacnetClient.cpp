@@ -31,6 +31,11 @@ constexpr uint8_t kApplicationTagCharacterString = 7;
 constexpr uint8_t kApplicationTagEnumerated = 9;
 constexpr uint8_t kApplicationTagObjectIdentifier = 12;
 
+bool isZeroIpAddress(const IPAddress& address) {
+  return address[0] == 0 && address[1] == 0 && address[2] == 0 &&
+         address[3] == 0;
+}
+
 uint16_t readUint16(const uint8_t* buffer) {
   return (static_cast<uint16_t>(buffer[0]) << 8) | buffer[1];
 }
@@ -640,9 +645,16 @@ bool BacnetClient::pollIAm(BacnetIAmDevice& device) {
   const bool parsed =
       parseIAmResponse(packet, static_cast<size_t>(bytesRead), device);
   if (parsed) {
-    logger_.info("BACnet/Discovery", "I-Am device %lu vendor %u",
+    device.address = udp_.remoteIP();
+    logger_.info("BACnet/Discovery", "I-Am device %lu from %s vendor %u",
                  static_cast<unsigned long>(device.deviceInstance),
+                 device.address.toString().c_str(),
                  static_cast<unsigned>(device.vendorId));
+    if (isZeroIpAddress(device.address)) {
+      logger_.warn("BACnet/Discovery",
+                   "I-Am device %lu has source address 0.0.0.0",
+                   static_cast<unsigned long>(device.deviceInstance));
+    }
   } else {
     logger_.debug("BACnet/Discovery", "unexpected discovery packet");
   }
@@ -652,6 +664,17 @@ bool BacnetClient::pollIAm(BacnetIAmDevice& device) {
 bool BacnetClient::sendReadProperty(IPAddress address,
                                     const BacnetPropertyRequest& request,
                                     uint8_t invokeId, uint16_t port) {
+  if (isZeroIpAddress(address)) {
+    logger_.error("BACnet/ReadProperty",
+                  "ReadProperty %s,%lu %s skipped invoke %u: target address "
+                  "is 0.0.0.0",
+                  objectTypeName(request.object.type),
+                  static_cast<unsigned long>(request.object.instance),
+                  propertyName(request.property),
+                  static_cast<unsigned>(invokeId));
+    return false;
+  }
+
   uint8_t packet[kMaxReadPropertyRequestSize] = {};
   const size_t requestSize =
       buildReadPropertyRequest(packet, sizeof(packet), request, invokeId);

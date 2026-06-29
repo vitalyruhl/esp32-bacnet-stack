@@ -66,7 +66,7 @@ void setup() {
 void loop() {
   BacnetIAmDevice device;
   if (client.pollIAm(device)) {
-    // Discovery result available in device.deviceInstance and related fields.
+    // Discovery result available in device.address, device.deviceInstance, etc.
   }
 }
 ```
@@ -78,7 +78,8 @@ The first client slice supports discovery:
 - builds standard BACnet/IP Who-Is requests
 - sends Who-Is on UDP port `47808`
 - parses minimal I-Am responses into `BacnetIAmDevice`
-- exposes discovered device instance, max APDU, segmentation, and vendor ID
+- exposes source address, discovered device instance, max APDU, segmentation,
+  and vendor ID
 
 The `examples/client-demo` firmware demonstrates discovery on ESP32. It uses
 the optional ConfigurationManager-based example setup to connect WiFi, then

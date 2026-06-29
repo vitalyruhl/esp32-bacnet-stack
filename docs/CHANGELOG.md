@@ -2,6 +2,16 @@
 
 This changelog is a curated overview.
 
+## 0.8.1
+
+- Captured the UDP source address from I-Am responses so the client demo scans
+  the discovered BACnet device instead of relying on a configured device
+  instance.
+- Added guardrails that warn and skip ReadProperty scans if the selected
+  target address is still `0.0.0.0`.
+- Kept the configured BACnet target address behind an explicit demo fallback
+  switch for parse-only or synthetic discovery records.
+
 ## 0.8.0
 
 - Updated the client demo to discover Analog Value and Multi-State Value
