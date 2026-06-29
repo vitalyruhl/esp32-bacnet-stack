@@ -2,6 +2,11 @@
 
 This changelog is a curated overview.
 
+## 0.8.2
+
+- Improved the client demo BACnet/IP Discovery card so Analog Value and
+  Multi-State Value entries render as compact left-aligned vertical lists.
+
 ## 0.8.1
 
 - Captured the UDP source address from I-Am responses so the client demo scans

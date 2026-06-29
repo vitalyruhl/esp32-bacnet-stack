@@ -216,6 +216,15 @@ static uint32_t activeReadTimeoutMs = kReadPropertyTimeoutMs;
 
 static const char GLOBAL_THEME_OVERRIDE[] PROGMEM = R"CSS(
 .myCSSTempClass { color:rgb(198, 16, 16) !important; font-weight:900!important; font-size: 1.2rem!important; }
+.bacnetObjectListValue {
+  display: block !important;
+  text-align: left !important;
+  white-space: pre-line !important;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: 0.88rem;
+}
 )CSS";
 
 void onWiFiConnected();
@@ -573,6 +582,7 @@ static void setupRuntimeUI() {
         .value("device0_analogValues",
                [deviceIndex]() { return bacnetAnalogValuesSummary(deviceIndex); })
         .label("AV")
+        .addCSSClass("bacnetObjectListValue")
         .order(40);
 
     bacnetDeviceGroup.divider("Multi-State Values", 59);
@@ -582,6 +592,7 @@ static void setupRuntimeUI() {
                  return bacnetMultiStateValuesSummary(deviceIndex);
                })
         .label("MV")
+        .addCSSClass("bacnetObjectListValue")
         .order(60);
   }
 }
