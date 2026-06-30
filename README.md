@@ -95,6 +95,9 @@ Hardware validation for this slice was performed against a WAGO BACnet/IP
 server at `<BACNET_DEVICE_IP>:47808`; the ESP32 repeatedly discovered device
 instance `<DEVICE_INSTANCE>`.
 
+The exported WAGO BACnet/IP test server configuration and programmed reference
+objects are documented in `dev-info/Wago_TestServer/`.
+
 ## BACnet/IP Client ReadProperty
 
 The client ReadProperty layer is still intentionally compact, but now uses a

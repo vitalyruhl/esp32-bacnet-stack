@@ -6,6 +6,8 @@ This changelog is a curated overview.
 
 - Improved the client demo BACnet/IP Discovery card so Analog Value and
   Multi-State Value entries render as compact left-aligned vertical lists.
+- Added WAGO BACnet/IP test server export data with documented programmed AV,
+  BV, and MV reference objects for demo validation.
 
 ## 0.8.1
 
