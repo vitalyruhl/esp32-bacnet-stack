@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later WITH GCC-exception-2.0
 
 #include <BacnetClient.h>
+#include <BacnetDeviceSession.h>
 #include <BacnetServer.h>
 #include <unity.h>
 
@@ -401,6 +402,37 @@ void test_bacnet_client_parses_read_property_error() {
                           static_cast<uint8_t>(value.type));
 }
 
+void test_bacnet_device_session_keeps_remote_device_metadata() {
+  BacnetClient client;
+  IPAddress address(192, 168, 1, 50);
+  BacnetDeviceSession session(client, 1234, address, 47809);
+
+  TEST_ASSERT_EQUAL_UINT32(1234, session.deviceInstance());
+  TEST_ASSERT_EQUAL_STRING("192.168.1.50", session.address().toString().c_str());
+  TEST_ASSERT_EQUAL_UINT16(47809, session.port());
+  TEST_ASSERT_EQUAL_PTR(&client, &session.client());
+
+  const BacnetObjectId deviceObject = session.deviceObject();
+  TEST_ASSERT_EQUAL_UINT16(static_cast<uint16_t>(BacnetObjectType::Device),
+                           deviceObject.type);
+  TEST_ASSERT_EQUAL_UINT32(1234, deviceObject.instance);
+}
+
+void test_bacnet_device_session_reports_send_failure() {
+  BacnetClient client;
+  BacnetDeviceSession session(client, 1234, IPAddress(0, 0, 0, 0));
+  BacnetValue value;
+
+  const BacnetDeviceSessionReadStatus status = session.readProperty(
+      BacnetObjectType::Device, 1234, BacnetPropertyId::ObjectName, value, 0);
+
+  TEST_ASSERT_EQUAL_UINT8(
+      static_cast<uint8_t>(BacnetDeviceSessionReadStatus::SendFailed),
+      static_cast<uint8_t>(status));
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetValueType::Empty),
+                          static_cast<uint8_t>(value.type));
+}
+
 void test_bacnet_server_lifecycle() {
   BacnetServer server;
 
@@ -437,6 +469,8 @@ void setup() {
   RUN_TEST(test_bacnet_client_parses_object_list_entry_ack);
   RUN_TEST(test_bacnet_client_parses_object_list_ack);
   RUN_TEST(test_bacnet_client_parses_read_property_error);
+  RUN_TEST(test_bacnet_device_session_keeps_remote_device_metadata);
+  RUN_TEST(test_bacnet_device_session_reports_send_failure);
   RUN_TEST(test_bacnet_server_lifecycle);
   UNITY_END();
 }

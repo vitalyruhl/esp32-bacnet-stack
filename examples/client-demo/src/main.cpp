@@ -30,7 +30,7 @@
 #define BME280_ADDRESS 0x76
 #endif
 
-#define VERSION "0.8.2"
+#define VERSION "0.9.0"
 #ifndef APP_NAME
 #define APP_NAME "BACnet Client Discovery Demo"
 #endif

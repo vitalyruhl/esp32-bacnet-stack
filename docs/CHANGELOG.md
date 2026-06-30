@@ -2,6 +2,11 @@
 
 This changelog is a curated overview.
 
+## 0.9.0
+
+- Added `BacnetDeviceSession` as a lightweight client-owned helper for known
+  remote BACnet/IP devices and device-scoped ReadProperty calls.
+
 ## 0.8.2
 
 - Improved the client demo BACnet/IP Discovery card so Analog Value and

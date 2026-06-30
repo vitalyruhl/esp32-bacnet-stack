@@ -3,6 +3,7 @@
 #pragma once
 
 #include "BacnetClient.h"
+#include "BacnetDeviceSession.h"
 #include "BacnetServer.h"
 
 namespace EspBacnet {

@@ -13,6 +13,8 @@ coverage are still evolving.
   responses.
 - Minimal client-side ReadProperty support is available for device strings,
   object lists, and selected value object `presentValue` reads.
+- `BacnetDeviceSession` can represent one known remote BACnet/IP device and
+  issue device-scoped ReadProperty calls through a `BacnetClient`.
 - A reusable BACnet logging layer is available with application-owned outputs.
 - Minimal `BacnetServer` role placeholder is available.
 - BACnet/IP is the first target.
@@ -115,6 +117,29 @@ generic property-access model:
 The initial property targets are device `objectName`, `vendorName`,
 `modelName`, and `firmwareRevision`. Hardware validation read those properties
 from a WAGO device instance `<DEVICE_INSTANCE>`.
+
+Known remote devices can also be represented with `BacnetDeviceSession`. The
+session stores the device instance, address, and BACnet/IP port while
+`BacnetClient` remains the transport owner.
+
+For simple reads, `BacnetDeviceSession::readProperty()` provides a blocking
+helper around the existing ReadProperty send/poll flow:
+
+```cpp
+BacnetDeviceSession device(client, discovered.deviceInstance,
+                           discovered.address);
+
+BacnetValue value;
+const auto status = device.readProperty(
+    device.deviceObject(), BacnetPropertyId::ObjectName, value);
+
+if (status == BacnetDeviceSessionReadStatus::Ack) {
+  Serial.println(value.displayText());
+}
+```
+
+The non-blocking `examples/client-demo` firmware keeps its own request state
+machine for UI-friendly scanning.
 
 The `examples/client-demo` firmware also includes a lightweight BACnet/IP
 Discovery card for demo visibility. It shows only the first discovered device,
