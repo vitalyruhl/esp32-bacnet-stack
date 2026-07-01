@@ -141,8 +141,8 @@ if (status == BacnetDeviceSessionReadStatus::Ack) {
 The non-blocking `examples/client-demo` firmware keeps its own request state
 machine for UI-friendly scanning.
 
-`BacnetRemoteObject` and `BacnetProperty` provide a lightweight synchronous
-wrapper over the same session read path:
+`BacnetRemoteObject` and `BacnetProperty` provide lightweight wrappers over
+the same session read path:
 
 ```cpp
 auto mv2000 = device.object(BacnetObjectType::MultiStateValue, 2000);
@@ -155,7 +155,49 @@ if (status == BacnetDeviceSessionReadStatus::Ack) {
 }
 ```
 
-The wrappers do not add scan, cache, queue, scheduler, or subscription state.
+The wrappers do not add scan, cache, queue, or automatic scheduler state.
+
+`BacnetProperty::subscribe()` adds an optional caller-owned property
+subscription handle. It uses callback notifications and session-driven fallback
+polling. The library does not spawn background tasks; the application drives
+polling from `loop()`.
+
+```cpp
+auto property = device.object(BacnetObjectType::AnalogValue, 200)
+                    .property(BacnetPropertyId::PresentValue);
+
+void onSubscription(const BacnetSubscriptionNotification& n) {
+  if (n.status == BacnetDeviceSessionReadStatus::Ack && n.hasValue) {
+    Serial.printf("value: %s\n", n.value->displayText());
+  }
+}
+
+BacnetSubscribeOptions options;
+options.fallbackPollMs = 5000;
+options.immediateFirstRead = true;
+
+auto sub = property.subscribe(onSubscription, nullptr, options);
+
+void loop() {
+  // Run one non-blocking step; call frequently from the main loop.
+  device.poll(sub);
+
+  // Optional: trigger an on-demand refresh outside fallback cadence.
+  // sub.requestRefresh();
+}
+```
+
+Subscription notes:
+
+- The caller owns the `BacnetPropertySubscription` handle lifetime.
+- The subscription must not outlive the `BacnetDeviceSession` that created it.
+- Callbacks run synchronously inside `BacnetDeviceSession::poll()`.
+- Notification pointers are valid only during the callback; copy values that
+  must be retained.
+- One session processes at most one subscription read request in flight.
+- `fallbackPollMs = 0` disables periodic fallback polling.
+- `requestRefresh()` schedules an immediate one-shot read when idle.
+- `stop()` deactivates the subscription and suppresses further polling.
 
 `BacnetDeviceSession::scanObjectList()` adds a blocking convenience scan over
 the remote Device object's `object-list` property. The caller owns the result

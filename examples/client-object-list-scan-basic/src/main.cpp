@@ -18,7 +18,7 @@
 #endif
 
 #ifndef APP_VERSION
-#define APP_VERSION "0.12.0"
+#define APP_VERSION "0.13.0"
 #endif
 
 #ifndef MY_USE_DHCP
@@ -45,9 +45,12 @@ constexpr uint32_t kWifiRetryDelayMs = 250;
 constexpr uint32_t kReadTimeoutMs = 3000;
 constexpr uint32_t kMaxObjectListEntries = 600;
 constexpr size_t kMaxScanResults = 10;
+constexpr uint32_t kSubscriptionFallbackPollMs = 5000;
 
 BacnetClient bacnetClient;
 BacnetScannedObject scanResults[kMaxScanResults];
+BacnetDeviceSession* activeSession = nullptr;
+BacnetPropertySubscription* activeSubscription = nullptr;
 
 bool parseIp(const char* text, IPAddress& address) {
   return text != nullptr && address.fromString(text);
@@ -120,6 +123,46 @@ void printObjectId(BacnetObjectId objectId) {
   Serial.print(objectId.instance);
 }
 
+bool isPresentValueSubscriptionCandidate(BacnetObjectId objectId) {
+  return objectId.type == static_cast<uint16_t>(BacnetObjectType::AnalogValue) ||
+         objectId.type ==
+             static_cast<uint16_t>(BacnetObjectType::MultiStateValue);
+}
+
+void printSubscriptionReason(const BacnetSubscriptionNotification& notification) {
+  bool printed = false;
+  if (notification.firstValue) {
+    Serial.print("first");
+    printed = true;
+  }
+  if (notification.valueChanged) {
+    Serial.print(printed ? ",value-changed" : "value-changed");
+    printed = true;
+  }
+  if (notification.statusChanged) {
+    Serial.print(printed ? ",status-changed" : "status-changed");
+    printed = true;
+  }
+  if (!printed) {
+    Serial.print("none");
+  }
+}
+
+void onSubscriptionUpdate(
+    const BacnetSubscriptionNotification& notification) {
+  Serial.print("[I] subscription ");
+  printObjectId(notification.objectId);
+  Serial.print(" present-value status=");
+  Serial.print(bacnetReadStatusText(notification.status));
+  Serial.print(" reason=");
+  printSubscriptionReason(notification);
+  if (notification.hasValue && notification.value != nullptr) {
+    Serial.print(" value=");
+    Serial.print(notification.value->displayText());
+  }
+  Serial.println();
+}
+
 void printScanOptions(const BacnetObjectScanOptions& options,
                       size_t resultCapacity) {
   Serial.print("[I] scan options maxObjectListEntries=");
@@ -174,6 +217,39 @@ void printScanResults(const BacnetObjectScanResult& scan) {
   }
 }
 
+bool startPresentValueSubscription(BacnetDeviceSession& session,
+                                   const BacnetObjectScanResult& scan) {
+  for (size_t i = 0; i < scan.stored; ++i) {
+    const BacnetObjectId objectId = scanResults[i].objectId;
+    if (!isPresentValueSubscriptionCandidate(objectId)) {
+      continue;
+    }
+
+    BacnetSubscribeOptions options;
+    options.fallbackPollMs = kSubscriptionFallbackPollMs;
+    options.immediateFirstRead = true;
+    options.notifyOnStatusChange = true;
+
+    static BacnetPropertySubscription subscription =
+        session.object(objectId)
+            .property(BacnetPropertyId::PresentValue)
+            .subscribe(onSubscriptionUpdate, nullptr, options);
+
+    activeSession = &session;
+    activeSubscription = &subscription;
+
+    Serial.print("[I] subscribing to ");
+    printObjectId(objectId);
+    Serial.print(" present-value fallbackPollMs=");
+    Serial.println(options.fallbackPollMs);
+    return true;
+  }
+
+  Serial.println("[W] no scanned analog-value or multi-state-value object for "
+                 "present-value subscription");
+  return false;
+}
+
 void runScan() {
   if (!bacnetClient.begin()) {
     Serial.println("[E] BACnet client failed to start");
@@ -188,8 +264,8 @@ void runScan() {
     Serial.println(BACNET_TARGET_ADDRESS);
     return;
   }
-  BacnetDeviceSession session(bacnetClient, BACNET_TARGET_DEVICE_INSTANCE,
-                              targetAddress, BACNET_TARGET_PORT);
+  static BacnetDeviceSession session(bacnetClient, BACNET_TARGET_DEVICE_INSTANCE,
+                                     targetAddress, BACNET_TARGET_PORT);
 
   Serial.print("[I] target BACnet IP ");
   Serial.println(targetAddress);
@@ -213,6 +289,11 @@ void runScan() {
   const BacnetObjectScanResult scan =
       session.scanObjectList(options, scanResults, kMaxScanResults);
   printScanResults(scan);
+  if (scan.stored == 0) {
+    Serial.println("[W] scan stored no objects; subscription validation skipped");
+    return;
+  }
+  startPresentValueSubscription(session, scan);
 }
 
 }  // namespace
@@ -233,5 +314,8 @@ void setup() {
 }
 
 void loop() {
-  delay(1000);
+  if (activeSession != nullptr && activeSubscription != nullptr) {
+    activeSession->poll(*activeSubscription, millis());
+  }
+  delay(25);
 }
