@@ -58,11 +58,71 @@ workflow-specific gates below.
   cleanup, and general issue workflow.
 - `plan.agent.md` owns planning-only issue breakdowns and tracked planning when
   explicitly requested.
-- Before `workflow.toMain`, check docs impact. If docs are affected, route to
-  `docs.agent.md`.
+- During `workflow.toMain`, invoke `docs.agent.md` before final merge/publish
+  completion is considered valid. `workflow.toMain` may complete only after the
+  docs gate passes or every docs finding is fixed or explicitly dispositioned by
+  an allowed user instruction. `docs.agent.md` owns the documentation checklist
+  and docs-gate report wording.
 - If profile changelog exists and change is user-visible or
   release/dependency/build/version-related, update it or justify no update.
 - Governance/docs-only changes need no version bump.
+
+
+## GitHub Issue And Project Status
+
+- Use the project-profile GitHub Project for tracked workflow coordination.
+- `workflow.begin` and `.begin`/`.beginn` MUST detect issue numbers from the
+  explicit user instruction, issue URL, branch name, prompt text, PR title/body,
+  or existing branch/PR references when available.
+- When begin starts issue-scoped work, move every detected active issue to
+  `In Progress` in the project unless the user explicitly gives a different
+  allowed status instruction.
+- After moving an issue to `In Progress`, verify the project field value by
+  reading it back. If verification fails, report a blocker and do not claim the
+  issue is in progress.
+- When supported by the current GitHub workflow, link or record branch/PR
+  context for the detected issue. If the repository has an existing
+  work-started comment or record rule, perform it and verify it. If no supported
+  mechanism exists, report that no branch-link/comment mechanism is configured;
+  do not invent one.
+- If an issue-scoped begin cannot update Project status because of missing
+  permissions, missing project item, ambiguous issue identity, API/tool failure,
+  or field mismatch, report the blocker explicitly. Continue only if central
+  governance allows continuing with a clear warning that project state is not
+  synchronized.
+- If begin includes multiple active issues, move all of them to `In Progress`
+  unless the user explicitly excludes an issue or gives a different allowed
+  status.
+- If no issue can be detected for tracked workflow work, do not invent an issue
+  and do not silently continue as tracked work. Ask whether to create a new
+  issue, link an existing issue, or continue untracked if governance allows it.
+  In non-interactive execution, stop and report a blocker.
+- If an issue number is detected but the issue does not exist, is closed when
+  active work is required, is missing from the Project, or is ambiguous, report
+  the blocker and ask whether to create, link, reopen, update, or add the issue
+  or Project item. Do not create issues or Project items without explicit
+  permission.
+- `workflow.toMain` MUST identify the issue or issues associated with the work
+  started at `.begin`/`.beginn` by checking explicit user instructions, branch
+  names, commits, PR links, closing keywords, issue references, and Project
+  items.
+- During `workflow.toMain`, verify commits, branch names, PR metadata, and issue
+  references before changing issue or Project status.
+- The default target Project status after a valid `workflow.toMain` is `Done`
+  for all detected issues from the begin-to-toMain work scope unless the user
+  explicitly says otherwise.
+- Explicit user status instructions win over the default target, for example
+  keeping an issue `In Review`, moving an issue to `In Progress`, not closing a
+  specific issue, or closing only selected issues.
+- The central final rule still applies: do not mark an issue solved/fixed, close
+  it, or move it to a final status unless the user confirmation requirement is
+  satisfied. If this blocks the default `Done` target, report the stricter
+  blocker and the issue-specific skipped update.
+- No issue/Project status update may be skipped silently. Every detected issue
+  MUST be reported with old status, intended status, final status, whether the
+  issue was closed or only moved in Project, and the reason for any skipped or
+  failed update.
+- Governance-only workflow changes do not require GitHub Issue tracking when the user explicitly allows untracked governance work. In that case, report `Issue tracking skipped: governance-only work explicitly allowed untracked by user.` and do not create or update GitHub Issues or Project items.
 
 ## Release
 
@@ -81,9 +141,13 @@ workflow-specific gates below.
   merge, cleanup, release updates, or destructive actions.
 - Follow-up shortcuts after `workflow.audit` run only when explicitly requested
   and no blockers remain.
-- `workflow.begin`: create/select proper branch; derive clean English name;
-  preserve exact names only when requested; report branch; do not edit code/build
-  files or run implementation work unless explicitly requested after setup.
+- `workflow.begin` / `.begin` / `.beginn`: create/select proper branch; derive
+  clean English name; preserve exact names only when requested; detect linked
+  issue scope; for issue-scoped work, move every active issue to `In Progress`,
+  verify the Project status read-back, and report old/new status; report a
+  blocker if Project status cannot be updated; report branch; do not edit
+  code/build files or run implementation work unless explicitly requested after
+  setup.
 - `workflow.checkpoint`: verify branch/status; refuse direct `main`/`master`
   except docs-only TODO exception; inspect `git diff --stat`; stage with
   `git add -A`; create one meaningful English commit; push only current work
@@ -98,11 +162,25 @@ workflow-specific gates below.
   or covered by named workflow.
 - `workflow.toMain`: PR workflow by default unless fast-forward/`ff` requested;
   commit/push/PR creation/merge/cleanup allowed only in this explicit workflow;
-  run/skip/reuse validation; check docs impact; report reviews/checks/conflicts/
-  branch protection; bypass only when explicitly requested; never bypass
-  required checks without explicit confirmed exception and reported reason.
-- `workflow.cleanBranches`: delete only branches verified integrated; skip
-  active, unmerged, or ambiguous branches and report reasons.
+  run/skip/reuse validation; run `docs.agent.md` and require the docs gate to
+  pass or have findings resolved; identify associated issues; update GitHub
+  Project status according to the default/explicit rules above; report reviews,
+  checks, conflicts, branch protection, issue status updates, and docs results;
+  bypass only when explicitly requested or already allowed by governance for the
+  current action; never bypass required checks without explicit confirmed
+  exception and reported reason. Owner/admin bypass does not weaken final state
+  requirements: local `main` MUST equal `origin/main`, the working tree MUST be
+  clean, and no leftover local, remote, or stale-tracking non-main work branches
+  may remain unless explicitly preserved. Fast-forward/`ff` MUST preserve linear
+  history where expected and must satisfy the same final synchronization and
+  cleanup requirements.
+- `workflow.cleanBranches`: delete only branches verified integrated; include
+  both local and remote cleanup; delete already-integrated remote
+  feature/work branches when safe and allowed; fetch/prune tracking refs after
+  remote cleanup; skip active, unmerged, explicitly protected, release, main, or
+  ambiguous branches and report reasons. If a stale local, remote, or
+  tracking branch cannot be deleted or pruned, stop or report it as an explicit
+  blocker; do not silently leave stale branches behind.
 - `workflow.end`: report branch, changed files, validation state, blockers only;
   do not commit, push, merge, switch branches, update release branches, or claim
   merge/fix success.
@@ -110,4 +188,106 @@ workflow-specific gates below.
   branches, or update release branches unless user invokes
   `workflow.checkpoint`, `workflow.toMain`, or explicit release sync.
 
-Reporting: central reporting; include PR/merge/release blockers when relevant.
+## Final Synchronization Checks
+
+After `workflow.toMain` followed by required cleanup, the repository MUST be in
+a synchronized valid state:
+
+- local `main` exists
+- remote `origin/main` exists
+- local `main` HEAD equals `origin/main` HEAD
+- current branch and ahead/behind state are known and verified
+- working tree is clean
+- local branch list contains no remaining feature/work branches unless
+  explicitly protected by user instruction
+- remote branch list contains no remaining feature/work branches unless
+  explicitly protected by user instruction
+- no stale local tracking branches remain after fetch/prune
+- no merged feature branch remains locally or remotely unless explicitly kept by
+  user instruction
+- only `main` remains as the normal active project branch
+
+The workflow MUST explicitly verify current branch, `git status`, local `main`
+HEAD, `origin/main` HEAD, ahead/behind state, local branches after cleanup,
+remote branches after cleanup, pruned tracking refs, and confirmation that local
+and remote are synchronized.
+
+Successful routine reports MUST summarize those checks compactly:
+
+- final result: success or failure
+- final branch, normally `main`
+- working tree: clean or dirty
+- local/remote sync: synced or not synced
+- branch cleanup: completed, skipped with reason, or blocked
+- docs gate: passed, no changes needed, findings resolved, or explicitly
+  dispositioned
+- validation: passed, skipped according to policy, or reused according to policy
+- issues/Project: issue number, old status, final status, and closed or
+  Project-only action
+- PR/merge result when a PR was used
+- explicit preserved branches, if any
+- blockers, if any
+
+Do not report commit hashes, local `main` HEAD hash, `origin/main` HEAD hash,
+full branch lists, full command output, detailed API responses, repeated
+validation logs, or implementation summaries already covered by the commit/PR
+on successful routine runs unless the user asks for details.
+
+Detailed synchronization data MUST be reported when the user requests details,
+verification fails, local `main` and `origin/main` differ, branch cleanup cannot
+complete, a branch is ambiguous or preserved, a PR/merge/release blocker occurs,
+issue/Project status update fails, or the workflow needs an audit trail to
+explain a blocker. If any check fails, report the failing condition as a
+blocker.
+
+## Acceptance Criteria
+
+`workflow.begin` / `.begin` / `.beginn` acceptance criteria:
+
+- branch created or selected according to existing branch/name rules
+- issue detection attempted from explicit instruction, branch, prompt, and
+  available GitHub references
+- for issue-scoped work, every active detected issue moved to `In Progress`
+  unless explicitly overridden by the user
+- Project status update verified by read-back
+- blocker reported if status could not be updated or verified
+- branch and issue/Project result reported
+- successful begin output remains concise; detailed GitHub/API output is
+  omitted unless issue detection or status update fails, the user asks for
+  details, or the details are needed to explain a blocker
+
+`workflow.toMain` acceptance criteria:
+
+- required validation passed, was skipped, or was reused only according to
+  central validation rules
+- `docs.agent.md` passed, or every docs finding was resolved before completion
+- associated issues detected and verified against branch, commits, PR metadata,
+  and explicit user instructions
+- GitHub Project statuses updated according to default/explicit rules, without
+  weakening the central user-confirmation rule for solved/fixed issues
+- issue close-vs-Project-only action reported for every detected issue
+- Final Synchronization Checks completed as the canonical synchronization,
+  branch cleanup, stale-tracking, and compact-reporting rule set
+- successful routine report is concise and omits hashes, full branch lists, full
+  command output, repeated validation logs, and detailed API responses unless
+  the user asks for details
+- detailed synchronization data is available on request and automatically
+  included for blockers, failures, skipped required actions, divergent
+  local/remote state, ambiguous branches, preserved branches, or failed
+  issue/Project updates
+- no untracked governance changes are left behind
+
+`workflow.cleanBranches` acceptance criteria:
+
+- local cleanup completed for all integrated, unprotected work branches
+- remote cleanup completed for all integrated, unprotected remote work branches
+- fetch/prune verification completed after remote cleanup
+- successful routine cleanup may be reported as completed without full branch
+  lists
+- full local and remote branch lists reported only when branches remain, cleanup
+  fails, branches are preserved, branch identity is ambiguous, or the user asks
+  for details
+- explicit exception list reported for every preserved branch, including reason
+
+Reporting: use central reporting. Keep successful routine output compact;
+include low-level details only on request or when needed to explain a blocker.

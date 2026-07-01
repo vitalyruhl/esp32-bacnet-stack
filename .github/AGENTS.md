@@ -24,7 +24,10 @@ If the agent cannot confidently state these items, it must perform a full govern
 ### Selected Agent
 
 - For workflow shortcuts, selected agent is `.github/agents/workflow.agent.md`.
-  - Treat leading-dot command tokens such as `.checkpoint`, `.audit`, `.ready`, `.toMain`, or `.cleanBranches` as workflow shortcut shorthand unless they are clearly paths, filenames, extensions, versions, or quoted literals.
+  - Treat leading-dot command tokens such as `.begin`, `.beginn`,
+    `.checkpoint`, `.audit`, `.ready`, `.toMain`, or `.cleanBranches` as
+    workflow shortcut shorthand unless they are clearly paths, filenames,
+    extensions, versions, or quoted literals.
 - Project profile is mandatory context when a full governance reload is required.
 - Project profile never replaces the selected agent.
 
@@ -47,7 +50,8 @@ Full governance reload is required when one of these applies:
 - task will perform git mutations, branch changes, PRs, merges, releases, or branch cleanup
 - task runs on `main`, `master`, a release branch, or an unknown branch
 - previous response showed uncertainty, stale assumptions, or rule drift
-- user explicitly requests audit, checkpoint, ready, toMain, cleanBranches, release, or session close
+- user explicitly requests begin, beginn, audit, checkpoint, ready, toMain,
+  cleanBranches, release, or session close
 
 Missing required governance reads when full reload is required is a hard blocker; report before work.
 
@@ -75,7 +79,7 @@ Do not discover governance only by broad search; hidden paths may be skipped.
 
 Governance searches MUST use hidden paths, for example:
 
-- `rg --hidden -n "workflow\.begin|workflow\.audit|workflow\.toMain|workflow\.cleanBranches" .`
+- `rg --hidden -n "workflow\.begin|\.begin|\.beginn|workflow\.audit|workflow\.toMain|workflow\.cleanBranches" .`
 - `fd --hidden "AGENTS|agent\.md|workflow\.agent\.md" .`
 
 Plain `rg ... .` or `fd ... .` is insufficient for governance discovery.
@@ -294,9 +298,17 @@ Serena indexing does not replace mandatory direct governance reads, direct file 
 - Always report: files changed or `no files changed`, summary, validation
   passed/failed/skipped/reused with reason, blockers/risks/required user action,
   and git actions only if performed.
-- Report only when relevant or requested: branch, governance files read, full
-  command list, full validation output, long file lists, `git diff --stat`,
-  focused diff excerpts, release branch details, GitHub Issue/Project updates.
+- Report detailed context only when requested or needed to explain a blocker,
+  failure, skipped required action, explicit user override, unsafe state, or
+  ambiguity: commit hashes, full branch lists, full command output, detailed API
+  responses, full validation output, long file lists, `git diff --stat`,
+  focused diff excerpts, release branch details, and governance files read.
+- For successful routine workflow runs, keep output compact and summarize
+  verified state instead of dumping low-level data. Report final result, final
+  branch, working-tree clean/dirty state, local/remote sync state, validation
+  state, docs gate result when applicable, issue/Project status changes when
+  applicable, PR/merge/release result when applicable, preserved branches, and
+  blockers if any.
 - Never hide failed commands, skipped required validation, invalid/uncertain
   reuse, unsafe dirty state, branch mismatch, user-change conflicts, merge/PR/CI
   blockers, Level C risk, correctness uncertainty, or required confirmation.

@@ -23,4 +23,21 @@ Extends central + project profile. Scope: docs/governance.
 - Escalate branch/PR/release/cleanup needs to `workflow.agent.md`.
 - Recommend `refactor.agent.md` when docs expose code conflicts.
 
-Reporting: central reporting; include docs uncertainty/conflicts.
+## Documentation Gate
+
+When invoked as a docs gate, check whether the pending work requires
+documentation or consistency updates in `README.md`, `docs/`, the profile
+changelog when present, affected examples/example docs, public API
+documentation/snippets, and governance docs affected by
+workflow/validation/branch/Project/release rule changes.
+
+If documentation is inconsistent, missing, stale, or contradicts implemented
+behavior, report exact findings and do not pass the docs gate until the
+findings are fixed or explicitly dispositioned by an allowed user instruction.
+
+If no documentation update is required, report exactly:
+`docs checked / no changes needed`.
+
+Report docs uncertainty or conflicts through central reporting. Do not duplicate
+`workflow.toMain`, branch cleanup, issue status, merge, release, or final
+synchronization rules here; those remain owned by `workflow.agent.md`.
