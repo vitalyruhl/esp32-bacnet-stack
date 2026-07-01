@@ -20,6 +20,22 @@ enum class BacnetDeviceSessionReadStatus : uint8_t {
   Skipped,
 };
 
+inline const char* bacnetReadStatusText(BacnetDeviceSessionReadStatus status) {
+  switch (status) {
+    case BacnetDeviceSessionReadStatus::Ack:
+      return "ok";
+    case BacnetDeviceSessionReadStatus::Error:
+      return "error";
+    case BacnetDeviceSessionReadStatus::Timeout:
+      return "timeout";
+    case BacnetDeviceSessionReadStatus::SendFailed:
+      return "send-failed";
+    case BacnetDeviceSessionReadStatus::Skipped:
+      return "skipped";
+  }
+  return "unknown";
+}
+
 class BacnetDeviceSession {
  public:
   static constexpr uint32_t kDefaultReadTimeoutMs = 1000;
@@ -74,6 +90,19 @@ struct BacnetObjectScanOptions {
   bool acceptsObjectType(BacnetObjectId objectId) const;
   bool acceptsObjectType(BacnetObjectType objectType) const;
 };
+
+template <size_t N>
+inline void bacnetSetObjectTypeFilter(
+    BacnetObjectScanOptions& options,
+    const BacnetObjectType (&objectTypes)[N]) {
+  options.objectTypes = objectTypes;
+  options.objectTypeCount = N;
+}
+
+inline void bacnetClearObjectTypeFilter(BacnetObjectScanOptions& options) {
+  options.objectTypes = nullptr;
+  options.objectTypeCount = 0;
+}
 
 struct BacnetScannedObject {
   BacnetObjectId objectId;

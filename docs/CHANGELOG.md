@@ -2,6 +2,17 @@
 
 This changelog is a curated overview.
 
+## Unreleased
+
+- Switched example BACnet target configuration from octet macros to readable
+  string-based IP macros with explicit parse-time validation logs.
+- Added reusable zero-allocation BACnet text helpers for object types and read
+  status in the public library API.
+- Added an array-safe helper for object-type scan filters so object-type count
+  is inferred from C++ array size instead of manual assignment.
+- Aligned example version constants with the canonical library version from
+  `library.json`.
+
 ## 0.12.0
 
 - Added `examples/client-object-list-scan-basic` as a minimal serial-only

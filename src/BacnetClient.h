@@ -29,6 +29,22 @@ enum class BacnetObjectType : uint16_t {
   MultiStateValue = 19,
 };
 
+inline const char* bacnetObjectTypeText(BacnetObjectType objectType) {
+  switch (objectType) {
+    case BacnetObjectType::AnalogValue:
+      return "analog-value";
+    case BacnetObjectType::MultiStateValue:
+      return "multi-state-value";
+    case BacnetObjectType::Device:
+      return "device";
+  }
+  return "object";
+}
+
+inline const char* bacnetObjectTypeText(uint16_t objectType) {
+  return bacnetObjectTypeText(static_cast<BacnetObjectType>(objectType));
+}
+
 enum class BacnetPropertyId : uint32_t {
   Description = 28,
   FirmwareRevision = 44,

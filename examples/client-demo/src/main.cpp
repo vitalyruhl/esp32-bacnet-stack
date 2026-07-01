@@ -30,7 +30,7 @@
 #define BME280_ADDRESS 0x76
 #endif
 
-#define VERSION "0.9.0"
+#define VERSION "0.12.0"
 #ifndef APP_NAME
 #define APP_NAME "BACnet Client Discovery Demo"
 #endif
@@ -60,21 +60,22 @@ static BME280_I2C bme280;
 static Ticker temperatureTicker;
 static BacnetClient bacnetClient;
 
-#ifndef BACNET_WHOIS_DESTINATION_OCTETS
-#define BACNET_WHOIS_DESTINATION_OCTETS 192, 0, 2, 255
+#ifndef BACNET_WHOIS_DESTINATION
+#define BACNET_WHOIS_DESTINATION "192.0.2.255"
 #endif
 
-#ifndef BACNET_TARGET_ADDRESS_OCTETS
-#define BACNET_TARGET_ADDRESS_OCTETS 192, 0, 2, 101
+#ifndef BACNET_TARGET_ADDRESS
+#define BACNET_TARGET_ADDRESS "192.0.2.101"
 #endif
 
 #ifndef BACNET_ALLOW_CONFIGURED_TARGET_FALLBACK
 #define BACNET_ALLOW_CONFIGURED_TARGET_FALLBACK 0
 #endif
 
-static const IPAddress kWhoIsDestination(BACNET_WHOIS_DESTINATION_OCTETS);
-static const IPAddress kConfiguredBacnetTargetAddress(
-    BACNET_TARGET_ADDRESS_OCTETS);
+static IPAddress whoIsDestination;
+static IPAddress configuredBacnetTargetAddress;
+static bool bacnetAddressConfigValid = false;
+static bool bacnetAddressConfigErrorLogged = false;
 static constexpr bool kAllowConfiguredBacnetTargetFallback =
     BACNET_ALLOW_CONFIGURED_TARGET_FALLBACK != 0;
 static constexpr uint32_t kWhoIsIntervalMs = 30000;
@@ -272,6 +273,35 @@ static bool isSameBacnetAddress(const IPAddress& left,
                                 const IPAddress& right) {
   return left[0] == right[0] && left[1] == right[1] && left[2] == right[2] &&
          left[3] == right[3];
+}
+
+static bool parseBacnetAddress(const char* label,
+                               const char* addressText,
+                               IPAddress& output) {
+  if (addressText != nullptr && output.fromString(addressText)) {
+    return true;
+  }
+
+  Serial.print("[E] Invalid BACnet ");
+  Serial.print(label);
+  Serial.print(" IP: ");
+  Serial.println(addressText != nullptr ? addressText : "<null>");
+  bacnetGuiLog(LogLevel::Error, "invalid BACnet %s IP: %s", label,
+               addressText != nullptr ? addressText : "<null>");
+  return false;
+}
+
+static bool configureBacnetAddresses() {
+  bacnetAddressConfigValid =
+      parseBacnetAddress("Who-Is destination", BACNET_WHOIS_DESTINATION,
+                         whoIsDestination) &&
+      parseBacnetAddress("target address", BACNET_TARGET_ADDRESS,
+                         configuredBacnetTargetAddress);
+
+  if (bacnetAddressConfigValid) {
+    bacnetAddressConfigErrorLogged = false;
+  }
+  return bacnetAddressConfigValid;
 }
 
 static bool ensureBacnetTargetAddress(BacnetDevicePreview& device,
@@ -666,19 +696,19 @@ static void sendWhoIs() {
   Serial.print("[I] Sending BACnet Who-Is #");
   Serial.print(whoIsCount);
   Serial.print(" to ");
-  Serial.print(kWhoIsDestination);
+  Serial.print(whoIsDestination);
   Serial.print(":");
   Serial.println(BacnetClient::kDefaultPort);
 
-  if (bacnetClient.sendWhoIs(kWhoIsDestination)) {
+  if (bacnetClient.sendWhoIs(whoIsDestination)) {
     Serial.println("[I] BACnet Who-Is sent");
     bacnetGuiLog(LogLevel::Info, "Who-Is sent to %s:%u",
-                 kWhoIsDestination.toString().c_str(),
+                 whoIsDestination.toString().c_str(),
                  BacnetClient::kDefaultPort);
   } else {
     Serial.println("[W] BACnet Who-Is send failed");
     bacnetGuiLog(LogLevel::Warn, "Who-Is send failed to %s:%u",
-                 kWhoIsDestination.toString().c_str(),
+                 whoIsDestination.toString().c_str(),
                  BacnetClient::kDefaultPort);
   }
 
@@ -689,6 +719,15 @@ static void sendWhoIs() {
 
 static void startBacnetDiscovery() {
   if (bacnetStarted) {
+    return;
+  }
+
+  if (!bacnetAddressConfigValid) {
+    if (!bacnetAddressConfigErrorLogged) {
+      bacnetAddressConfigErrorLogged = true;
+      Serial.println("[E] BACnet discovery disabled: invalid BACnet IP config");
+      bacnetGuiLog(LogLevel::Error, "discovery disabled: invalid BACnet IP config");
+    }
     return;
   }
 
@@ -703,13 +742,13 @@ static void startBacnetDiscovery() {
   Serial.print("[I] BACnet client started on UDP port ");
   Serial.println(bacnetClient.localPort());
   Serial.print("[I] BACnet Who-Is destination ");
-  Serial.print(kWhoIsDestination);
+  Serial.print(whoIsDestination);
   Serial.print(":");
   Serial.println(BacnetClient::kDefaultPort);
   bacnetGuiLog(LogLevel::Info, "client started on UDP %u",
                bacnetClient.localPort());
   bacnetGuiLog(LogLevel::Info, "Who-Is destination %s:%u",
-               kWhoIsDestination.toString().c_str(),
+               whoIsDestination.toString().c_str(),
                BacnetClient::kDefaultPort);
 
   sendWhoIs();
@@ -763,8 +802,8 @@ static int recordBacnetDevice(const BacnetIAmDevice& iAm) {
           device.address.toString().c_str(),
           static_cast<unsigned long>(iAm.deviceInstance));
     } else if (kAllowConfiguredBacnetTargetFallback &&
-               !isZeroBacnetAddress(kConfiguredBacnetTargetAddress)) {
-      device.address = kConfiguredBacnetTargetAddress;
+                    !isZeroBacnetAddress(configuredBacnetTargetAddress)) {
+                  device.address = configuredBacnetTargetAddress;
       device.invalidTargetLogged = false;
       bacnetClient.logger().warn(
           "BACnet/Discovery",
@@ -967,8 +1006,7 @@ static uint8_t allocateReadPropertyInvokeId() {
 }
 
 static const char* objectTypeName(uint16_t objectType) {
-  return objectType == kBacnetAnalogValueObjectType ? "analog-value"
-                                                    : "multi-state-value";
+  return bacnetObjectTypeText(objectType);
 }
 
 static const char* shortObjectTypeName(uint16_t objectType) {
@@ -2060,6 +2098,7 @@ void setup() {
   ConfigManager.setCustomCss(GLOBAL_THEME_OVERRIDE,
                              sizeof(GLOBAL_THEME_OVERRIDE) - 1);
   setupGuiLogging();
+  configureBacnetAddresses();
 
   coreSettings.attachWiFi(ConfigManager);
   coreSettings.attachSystem(ConfigManager);
