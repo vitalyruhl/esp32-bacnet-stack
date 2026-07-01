@@ -16,6 +16,10 @@ class BacnetProperty {
   BacnetObjectId objectId() const;
   BacnetPropertyId propertyId() const;
   uint32_t arrayIndex() const;
+  BacnetPropertySubscription subscribe(
+      BacnetSubscriptionCallback callback,
+      void* userData = nullptr,
+      const BacnetSubscribeOptions& options = BacnetSubscribeOptions{}) const;
   BacnetDeviceSessionReadStatus read(
       BacnetValue& value,
       uint32_t timeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs) const;

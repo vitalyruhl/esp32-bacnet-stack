@@ -4,6 +4,18 @@ This changelog is a curated overview.
 
 ## Unreleased
 
+- Added `BacnetProperty::subscribe()` with a caller-owned
+  `BacnetPropertySubscription` handle for callback-based property updates.
+- Added `BacnetDeviceSession::poll()` overloads for non-blocking session-side
+  subscription processing with one in-flight read at a time.
+- Added fallback polling controls (`fallbackPollMs`, `requestRefresh()`,
+  `stop()`, `immediateFirstRead`) and notification reasons for value/status
+  transitions.
+- Added busy-state protection and move/destructor cleanup for caller-owned
+  subscription handles.
+- Added focused unit coverage for subscription options, move-only handle
+  semantics, refresh behavior, and stop behavior.
+
 - Switched example BACnet target configuration from octet macros to readable
   string-based IP macros with explicit parse-time validation logs.
 - Added reusable zero-allocation BACnet text helpers for object types and read

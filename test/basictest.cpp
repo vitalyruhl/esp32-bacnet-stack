@@ -9,6 +9,42 @@
 
 #include <cstdio>
 #include <cstring>
+#include <type_traits>
+#include <utility>
+
+struct SubscriptionCallbackCapture {
+  size_t calls = 0;
+  BacnetObjectId objectId;
+  BacnetPropertyId propertyId = BacnetPropertyId::ObjectName;
+  uint32_t arrayIndex = kBacnetNoArrayIndex;
+  BacnetDeviceSessionReadStatus status = BacnetDeviceSessionReadStatus::Skipped;
+  bool hasValue = false;
+  bool firstValue = false;
+  bool valueChanged = false;
+  bool statusChanged = false;
+  BacnetSubscriptionNotificationReason reason =
+      BacnetSubscriptionNotificationReason::None;
+};
+
+static void captureSubscriptionNotification(
+    const BacnetSubscriptionNotification& notification) {
+  auto* capture =
+      static_cast<SubscriptionCallbackCapture*>(notification.userData);
+  if (capture == nullptr) {
+    return;
+  }
+
+  ++capture->calls;
+  capture->objectId = notification.objectId;
+  capture->propertyId = notification.propertyId;
+  capture->arrayIndex = notification.arrayIndex;
+  capture->status = notification.status;
+  capture->hasValue = notification.hasValue;
+  capture->firstValue = notification.firstValue;
+  capture->valueChanged = notification.valueChanged;
+  capture->statusChanged = notification.statusChanged;
+  capture->reason = notification.reason;
+}
 
 class CapturingBacnetLogOutput : public BacnetLogOutput {
  public:
@@ -608,6 +644,247 @@ void test_bacnet_server_lifecycle() {
   TEST_ASSERT_FALSE(server.isRunning());
 }
 
+void test_bacnet_subscribe_options_defaults() {
+  BacnetSubscribeOptions options;
+
+  TEST_ASSERT_EQUAL_UINT32(10000, options.fallbackPollMs);
+  TEST_ASSERT_EQUAL_UINT32(BacnetDeviceSession::kDefaultReadTimeoutMs,
+                           options.timeoutMs);
+  TEST_ASSERT_TRUE(options.immediateFirstRead);
+  TEST_ASSERT_TRUE(options.notifyOnStatusChange);
+}
+
+void test_bacnet_property_subscription_is_move_only() {
+  static_assert(!std::is_copy_constructible<BacnetPropertySubscription>::value,
+                "BacnetPropertySubscription must not be copy-constructible");
+  static_assert(!std::is_copy_assignable<BacnetPropertySubscription>::value,
+                "BacnetPropertySubscription must not be copy-assignable");
+  static_assert(std::is_move_constructible<BacnetPropertySubscription>::value,
+                "BacnetPropertySubscription should be move-constructible");
+  static_assert(std::is_move_assignable<BacnetPropertySubscription>::value,
+                "BacnetPropertySubscription should be move-assignable");
+  TEST_ASSERT_TRUE(true);
+}
+
+void test_bacnet_property_subscribe_exposes_identity_and_defaults() {
+  BacnetClient client;
+  BacnetDeviceSession session(client, 1234, IPAddress(192, 168, 1, 50));
+  BacnetProperty property =
+      session.object(BacnetObjectType::AnalogValue, 200)
+          .property(BacnetPropertyId::PresentValue, 1);
+
+  BacnetPropertySubscription subscription =
+      property.subscribe(nullptr, nullptr, BacnetSubscribeOptions{});
+
+  TEST_ASSERT_EQUAL_UINT16(static_cast<uint16_t>(BacnetObjectType::AnalogValue),
+                           subscription.objectId().type);
+  TEST_ASSERT_EQUAL_UINT32(200, subscription.objectId().instance);
+  TEST_ASSERT_EQUAL_UINT32(static_cast<uint32_t>(BacnetPropertyId::PresentValue),
+                           static_cast<uint32_t>(subscription.propertyId()));
+  TEST_ASSERT_EQUAL_UINT32(1, subscription.arrayIndex());
+  TEST_ASSERT_TRUE(subscription.active());
+  TEST_ASSERT_FALSE(subscription.inFlight());
+  TEST_ASSERT_FALSE(subscription.hasValue());
+  TEST_ASSERT_EQUAL_UINT8(
+      static_cast<uint8_t>(BacnetDeviceSessionReadStatus::Skipped),
+      static_cast<uint8_t>(subscription.lastStatus()));
+  TEST_ASSERT_EQUAL_UINT32(0, subscription.lastUpdateMs());
+}
+
+void test_bacnet_subscription_request_refresh_and_fallback_zero_behavior() {
+  BacnetClient client;
+  BacnetDeviceSession session(client, 1234, IPAddress(192, 168, 1, 50));
+  BacnetProperty property =
+      session.object(BacnetObjectType::AnalogValue, 200)
+          .property(BacnetPropertyId::PresentValue);
+
+  SubscriptionCallbackCapture capture;
+  BacnetSubscribeOptions options;
+  options.fallbackPollMs = 0;
+  options.immediateFirstRead = false;
+
+  BacnetPropertySubscription subscription =
+      property.subscribe(captureSubscriptionNotification, &capture, options);
+
+  session.poll(subscription, 1000);
+  TEST_ASSERT_EQUAL_UINT32(0, static_cast<uint32_t>(capture.calls));
+  TEST_ASSERT_EQUAL_UINT8(
+      static_cast<uint8_t>(BacnetDeviceSessionReadStatus::Skipped),
+      static_cast<uint8_t>(subscription.lastStatus()));
+
+  subscription.requestRefresh();
+  session.poll(subscription, 1001);
+  TEST_ASSERT_EQUAL_UINT32(1, static_cast<uint32_t>(capture.calls));
+  TEST_ASSERT_EQUAL_UINT8(
+      static_cast<uint8_t>(BacnetDeviceSessionReadStatus::SendFailed),
+      static_cast<uint8_t>(subscription.lastStatus()));
+  TEST_ASSERT_EQUAL_UINT32(1001, subscription.lastUpdateMs());
+  TEST_ASSERT_FALSE(subscription.hasValue());
+  TEST_ASSERT_TRUE(capture.statusChanged);
+  TEST_ASSERT_TRUE(bacnetSubscriptionReasonContains(
+      capture.reason, BacnetSubscriptionNotificationReason::StatusChanged));
+}
+
+void test_bacnet_subscription_stop_disables_polling() {
+  BacnetClient client;
+  BacnetDeviceSession session(client, 1234, IPAddress(192, 168, 1, 50));
+  BacnetProperty property =
+      session.object(BacnetObjectType::MultiStateValue, 2000)
+          .property(BacnetPropertyId::PresentValue);
+
+  SubscriptionCallbackCapture capture;
+  BacnetPropertySubscription subscription =
+      property.subscribe(captureSubscriptionNotification, &capture);
+
+  subscription.stop();
+  session.poll(subscription, 2000);
+
+  TEST_ASSERT_FALSE(subscription.active());
+  TEST_ASSERT_FALSE(subscription.inFlight());
+  TEST_ASSERT_EQUAL_UINT32(0, static_cast<uint32_t>(capture.calls));
+  TEST_ASSERT_EQUAL_UINT8(
+      static_cast<uint8_t>(BacnetDeviceSessionReadStatus::Skipped),
+      static_cast<uint8_t>(subscription.lastStatus()));
+}
+
+void test_bacnet_subscription_notify_status_change_false_suppresses_callback() {
+  BacnetClient client;
+  BacnetDeviceSession session(client, 1234, IPAddress(192, 168, 1, 50));
+  BacnetProperty property =
+      session.object(BacnetObjectType::AnalogValue, 200)
+          .property(BacnetPropertyId::PresentValue);
+
+  SubscriptionCallbackCapture capture;
+  BacnetSubscribeOptions options;
+  options.fallbackPollMs = 0;
+  options.immediateFirstRead = false;
+  options.notifyOnStatusChange = false;
+
+  BacnetPropertySubscription subscription =
+      property.subscribe(captureSubscriptionNotification, &capture, options);
+
+  subscription.requestRefresh();
+  session.poll(subscription, 1000);
+
+  TEST_ASSERT_EQUAL_UINT8(
+      static_cast<uint8_t>(BacnetDeviceSessionReadStatus::SendFailed),
+      static_cast<uint8_t>(subscription.lastStatus()));
+  TEST_ASSERT_EQUAL_UINT32(0, static_cast<uint32_t>(capture.calls));
+  TEST_ASSERT_EQUAL_UINT8(
+      static_cast<uint8_t>(BacnetSubscriptionNotificationReason::None),
+      static_cast<uint8_t>(subscription.lastNotificationReason()));
+}
+
+void test_bacnet_subscription_immediate_first_read_works_with_fallback_zero() {
+  BacnetClient client;
+  BacnetDeviceSession session(client, 1234, IPAddress(192, 168, 1, 50));
+  BacnetProperty property =
+      session.object(BacnetObjectType::AnalogValue, 200)
+          .property(BacnetPropertyId::PresentValue);
+
+  SubscriptionCallbackCapture capture;
+  BacnetSubscribeOptions options;
+  options.fallbackPollMs = 0;
+  options.immediateFirstRead = true;
+
+  BacnetPropertySubscription subscription =
+      property.subscribe(captureSubscriptionNotification, &capture, options);
+
+  session.poll(subscription, 1000);
+  TEST_ASSERT_EQUAL_UINT8(
+      static_cast<uint8_t>(BacnetDeviceSessionReadStatus::SendFailed),
+      static_cast<uint8_t>(subscription.lastStatus()));
+  TEST_ASSERT_EQUAL_UINT32(1000, subscription.lastUpdateMs());
+
+  session.poll(subscription, 2000);
+  TEST_ASSERT_EQUAL_UINT32(1000, subscription.lastUpdateMs());
+}
+
+void test_bacnet_subscription_move_while_in_flight_keeps_session_reference_safe() {
+  BacnetClient client;
+  TEST_ASSERT_TRUE(client.begin(47810));
+  BacnetDeviceSession session(client, 1234, IPAddress(192, 0, 2, 50));
+  BacnetProperty property =
+      session.object(BacnetObjectType::AnalogValue, 200)
+          .property(BacnetPropertyId::PresentValue);
+
+  BacnetPropertySubscription subscription = property.subscribe(nullptr);
+  session.poll(subscription, 1000);
+
+  if (!subscription.inFlight()) {
+    TEST_IGNORE_MESSAGE("UDP send did not enter in-flight state");
+  }
+
+  BacnetPropertySubscription moved(std::move(subscription));
+  TEST_ASSERT_FALSE(subscription.active());
+  TEST_ASSERT_FALSE(subscription.inFlight());
+  TEST_ASSERT_TRUE(moved.active());
+  TEST_ASSERT_TRUE(moved.inFlight());
+
+  BacnetValue value;
+  const auto status =
+      session.readProperty(BacnetObjectType::AnalogValue, 200,
+                           BacnetPropertyId::PresentValue, value, 1);
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetDeviceSessionReadStatus::Busy),
+                         static_cast<uint8_t>(status));
+}
+
+void test_bacnet_subscription_stop_while_in_flight_allows_blocking_read() {
+  BacnetClient client;
+  TEST_ASSERT_TRUE(client.begin(47811));
+  BacnetDeviceSession session(client, 1234, IPAddress(192, 0, 2, 50));
+  BacnetProperty property =
+      session.object(BacnetObjectType::AnalogValue, 200)
+          .property(BacnetPropertyId::PresentValue);
+
+  BacnetPropertySubscription subscription = property.subscribe(nullptr);
+  session.poll(subscription, 1000);
+
+  if (!subscription.inFlight()) {
+    TEST_IGNORE_MESSAGE("UDP send did not enter in-flight state");
+  }
+
+  subscription.stop();
+  TEST_ASSERT_FALSE(subscription.active());
+  TEST_ASSERT_FALSE(subscription.inFlight());
+
+  BacnetValue value;
+  const auto status =
+      session.readProperty(BacnetObjectType::AnalogValue, 200,
+                           BacnetPropertyId::PresentValue, value, 1);
+  TEST_ASSERT_NOT_EQUAL_UINT8(
+      static_cast<uint8_t>(BacnetDeviceSessionReadStatus::Busy),
+      static_cast<uint8_t>(status));
+}
+
+void test_bacnet_subscription_destruction_while_in_flight_releases_session() {
+  BacnetClient client;
+  TEST_ASSERT_TRUE(client.begin(47812));
+  BacnetDeviceSession session(client, 1234, IPAddress(192, 0, 2, 50));
+  bool enteredInFlight = false;
+
+  {
+    BacnetProperty property =
+        session.object(BacnetObjectType::AnalogValue, 200)
+            .property(BacnetPropertyId::PresentValue);
+    BacnetPropertySubscription subscription = property.subscribe(nullptr);
+    session.poll(subscription, 1000);
+    enteredInFlight = subscription.inFlight();
+  }
+
+  if (!enteredInFlight) {
+    TEST_IGNORE_MESSAGE("UDP send did not enter in-flight state");
+  }
+
+  BacnetValue value;
+  const auto status =
+      session.readProperty(BacnetObjectType::AnalogValue, 200,
+                           BacnetPropertyId::PresentValue, value, 1);
+  TEST_ASSERT_NOT_EQUAL_UINT8(
+      static_cast<uint8_t>(BacnetDeviceSessionReadStatus::Busy),
+      static_cast<uint8_t>(status));
+}
+
 void setup() {
   UNITY_BEGIN();
   RUN_TEST(test_bacnet_client_lifecycle);
@@ -642,6 +919,16 @@ void setup() {
   RUN_TEST(test_bacnet_scanned_object_defaults_are_skipped);
   RUN_TEST(test_bacnet_device_session_scan_object_list_invalid_target);
   RUN_TEST(test_bacnet_server_lifecycle);
+  RUN_TEST(test_bacnet_subscribe_options_defaults);
+  RUN_TEST(test_bacnet_property_subscription_is_move_only);
+  RUN_TEST(test_bacnet_property_subscribe_exposes_identity_and_defaults);
+  RUN_TEST(test_bacnet_subscription_request_refresh_and_fallback_zero_behavior);
+  RUN_TEST(test_bacnet_subscription_stop_disables_polling);
+  RUN_TEST(test_bacnet_subscription_notify_status_change_false_suppresses_callback);
+  RUN_TEST(test_bacnet_subscription_immediate_first_read_works_with_fallback_zero);
+  RUN_TEST(test_bacnet_subscription_move_while_in_flight_keeps_session_reference_safe);
+  RUN_TEST(test_bacnet_subscription_stop_while_in_flight_allows_blocking_read);
+  RUN_TEST(test_bacnet_subscription_destruction_while_in_flight_releases_session);
   UNITY_END();
 }
 

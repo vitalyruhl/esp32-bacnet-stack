@@ -27,6 +27,22 @@ uint32_t BacnetProperty::arrayIndex() const {
   return arrayIndex_;
 }
 
+BacnetPropertySubscription BacnetProperty::subscribe(
+    BacnetSubscriptionCallback callback,
+    void* userData,
+    const BacnetSubscribeOptions& options) const {
+  BacnetPropertySubscription subscription(*session_, objectId_, propertyId_,
+                                          arrayIndex_, options, callback,
+                                          userData);
+  session_->client().logger().info(
+      "BACnet/Subscription", "subscription created %s,%lu %u array=%lu",
+      bacnetObjectTypeText(objectId_.type),
+      static_cast<unsigned long>(objectId_.instance),
+      static_cast<unsigned>(propertyId_),
+      static_cast<unsigned long>(arrayIndex_));
+  return subscription;
+}
+
 BacnetDeviceSessionReadStatus BacnetProperty::read(
     BacnetValue& value, uint32_t timeoutMs) const {
   return session_->readProperty(objectId_, propertyId_, value, timeoutMs,
