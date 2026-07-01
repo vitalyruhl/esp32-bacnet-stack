@@ -2,6 +2,12 @@
 
 This changelog is a curated overview.
 
+## 0.12.0
+
+- Added `examples/client-object-list-scan-basic` as a minimal serial-only
+  hardware validation sketch for the `BacnetDeviceSession`,
+  `BacnetRemoteObject`, and `scanObjectList()` APIs.
+
 ## 0.11.0
 
 - Added blocking `BacnetDeviceSession::scanObjectList()` for caller-buffered

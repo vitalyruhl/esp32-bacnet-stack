@@ -186,6 +186,12 @@ for (size_t i = 0; i < scan.stored; ++i) {
 The scan API does not add range probing, async scheduling, refresh state,
 cache, queue, callbacks, or subscriptions.
 
+The `examples/client-object-list-scan-basic` project is a minimal serial-only
+hardware validation sketch for known BACnet/IP devices. It uses local
+`secret/secrets.h` WiFi/static-IP settings, starts `BacnetClient`, creates a
+`BacnetDeviceSession`, scans AV/MV entries with `scanObjectList()`, and prints
+compact object id, object-name, description, and present-value output.
+
 The `examples/client-demo` firmware also includes a lightweight BACnet/IP
 Discovery card for demo visibility. It shows only the first discovered device,
 keeps the BME280 status card unchanged, and uses the Device Object
