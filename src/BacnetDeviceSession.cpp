@@ -2,6 +2,8 @@
 
 #include "BacnetDeviceSession.h"
 
+#include "BacnetRemoteObject.h"
+
 BacnetDeviceSession::BacnetDeviceSession(BacnetClient& client,
                                          uint32_t deviceInstance,
                                          IPAddress address, uint16_t port)
@@ -33,6 +35,16 @@ uint16_t BacnetDeviceSession::port() const {
 BacnetObjectId BacnetDeviceSession::deviceObject() const {
   return BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::Device),
                         deviceInstance_};
+}
+
+BacnetRemoteObject BacnetDeviceSession::object(BacnetObjectId objectId) {
+  return BacnetRemoteObject(*this, objectId);
+}
+
+BacnetRemoteObject BacnetDeviceSession::object(BacnetObjectType objectType,
+                                               uint32_t objectInstance) {
+  return object(
+      BacnetObjectId{static_cast<uint16_t>(objectType), objectInstance});
 }
 
 BacnetDeviceSessionReadStatus BacnetDeviceSession::readProperty(

@@ -141,6 +141,22 @@ if (status == BacnetDeviceSessionReadStatus::Ack) {
 The non-blocking `examples/client-demo` firmware keeps its own request state
 machine for UI-friendly scanning.
 
+`BacnetRemoteObject` and `BacnetProperty` provide a lightweight synchronous
+wrapper over the same session read path:
+
+```cpp
+auto mv2000 = device.object(BacnetObjectType::MultiStateValue, 2000);
+
+BacnetValue value;
+const auto status = mv2000.readPresentValue(value);
+
+if (status == BacnetDeviceSessionReadStatus::Ack) {
+  Serial.println(value.displayText());
+}
+```
+
+The wrappers do not add scan, cache, queue, scheduler, or subscription state.
+
 The `examples/client-demo` firmware also includes a lightweight BACnet/IP
 Discovery card for demo visibility. It shows only the first discovered device,
 keeps the BME280 status card unchanged, and uses the Device Object

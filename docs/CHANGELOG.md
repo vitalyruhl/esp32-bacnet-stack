@@ -2,6 +2,11 @@
 
 This changelog is a curated overview.
 
+## 0.10.0
+
+- Added `BacnetRemoteObject` and `BacnetProperty` as lightweight synchronous
+  wrappers over `BacnetDeviceSession::readProperty()` for object/property reads.
+
 ## 0.9.0
 
 - Added `BacnetDeviceSession` as a lightweight client-owned helper for known

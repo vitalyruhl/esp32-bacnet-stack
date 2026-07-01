@@ -6,6 +6,8 @@
 
 #include <cstdint>
 
+class BacnetRemoteObject;
+
 enum class BacnetDeviceSessionReadStatus : uint8_t {
   Ack,
   Error,
@@ -27,6 +29,9 @@ class BacnetDeviceSession {
   IPAddress address() const;
   uint16_t port() const;
   BacnetObjectId deviceObject() const;
+  BacnetRemoteObject object(BacnetObjectId objectId);
+  BacnetRemoteObject object(BacnetObjectType objectType,
+                            uint32_t objectInstance);
 
   BacnetDeviceSessionReadStatus readProperty(
       BacnetObjectId object, BacnetPropertyId property, BacnetValue& value,

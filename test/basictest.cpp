@@ -2,6 +2,7 @@
 
 #include <BacnetClient.h>
 #include <BacnetDeviceSession.h>
+#include <BacnetRemoteObject.h>
 #include <BacnetServer.h>
 #include <unity.h>
 
@@ -433,6 +434,78 @@ void test_bacnet_device_session_reports_send_failure() {
                           static_cast<uint8_t>(value.type));
 }
 
+void test_bacnet_device_session_creates_remote_object() {
+  BacnetClient client;
+  BacnetDeviceSession session(client, 1234, IPAddress(192, 168, 1, 50));
+
+  const BacnetRemoteObject object =
+      session.object(BacnetObjectType::MultiStateValue, 2000);
+  const BacnetObjectId objectId = object.objectId();
+
+  TEST_ASSERT_EQUAL_UINT16(static_cast<uint16_t>(BacnetObjectType::MultiStateValue),
+                           objectId.type);
+  TEST_ASSERT_EQUAL_UINT32(2000, objectId.instance);
+}
+
+void test_bacnet_remote_object_creates_property_request() {
+  BacnetClient client;
+  BacnetDeviceSession session(client, 1234, IPAddress(192, 168, 1, 50));
+  const BacnetRemoteObject object =
+      session.object(BacnetObjectId{
+          static_cast<uint16_t>(BacnetObjectType::MultiStateValue), 2000});
+
+  const BacnetProperty property =
+      object.property(BacnetPropertyId::StateText, 2);
+  const BacnetPropertyRequest request = property.request();
+
+  TEST_ASSERT_EQUAL_UINT16(static_cast<uint16_t>(BacnetObjectType::MultiStateValue),
+                           property.objectId().type);
+  TEST_ASSERT_EQUAL_UINT32(2000, property.objectId().instance);
+  TEST_ASSERT_EQUAL_UINT32(static_cast<uint32_t>(BacnetPropertyId::StateText),
+                           static_cast<uint32_t>(property.propertyId()));
+  TEST_ASSERT_EQUAL_UINT32(2, property.arrayIndex());
+  TEST_ASSERT_EQUAL_UINT16(static_cast<uint16_t>(BacnetObjectType::MultiStateValue),
+                           request.object.type);
+  TEST_ASSERT_EQUAL_UINT32(2000, request.object.instance);
+  TEST_ASSERT_EQUAL_UINT32(static_cast<uint32_t>(BacnetPropertyId::StateText),
+                           static_cast<uint32_t>(request.property));
+  TEST_ASSERT_EQUAL_UINT32(2, request.arrayIndex);
+}
+
+void test_bacnet_remote_object_read_reports_send_failure() {
+  BacnetClient client;
+  BacnetDeviceSession session(client, 1234, IPAddress(0, 0, 0, 0));
+  const BacnetRemoteObject object =
+      session.object(BacnetObjectType::AnalogValue, 200);
+  BacnetValue value;
+
+  const BacnetDeviceSessionReadStatus status =
+      object.readPresentValue(value, 0);
+
+  TEST_ASSERT_EQUAL_UINT8(
+      static_cast<uint8_t>(BacnetDeviceSessionReadStatus::SendFailed),
+      static_cast<uint8_t>(status));
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetValueType::Empty),
+                          static_cast<uint8_t>(value.type));
+}
+
+void test_bacnet_property_read_reports_send_failure() {
+  BacnetClient client;
+  BacnetDeviceSession session(client, 1234, IPAddress(0, 0, 0, 0));
+  const BacnetProperty property =
+      session.object(BacnetObjectType::Device, 1234)
+          .property(BacnetPropertyId::ObjectName);
+  BacnetValue value;
+
+  const BacnetDeviceSessionReadStatus status = property.read(value, 0);
+
+  TEST_ASSERT_EQUAL_UINT8(
+      static_cast<uint8_t>(BacnetDeviceSessionReadStatus::SendFailed),
+      static_cast<uint8_t>(status));
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetValueType::Empty),
+                          static_cast<uint8_t>(value.type));
+}
+
 void test_bacnet_server_lifecycle() {
   BacnetServer server;
 
@@ -471,6 +544,10 @@ void setup() {
   RUN_TEST(test_bacnet_client_parses_read_property_error);
   RUN_TEST(test_bacnet_device_session_keeps_remote_device_metadata);
   RUN_TEST(test_bacnet_device_session_reports_send_failure);
+  RUN_TEST(test_bacnet_device_session_creates_remote_object);
+  RUN_TEST(test_bacnet_remote_object_creates_property_request);
+  RUN_TEST(test_bacnet_remote_object_read_reports_send_failure);
+  RUN_TEST(test_bacnet_property_read_reports_send_failure);
   RUN_TEST(test_bacnet_server_lifecycle);
   UNITY_END();
 }
