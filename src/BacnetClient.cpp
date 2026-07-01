@@ -375,7 +375,9 @@ bool parseUnsupportedApplicationValue(const uint8_t* buffer, size_t length,
 bool parseReadPropertyApplicationValue(const uint8_t* buffer, size_t length,
                                        size_t& offset,
                                        BacnetPropertyId expectedProperty,
-                                       BacnetValue& value) {
+                                       BacnetValue& value,
+                                       uint32_t arrayIndex =
+                                           kBacnetNoArrayIndex) {
   if (offset >= length) {
     return false;
   }
@@ -387,8 +389,10 @@ bool parseReadPropertyApplicationValue(const uint8_t* buffer, size_t length,
                                       kApplicationTagUnsigned, value);
     }
     if (tagNumber == kApplicationTagObjectIdentifier) {
-      return parseApplicationObjectIdentifierList(buffer, length, offset,
-                                                 value);
+      if (arrayIndex != kBacnetNoArrayIndex) {
+        return parseApplicationObjectIdentifier(buffer, length, offset, value);
+      }
+      return parseApplicationObjectIdentifierList(buffer, length, offset, value);
     }
   }
 
@@ -987,9 +991,9 @@ bool BacnetClient::parseReadPropertyAck(const uint8_t* buffer, size_t length,
     return false;
   }
 
+  uint32_t responseArrayIndex = kBacnetNoArrayIndex;
   if (offset < length && (buffer[offset] >> 4) == 2 &&
       (buffer[offset] & 0x08) != 0) {
-    uint32_t responseArrayIndex = 0;
     if (!readContextValue(buffer, length, offset, 2, responseArrayIndex)) {
       return false;
     }
@@ -1006,7 +1010,8 @@ bool BacnetClient::parseReadPropertyAck(const uint8_t* buffer, size_t length,
   }
 
   if (!parseReadPropertyApplicationValue(buffer, length, offset,
-                                         expectedRequest.property, value)) {
+                                         expectedRequest.property, value,
+                                         responseArrayIndex)) {
     return false;
   }
 
@@ -1039,9 +1044,9 @@ bool BacnetClient::parseReadPropertyAck(const uint8_t* buffer, size_t length,
     return false;
   }
 
+  uint32_t responseArrayIndex = kBacnetNoArrayIndex;
   if (offset < length && (buffer[offset] >> 4) == 2 &&
       (buffer[offset] & 0x08) != 0) {
-    uint32_t responseArrayIndex = 0;
     if (!readContextValue(buffer, length, offset, 2, responseArrayIndex)) {
       return false;
     }
@@ -1052,7 +1057,8 @@ bool BacnetClient::parseReadPropertyAck(const uint8_t* buffer, size_t length,
   }
 
   if (!parseReadPropertyApplicationValue(buffer, length, offset,
-                                         expectedProperty, value)) {
+                                         expectedProperty, value,
+                                         responseArrayIndex)) {
     return false;
   }
 

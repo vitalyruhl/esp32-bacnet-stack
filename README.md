@@ -157,6 +157,35 @@ if (status == BacnetDeviceSessionReadStatus::Ack) {
 
 The wrappers do not add scan, cache, queue, scheduler, or subscription state.
 
+`BacnetDeviceSession::scanObjectList()` adds a blocking convenience scan over
+the remote Device object's `object-list` property. The caller owns the result
+buffer and optional filters:
+
+```cpp
+const BacnetObjectType valueTypes[] = {
+    BacnetObjectType::AnalogValue,
+    BacnetObjectType::MultiStateValue,
+};
+
+BacnetObjectScanOptions scanOptions;
+scanOptions.objectTypes = valueTypes;
+scanOptions.objectTypeCount = 2;
+scanOptions.maxObjectListEntries = 600;
+
+BacnetScannedObject foundObjects[10];
+const auto scan = device.scanObjectList(
+    scanOptions, foundObjects, 10);
+
+for (size_t i = 0; i < scan.stored; ++i) {
+  auto object = device.object(foundObjects[i].objectId);
+  BacnetValue value;
+  object.readPresentValue(value);
+}
+```
+
+The scan API does not add range probing, async scheduling, refresh state,
+cache, queue, callbacks, or subscriptions.
+
 The `examples/client-demo` firmware also includes a lightweight BACnet/IP
 Discovery card for demo visibility. It shows only the first discovered device,
 keeps the BME280 status card unchanged, and uses the Device Object

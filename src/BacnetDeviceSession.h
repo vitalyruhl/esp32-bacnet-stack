@@ -4,15 +4,20 @@
 
 #include "BacnetClient.h"
 
+#include <cstddef>
 #include <cstdint>
 
 class BacnetRemoteObject;
+struct BacnetObjectScanOptions;
+struct BacnetObjectScanResult;
+struct BacnetScannedObject;
 
 enum class BacnetDeviceSessionReadStatus : uint8_t {
   Ack,
   Error,
   Timeout,
   SendFailed,
+  Skipped,
 };
 
 class BacnetDeviceSession {
@@ -42,6 +47,10 @@ class BacnetDeviceSession {
       BacnetPropertyId property, BacnetValue& value,
       uint32_t timeoutMs = kDefaultReadTimeoutMs,
       uint32_t arrayIndex = kBacnetNoArrayIndex);
+  BacnetObjectScanResult scanObjectList(
+      const BacnetObjectScanOptions& options,
+      BacnetScannedObject* results,
+      size_t resultCapacity);
 
  private:
   uint8_t allocateInvokeId();
@@ -51,4 +60,40 @@ class BacnetDeviceSession {
   IPAddress address_;
   uint16_t port_ = BacnetClient::kDefaultPort;
   uint8_t nextInvokeId_ = 1;
+};
+
+struct BacnetObjectScanOptions {
+  const BacnetObjectType* objectTypes = nullptr;
+  size_t objectTypeCount = 0;
+  uint32_t maxObjectListEntries = 600;
+  uint32_t readTimeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs;
+  bool readObjectName = true;
+  bool readDescription = true;
+  bool readPresentValue = true;
+
+  bool acceptsObjectType(BacnetObjectId objectId) const;
+  bool acceptsObjectType(BacnetObjectType objectType) const;
+};
+
+struct BacnetScannedObject {
+  BacnetObjectId objectId;
+  BacnetDeviceSessionReadStatus objectNameStatus =
+      BacnetDeviceSessionReadStatus::Skipped;
+  BacnetValue objectName;
+  BacnetDeviceSessionReadStatus descriptionStatus =
+      BacnetDeviceSessionReadStatus::Skipped;
+  BacnetValue description;
+  BacnetDeviceSessionReadStatus presentValueStatus =
+      BacnetDeviceSessionReadStatus::Skipped;
+  BacnetValue presentValue;
+};
+
+struct BacnetObjectScanResult {
+  BacnetDeviceSessionReadStatus objectListCountStatus =
+      BacnetDeviceSessionReadStatus::Skipped;
+  uint32_t objectListCount = 0;
+  uint32_t inspected = 0;
+  size_t found = 0;
+  size_t stored = 0;
+  bool truncated = false;
 };

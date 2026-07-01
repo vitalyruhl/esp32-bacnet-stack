@@ -4,6 +4,7 @@
 #include <BacnetDeviceSession.h>
 #include <BacnetRemoteObject.h>
 #include <BacnetServer.h>
+#include <EspBacnet.h>
 #include <unity.h>
 
 #include <cstdio>
@@ -506,6 +507,94 @@ void test_bacnet_property_read_reports_send_failure() {
                           static_cast<uint8_t>(value.type));
 }
 
+void test_bacnet_object_scan_options_defaults() {
+  BacnetObjectScanOptions options;
+
+  TEST_ASSERT_NULL(options.objectTypes);
+  TEST_ASSERT_EQUAL_UINT32(0, options.objectTypeCount);
+  TEST_ASSERT_EQUAL_UINT32(600, options.maxObjectListEntries);
+  TEST_ASSERT_EQUAL_UINT32(BacnetDeviceSession::kDefaultReadTimeoutMs,
+                           options.readTimeoutMs);
+  TEST_ASSERT_TRUE(options.readObjectName);
+  TEST_ASSERT_TRUE(options.readDescription);
+  TEST_ASSERT_TRUE(options.readPresentValue);
+  TEST_ASSERT_TRUE(options.acceptsObjectType(BacnetObjectType::Device));
+  TEST_ASSERT_TRUE(options.acceptsObjectType(
+      BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::AnalogValue),
+                     200}));
+}
+
+void test_bacnet_object_scan_options_filter_object_types() {
+  const BacnetObjectType objectTypes[] = {BacnetObjectType::AnalogValue,
+                                          BacnetObjectType::MultiStateValue};
+  BacnetObjectScanOptions options;
+  options.objectTypes = objectTypes;
+  options.objectTypeCount = 2;
+
+  TEST_ASSERT_TRUE(options.acceptsObjectType(BacnetObjectType::AnalogValue));
+  TEST_ASSERT_TRUE(options.acceptsObjectType(
+      BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::MultiStateValue),
+                     2000}));
+  TEST_ASSERT_FALSE(options.acceptsObjectType(BacnetObjectType::Device));
+}
+
+void test_bacnet_scanned_object_defaults_are_skipped() {
+  BacnetScannedObject scanned;
+  BacnetObjectScanResult result;
+
+  TEST_ASSERT_EQUAL_UINT8(
+      static_cast<uint8_t>(BacnetDeviceSessionReadStatus::Skipped),
+      static_cast<uint8_t>(scanned.objectNameStatus));
+  TEST_ASSERT_EQUAL_UINT8(
+      static_cast<uint8_t>(BacnetDeviceSessionReadStatus::Skipped),
+      static_cast<uint8_t>(scanned.descriptionStatus));
+  TEST_ASSERT_EQUAL_UINT8(
+      static_cast<uint8_t>(BacnetDeviceSessionReadStatus::Skipped),
+      static_cast<uint8_t>(scanned.presentValueStatus));
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetValueType::Empty),
+                          static_cast<uint8_t>(scanned.objectName.type));
+  TEST_ASSERT_EQUAL_UINT8(
+      static_cast<uint8_t>(BacnetDeviceSessionReadStatus::Skipped),
+      static_cast<uint8_t>(result.objectListCountStatus));
+  TEST_ASSERT_EQUAL_UINT32(0, result.objectListCount);
+  TEST_ASSERT_EQUAL_UINT32(0, result.inspected);
+  TEST_ASSERT_EQUAL_UINT32(0, result.found);
+  TEST_ASSERT_EQUAL_UINT32(0, result.stored);
+  TEST_ASSERT_FALSE(result.truncated);
+}
+
+void test_bacnet_device_session_scan_object_list_invalid_target() {
+  BacnetClient client;
+  BacnetDeviceSession session(client, 1234, IPAddress(0, 0, 0, 0));
+  BacnetObjectScanOptions options;
+  options.readTimeoutMs = 0;
+  BacnetScannedObject results[1];
+  results[0].objectId = BacnetObjectId{
+      static_cast<uint16_t>(BacnetObjectType::AnalogValue), 42};
+
+  const BacnetObjectScanResult result =
+      session.scanObjectList(options, results, 1);
+
+  TEST_ASSERT_EQUAL_UINT8(
+      static_cast<uint8_t>(BacnetDeviceSessionReadStatus::SendFailed),
+      static_cast<uint8_t>(result.objectListCountStatus));
+  TEST_ASSERT_EQUAL_UINT32(0, result.objectListCount);
+  TEST_ASSERT_EQUAL_UINT32(0, result.inspected);
+  TEST_ASSERT_EQUAL_UINT32(0, result.found);
+  TEST_ASSERT_EQUAL_UINT32(0, result.stored);
+  TEST_ASSERT_FALSE(result.truncated);
+  TEST_ASSERT_EQUAL_UINT16(static_cast<uint16_t>(BacnetObjectType::AnalogValue),
+                           results[0].objectId.type);
+  TEST_ASSERT_EQUAL_UINT32(42, results[0].objectId.instance);
+
+  const BacnetObjectScanResult zeroCapacityResult =
+      session.scanObjectList(options, nullptr, 0);
+  TEST_ASSERT_EQUAL_UINT8(
+      static_cast<uint8_t>(BacnetDeviceSessionReadStatus::SendFailed),
+      static_cast<uint8_t>(zeroCapacityResult.objectListCountStatus));
+  TEST_ASSERT_EQUAL_UINT32(0, zeroCapacityResult.stored);
+}
+
 void test_bacnet_server_lifecycle() {
   BacnetServer server;
 
@@ -548,6 +637,10 @@ void setup() {
   RUN_TEST(test_bacnet_remote_object_creates_property_request);
   RUN_TEST(test_bacnet_remote_object_read_reports_send_failure);
   RUN_TEST(test_bacnet_property_read_reports_send_failure);
+  RUN_TEST(test_bacnet_object_scan_options_defaults);
+  RUN_TEST(test_bacnet_object_scan_options_filter_object_types);
+  RUN_TEST(test_bacnet_scanned_object_defaults_are_skipped);
+  RUN_TEST(test_bacnet_device_session_scan_object_list_invalid_target);
   RUN_TEST(test_bacnet_server_lifecycle);
   UNITY_END();
 }

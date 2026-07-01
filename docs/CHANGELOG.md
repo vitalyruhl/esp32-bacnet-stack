@@ -2,6 +2,12 @@
 
 This changelog is a curated overview.
 
+## 0.11.0
+
+- Added blocking `BacnetDeviceSession::scanObjectList()` for caller-buffered
+  Device `object-list` scans with optional generic BACnet object-type filters
+  and optional object-name, description, and present-value reads.
+
 ## 0.10.0
 
 - Added `BacnetRemoteObject` and `BacnetProperty` as lightweight synchronous
