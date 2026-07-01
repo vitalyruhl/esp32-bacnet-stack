@@ -35,10 +35,11 @@
 
 namespace {
 
+constexpr const char* kExampleName = "BACnet object-list scan basic example";
 constexpr uint32_t kSerialBaud = 115200;
 constexpr uint32_t kWifiConnectTimeoutMs = 20000;
 constexpr uint32_t kWifiRetryDelayMs = 250;
-constexpr uint32_t kReadTimeoutMs = 1000;
+constexpr uint32_t kReadTimeoutMs = 3000;
 constexpr uint32_t kMaxObjectListEntries = 600;
 constexpr size_t kMaxScanResults = 10;
 
@@ -92,6 +93,8 @@ bool connectWifi() {
     return false;
   }
   Serial.println("[I] WiFi connected");
+  Serial.print("[I] local WiFi IP ");
+  Serial.println(WiFi.localIP());
   return true;
 }
 
@@ -143,8 +146,36 @@ void printObjectId(BacnetObjectId objectId) {
   Serial.print(objectId.instance);
 }
 
+void printScanOptions(const BacnetObjectScanOptions& options,
+                      size_t resultCapacity) {
+  Serial.print("[I] scan options maxObjectListEntries=");
+  Serial.print(options.maxObjectListEntries);
+  Serial.print(" readTimeoutMs=");
+  Serial.print(options.readTimeoutMs);
+  Serial.print(" resultCapacity=");
+  Serial.print(resultCapacity);
+  Serial.print(" readObjectName=");
+  Serial.print(options.readObjectName ? "yes" : "no");
+  Serial.print(" readDescription=");
+  Serial.print(options.readDescription ? "yes" : "no");
+  Serial.print(" readPresentValue=");
+  Serial.println(options.readPresentValue ? "yes" : "no");
+  Serial.print("[I] scan filter objectTypes=");
+  if (options.objectTypes == nullptr || options.objectTypeCount == 0) {
+    Serial.println("all");
+    return;
+  }
+  for (size_t i = 0; i < options.objectTypeCount; ++i) {
+    if (i > 0) {
+      Serial.print(",");
+    }
+    Serial.print(objectTypeText(static_cast<uint16_t>(options.objectTypes[i])));
+  }
+  Serial.println();
+}
+
 void printScanResults(const BacnetObjectScanResult& scan) {
-  Serial.print("[I] scan countStatus=");
+  Serial.print("[I] scan count-status=");
   Serial.print(readStatusText(scan.objectListCountStatus));
   Serial.print(" count=");
   Serial.print(scan.objectListCount);
@@ -174,10 +205,19 @@ void runScan() {
     Serial.println("[E] BACnet client failed to start");
     return;
   }
+  Serial.print("[I] BACnet local UDP port ");
+  Serial.println(bacnetClient.localPort());
 
   const IPAddress targetAddress(BACNET_TARGET_ADDRESS_OCTETS);
   BacnetDeviceSession session(bacnetClient, BACNET_TARGET_DEVICE_INSTANCE,
                               targetAddress, BACNET_TARGET_PORT);
+
+  Serial.print("[I] target BACnet IP ");
+  Serial.println(targetAddress);
+  Serial.print("[I] target BACnet device ID ");
+  Serial.println(static_cast<uint32_t>(BACNET_TARGET_DEVICE_INSTANCE));
+  Serial.print("[I] target BACnet port ");
+  Serial.println(static_cast<uint16_t>(BACNET_TARGET_PORT));
 
   const BacnetObjectType valueObjectTypes[] = {
       BacnetObjectType::AnalogValue,
@@ -191,6 +231,7 @@ void runScan() {
   options.readTimeoutMs = kReadTimeoutMs;
 
   Serial.println("[I] Starting BACnet object-list scan");
+  printScanOptions(options, kMaxScanResults);
   const BacnetObjectScanResult scan =
       session.scanObjectList(options, scanResults, kMaxScanResults);
   printScanResults(scan);
@@ -202,7 +243,8 @@ void setup() {
   Serial.begin(kSerialBaud);
   delay(500);
   Serial.println();
-  Serial.println("[I] " APP_NAME);
+  Serial.print("[I] ");
+  Serial.println(kExampleName);
 
   if (!connectWifi()) {
     return;

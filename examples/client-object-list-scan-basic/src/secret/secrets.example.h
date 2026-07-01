@@ -5,8 +5,6 @@
 // Copy this file to secrets.h and adjust local values there.
 // The real secrets.h file is ignored by Git and must not be committed.
 
-#define APP_NAME "BACnet Object List Scan Basic"
-
 #define MY_WIFI_SSID "YOUR_WIFI_SSID"
 #define MY_WIFI_PASSWORD "YOUR_WIFI_PASSWORD"
 
@@ -18,6 +16,7 @@
 #define MY_USE_DHCP false
 
 // BACnet validation target. Keep real local values in secrets.h.
+// The example prints these target values for diagnostics.
 #define BACNET_TARGET_DEVICE_INSTANCE 1234
 #define BACNET_TARGET_ADDRESS_OCTETS 192, 0, 2, 101
 #define BACNET_TARGET_PORT 47808
