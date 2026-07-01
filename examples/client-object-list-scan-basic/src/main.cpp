@@ -17,6 +17,10 @@
 #define APP_NAME "BACnet Object List Scan Basic"
 #endif
 
+#ifndef APP_VERSION
+#define APP_VERSION "0.12.0"
+#endif
+
 #ifndef MY_USE_DHCP
 #define MY_USE_DHCP true
 #endif
@@ -25,8 +29,8 @@
 #define BACNET_TARGET_DEVICE_INSTANCE 1234
 #endif
 
-#ifndef BACNET_TARGET_ADDRESS_OCTETS
-#define BACNET_TARGET_ADDRESS_OCTETS 192, 0, 2, 101
+#ifndef BACNET_TARGET_ADDRESS
+#define BACNET_TARGET_ADDRESS "192.0.2.101"
 #endif
 
 #ifndef BACNET_TARGET_PORT
@@ -35,7 +39,6 @@
 
 namespace {
 
-constexpr const char* kExampleName = "BACnet object-list scan basic example";
 constexpr uint32_t kSerialBaud = 115200;
 constexpr uint32_t kWifiConnectTimeoutMs = 20000;
 constexpr uint32_t kWifiRetryDelayMs = 250;
@@ -98,41 +101,12 @@ bool connectWifi() {
   return true;
 }
 
-const char* readStatusText(BacnetDeviceSessionReadStatus status) {
-  switch (status) {
-    case BacnetDeviceSessionReadStatus::Ack:
-      return "ok";
-    case BacnetDeviceSessionReadStatus::Error:
-      return "error";
-    case BacnetDeviceSessionReadStatus::Timeout:
-      return "timeout";
-    case BacnetDeviceSessionReadStatus::SendFailed:
-      return "send-failed";
-    case BacnetDeviceSessionReadStatus::Skipped:
-      return "skipped";
-  }
-  return "unknown";
-}
-
-const char* objectTypeText(uint16_t objectType) {
-  if (objectType == static_cast<uint16_t>(BacnetObjectType::AnalogValue)) {
-    return "analog-value";
-  }
-  if (objectType == static_cast<uint16_t>(BacnetObjectType::MultiStateValue)) {
-    return "multi-state-value";
-  }
-  if (objectType == static_cast<uint16_t>(BacnetObjectType::Device)) {
-    return "device";
-  }
-  return "object";
-}
-
 void printValue(const char* label, BacnetDeviceSessionReadStatus status,
                 const BacnetValue& value) {
   Serial.print("  ");
   Serial.print(label);
   Serial.print(": ");
-  Serial.print(readStatusText(status));
+  Serial.print(bacnetReadStatusText(status));
   if (status == BacnetDeviceSessionReadStatus::Ack) {
     Serial.print(" ");
     Serial.print(value.displayText());
@@ -141,7 +115,7 @@ void printValue(const char* label, BacnetDeviceSessionReadStatus status,
 }
 
 void printObjectId(BacnetObjectId objectId) {
-  Serial.print(objectTypeText(objectId.type));
+  Serial.print(bacnetObjectTypeText(objectId.type));
   Serial.print(",");
   Serial.print(objectId.instance);
 }
@@ -169,14 +143,14 @@ void printScanOptions(const BacnetObjectScanOptions& options,
     if (i > 0) {
       Serial.print(",");
     }
-    Serial.print(objectTypeText(static_cast<uint16_t>(options.objectTypes[i])));
+    Serial.print(bacnetObjectTypeText(options.objectTypes[i]));
   }
   Serial.println();
 }
 
 void printScanResults(const BacnetObjectScanResult& scan) {
   Serial.print("[I] scan count-status=");
-  Serial.print(readStatusText(scan.objectListCountStatus));
+  Serial.print(bacnetReadStatusText(scan.objectListCountStatus));
   Serial.print(" count=");
   Serial.print(scan.objectListCount);
   Serial.print(" inspected=");
@@ -208,7 +182,12 @@ void runScan() {
   Serial.print("[I] BACnet local UDP port ");
   Serial.println(bacnetClient.localPort());
 
-  const IPAddress targetAddress(BACNET_TARGET_ADDRESS_OCTETS);
+  IPAddress targetAddress;
+  if (!parseIp(BACNET_TARGET_ADDRESS, targetAddress)) {
+    Serial.print("[E] Invalid BACnet target IP: ");
+    Serial.println(BACNET_TARGET_ADDRESS);
+    return;
+  }
   BacnetDeviceSession session(bacnetClient, BACNET_TARGET_DEVICE_INSTANCE,
                               targetAddress, BACNET_TARGET_PORT);
 
@@ -225,8 +204,7 @@ void runScan() {
   };
 
   BacnetObjectScanOptions options;
-  options.objectTypes = valueObjectTypes;
-  options.objectTypeCount = 2;
+  bacnetSetObjectTypeFilter(options, valueObjectTypes);
   options.maxObjectListEntries = kMaxObjectListEntries;
   options.readTimeoutMs = kReadTimeoutMs;
 
@@ -243,8 +221,10 @@ void setup() {
   Serial.begin(kSerialBaud);
   delay(500);
   Serial.println();
-  Serial.print("[I] ");
-  Serial.println(kExampleName);
+  Serial.print("[I] demo ");
+  Serial.println(APP_NAME);
+  Serial.print("[I] version ");
+  Serial.println(APP_VERSION);
 
   if (!connectWifi()) {
     return;

@@ -18,5 +18,5 @@
 // BACnet validation target. Keep real local values in secrets.h.
 // The example prints these target values for diagnostics.
 #define BACNET_TARGET_DEVICE_INSTANCE 1234
-#define BACNET_TARGET_ADDRESS_OCTETS 192, 0, 2, 101
+#define BACNET_TARGET_ADDRESS "192.0.2.101"
 #define BACNET_TARGET_PORT 47808
