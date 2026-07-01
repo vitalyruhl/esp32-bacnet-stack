@@ -102,44 +102,129 @@ BacnetObjectScanResult BacnetDeviceSession::scanObjectList(
     const BacnetObjectScanOptions& options,
     BacnetScannedObject* results,
     size_t resultCapacity) {
+  BacnetLogger& logger = client_.logger();
+  logger.info(
+      "BACnet/Scan",
+      "scan start device %lu target %u.%u.%u.%u:%u max-entries %lu filter-count "
+      "%u",
+      static_cast<unsigned long>(deviceInstance_),
+      static_cast<unsigned>(address_[0]),
+      static_cast<unsigned>(address_[1]),
+      static_cast<unsigned>(address_[2]),
+      static_cast<unsigned>(address_[3]),
+      static_cast<unsigned>(port_),
+      static_cast<unsigned long>(options.maxObjectListEntries),
+      static_cast<unsigned>(options.objectTypeCount));
+
   BacnetObjectScanResult result;
   BacnetValue countValue;
+  logger.debug("BACnet/Scan", "read device,%lu objectList[0] start",
+               static_cast<unsigned long>(deviceInstance_));
   result.objectListCountStatus =
       readProperty(deviceObject(), BacnetPropertyId::ObjectList, countValue,
                    options.readTimeoutMs, 0);
   if (result.objectListCountStatus != BacnetDeviceSessionReadStatus::Ack) {
+    logger.warn("BACnet/Scan", "read device,%lu objectList[0] failed: %s",
+                static_cast<unsigned long>(deviceInstance_),
+                bacnetReadStatusText(result.objectListCountStatus));
+    logger.info(
+        "BACnet/Scan",
+        "scan summary count-status=%s count=%lu inspected=%lu found=%u stored=%u "
+        "truncated=%s",
+        bacnetReadStatusText(result.objectListCountStatus),
+        static_cast<unsigned long>(result.objectListCount),
+        static_cast<unsigned long>(result.inspected),
+        static_cast<unsigned>(result.found),
+        static_cast<unsigned>(result.stored),
+        result.truncated ? "yes" : "no");
     return result;
   }
   if (countValue.type != BacnetValueType::Unsigned) {
     result.objectListCountStatus = BacnetDeviceSessionReadStatus::Error;
+    logger.warn("BACnet/Scan",
+                "read device,%lu objectList[0] invalid value type %u",
+                static_cast<unsigned long>(deviceInstance_),
+                static_cast<unsigned>(countValue.type));
+    logger.info(
+        "BACnet/Scan",
+        "scan summary count-status=%s count=%lu inspected=%lu found=%u stored=%u "
+        "truncated=%s",
+        bacnetReadStatusText(result.objectListCountStatus),
+        static_cast<unsigned long>(result.objectListCount),
+        static_cast<unsigned long>(result.inspected),
+        static_cast<unsigned>(result.found),
+        static_cast<unsigned>(result.stored),
+        result.truncated ? "yes" : "no");
     return result;
   }
 
   result.objectListCount = countValue.unsignedValue;
+  logger.info("BACnet/Scan", "read device,%lu objectList[0]=%lu",
+              static_cast<unsigned long>(deviceInstance_),
+              static_cast<unsigned long>(result.objectListCount));
   const uint32_t maxEntries =
       result.objectListCount < options.maxObjectListEntries
           ? result.objectListCount
           : options.maxObjectListEntries;
+  bool truncationLogged = false;
 
   for (uint32_t index = 1; index <= maxEntries; ++index) {
     BacnetValue entryValue;
+    logger.trace("BACnet/Scan", "read device,%lu objectList[%lu] start",
+                 static_cast<unsigned long>(deviceInstance_),
+                 static_cast<unsigned long>(index));
     const BacnetDeviceSessionReadStatus entryStatus =
         readProperty(deviceObject(), BacnetPropertyId::ObjectList, entryValue,
                      options.readTimeoutMs, index);
     if (entryStatus != BacnetDeviceSessionReadStatus::Ack) {
+      logger.warn("BACnet/Scan", "read device,%lu objectList[%lu] failed: %s",
+                  static_cast<unsigned long>(deviceInstance_),
+                  static_cast<unsigned long>(index),
+                  bacnetReadStatusText(entryStatus));
       break;
     }
 
     ++result.inspected;
     BacnetObjectId objectId;
-    if (!objectIdFromObjectListValue(entryValue, objectId) ||
-        !options.acceptsObjectType(objectId)) {
+    if (!objectIdFromObjectListValue(entryValue, objectId)) {
+      logger.trace("BACnet/Scan",
+                   "objectList[%lu] skipped malformed object identifier",
+                   static_cast<unsigned long>(index));
       continue;
     }
 
+    if (!options.acceptsObjectType(objectId)) {
+      logger.trace("BACnet/Scan", "objectList[%lu] skipped %s,%lu",
+                   static_cast<unsigned long>(index),
+                   bacnetObjectTypeText(objectId.type),
+                   static_cast<unsigned long>(objectId.instance));
+      continue;
+    }
+
+    logger.debug("BACnet/Scan", "objectList[%lu] accepted %s,%lu",
+                 static_cast<unsigned long>(index),
+                 bacnetObjectTypeText(objectId.type),
+                 static_cast<unsigned long>(objectId.instance));
+
     ++result.found;
-    if (results == nullptr || result.stored >= resultCapacity) {
+    if (results == nullptr) {
       result.truncated = true;
+      if (!truncationLogged) {
+        truncationLogged = true;
+        logger.warn("BACnet/Scan",
+                    "no result buffer provided; scan will truncate");
+      }
+      continue;
+    }
+
+    if (result.stored >= resultCapacity) {
+      result.truncated = true;
+      if (!truncationLogged) {
+        truncationLogged = true;
+        logger.warn("BACnet/Scan",
+                    "result buffer full at %u entries; scan will truncate",
+                    static_cast<unsigned>(resultCapacity));
+      }
       continue;
     }
 
@@ -161,11 +246,31 @@ BacnetObjectScanResult BacnetDeviceSession::scanObjectList(
           remoteObject.readPresentValue(scanned.presentValue,
                                         options.readTimeoutMs);
     }
+
+    logger.debug(
+        "BACnet/Scan",
+        "scan read %s,%lu name=%s description=%s presentValue=%s",
+        bacnetObjectTypeText(objectId.type),
+        static_cast<unsigned long>(objectId.instance),
+        bacnetReadStatusText(scanned.objectNameStatus),
+        bacnetReadStatusText(scanned.descriptionStatus),
+        bacnetReadStatusText(scanned.presentValueStatus));
   }
 
   if (result.objectListCount > options.maxObjectListEntries) {
     result.truncated = true;
   }
+
+  logger.info(
+      "BACnet/Scan",
+      "scan summary count-status=%s count=%lu inspected=%lu found=%u stored=%u "
+      "truncated=%s",
+      bacnetReadStatusText(result.objectListCountStatus),
+      static_cast<unsigned long>(result.objectListCount),
+      static_cast<unsigned long>(result.inspected),
+      static_cast<unsigned>(result.found),
+      static_cast<unsigned>(result.stored),
+      result.truncated ? "yes" : "no");
   return result;
 }
 
