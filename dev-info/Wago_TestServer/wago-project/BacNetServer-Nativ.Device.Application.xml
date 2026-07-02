@@ -13,36 +13,16 @@
   <NodeList>
     <Node name="Application">
       <Node name="PLC_PRG">
-        <Node name="av200_sine" type="T_REAL" access="ReadWrite">
-          <Comment />
-        </Node>
-        <Node name="av201_writeTest" type="T_REAL" access="ReadWrite">
-          <Comment />
-        </Node>
-        <Node name="av202_ramp" type="T_REAL" access="ReadWrite">
-          <Comment />
-        </Node>
-        <Node name="av203_alarmSource" type="T_REAL" access="ReadWrite">
-          <Comment />
-        </Node>
-        <Node name="bv100_enable" type="T_BOOL" access="ReadWrite">
-          <Comment />
-        </Node>
-        <Node name="bv101_writeTest" type="T_BOOL" access="ReadWrite">
-          <Comment />
-        </Node>
-        <Node name="bv102_alarm" type="T_BOOL" access="ReadWrite">
-          <Comment />
-        </Node>
-        <Node name="mv2000_status" type="T_UINT" access="ReadWrite">
-          <Comment />
-        </Node>
-        <Node name="mv2001_writeTest" type="T_UINT" access="ReadWrite">
-          <Comment />
-        </Node>
-        <Node name="mv2002_cycle" type="T_UINT" access="ReadWrite">
-          <Comment />
-        </Node>
+        <Node name="av200_sine" type="T_REAL" access="ReadWrite" />
+        <Node name="av201_writeTest" type="T_REAL" access="ReadWrite" />
+        <Node name="av202_ramp" type="T_REAL" access="ReadWrite" />
+        <Node name="av203_alarmSource" type="T_REAL" access="ReadWrite" />
+        <Node name="bv100_enable" type="T_BOOL" access="ReadWrite" />
+        <Node name="bv101_writeTest" type="T_BOOL" access="ReadWrite" />
+        <Node name="bv102_alarm" type="T_BOOL" access="ReadWrite" />
+        <Node name="mv2000_status" type="T_UINT" access="ReadWrite" />
+        <Node name="mv2001_writeTest" type="T_UINT" access="ReadWrite" />
+        <Node name="mv2002_cycle" type="T_UINT" access="ReadWrite" />
       </Node>
     </Node>
   </NodeList>

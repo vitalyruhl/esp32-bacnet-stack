@@ -4,6 +4,17 @@ This changelog is a curated overview.
 
 ## Unreleased
 
+- Added read-only object status/health snapshots for simple BACnet clients,
+  covering `present-value`, `status-flags`, `event-state`, `reliability`, and
+  `out-of-service` with conservative Normal/Warning/Error/OutOfService/Unknown
+  state derivation.
+- Extended `examples/hil-wago-client-acceptance` with `S03` common process
+  object status reads, keeping unsupported status properties safe and
+  read-only.
+- Added a minimal read-only BACnet object health/status view to
+  `examples/client-demo`.
+- Bumped the library and example version constants to `0.18.0`.
+
 - Added standard BACnet process object identifiers for AI/AO/AV, BI/BO/BV, and
   MI/MO/MV to the generic client-facing object model and text helpers.
 - Extended `examples/client-object-list-scan-basic` and

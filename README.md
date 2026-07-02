@@ -21,6 +21,8 @@ write flows, and server MVP remain future work.
 | ReadProperty / values | Generic ReadProperty model | ✅ Implemented | Object + property + optional array index request model is available. |
 | ReadProperty / values | Reading known device/object properties | ✅ Implemented | Works for selected known properties and known object IDs. |
 | ReadProperty / values | Reading selected `present-value` from known AI/AO/AV, BI/BO/BV, and MI/MO/MV objects | 🟢 Use-case ready | Suitable for practical value monitoring on known process objects. |
+| ReadProperty / values | Reading object health/status from `status-flags`, `event-state`, `reliability`, and `out-of-service` | 🟢 Use-case ready | `BacnetDeviceSession::readObjectStatus()` reads each property safely and preserves per-property status. |
+| ReadProperty / values | Derived Normal/Warning/Error/OutOfService/Unknown state | 🟡 Partial | Conservative derivation is implemented; warning/error hardware cases still need targeted HIL validation. |
 | ReadProperty / values | Displaying/forwarding selected BACnet values by fallback polling | 🟢 Use-case ready | Property subscription abstraction with fallback polling is available. |
 | ReadProperty / values | Typed value decode coverage | 🟡 Partial | Common value paths are supported; full coverage is still expanding. |
 | Object discovery | Device `object-list` scan | ✅ Implemented | Scans entries from the remote Device object's `object-list`. |
@@ -34,11 +36,12 @@ write flows, and server MVP remain future work.
 | Writes | PresentValue priority write helpers | ⏳ Planned | Future client capability, not currently implemented. |
 | Writes | Hardware writes | 🚫 Not implemented | Disabled by default; future explicit opt-in only. |
 | Examples / validation | `examples/client-object-list-scan-basic` | ✅ Implemented | Minimal serial-oriented object-list validation example for common process object reads. |
-| Examples / validation | `examples/client-demo` | ✅ Implemented | End-to-end client demo with discovery, scan, and process-value updates. |
+| Examples / validation | `examples/client-demo` | ✅ Implemented | End-to-end client demo with discovery, scan, process-value updates, and a read-only value/status browser view. |
 | Examples / validation | `examples/hil-wago-client-acceptance` | 🧪 Local HIL validated | Local hardware acceptance runner for client scenarios. |
 | Examples / validation | HIL scenario S01 non-blocking object-list scan | 🧪 Local HIL validated | Validated on local ESP32/BACnet-IP target setup. |
-| Examples / validation | HIL scenario S02 common process present-value reads | ✅ Implemented | Enabled by default in the local secrets template; can be disabled with `HIL_ENABLE_PROCESS_PRESENT_VALUE_READS`. |
-| Examples / validation | Future HIL scenarios S03-S08 | ⏳ Planned | Present as scenario blocks and skipped by default unless enabled. |
+| Examples / validation | HIL scenario S02 common process present-value reads | 🧪 Local HIL validated | Validated on local ESP32/WAGO BACnet-IP target setup. |
+| Examples / validation | HIL scenario S03 common process object status reads | 🧪 Local HIL validated | Validated on local ESP32/WAGO BACnet-IP target setup. |
+| Examples / validation | Future HIL scenarios S04-S09 | ⏳ Planned | Present as scenario blocks and skipped by default unless enabled. |
 | Server / transports | BACnet/IP server role | 🧱 Placeholder | Placeholder role exists; not a completed server feature set. |
 | Server / transports | Server MVP | ⏳ Planned | Planned after client runtime completion milestones. |
 | Server / transports | BACnet MS/TP | ⏳ Planned | Scheduled for later transport work. |
@@ -313,11 +316,13 @@ compact object id, object-name, description, and present-value output.
 The `examples/client-demo` firmware also includes a lightweight BACnet/IP
 Discovery card for demo visibility. It selects the configured BACnet/IP device
 or the first discovered I-Am device, keeps the BME280 status card unchanged,
-and drives a `BacnetObjectListScanJob` from `loop()` for AV/MV discovery. Up to
-10 found Analog Value objects and up to 10 found Multi-State Value objects are
+and drives a `BacnetObjectListScanJob` from `loop()` for process object
+discovery. Up to 10 found Analog, Binary, and Multi-State process objects are
 displayed with `description` or `objectName` plus `presentValue` status/value.
-The demo refreshes present values through `BacnetProperty::subscribe()` with
-fallback polling. BACnet scan and subscription activity is written through the
+The demo also shows one read-only object health/status snapshot selected from
+local configuration or the first discovered process object. Present values
+refresh through `BacnetProperty::subscribe()` with fallback polling. BACnet scan
+and subscription activity is written through the
 BACnet logger and forwarded to the ConfigurationManager GUI log by the demo
 adapter.
 

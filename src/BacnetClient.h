@@ -68,16 +68,20 @@ inline const char* bacnetObjectTypeText(uint16_t objectType) {
 
 enum class BacnetPropertyId : uint32_t {
   Description = 28,
+  EventState = 36,
   FirmwareRevision = 44,
   ModelName = 70,
   NumberOfStates = 74,
   ObjectList = 76,
   ObjectName = 77,
   ObjectType = 79,
+  OutOfService = 81,
   PresentValue = 85,
   PriorityArray = 87,
+  Reliability = 103,
   RelinquishDefault = 104,
   StateText = 110,
+  StatusFlags = 111,
   PropertyList = 371,
   VendorName = 121,
 };
@@ -97,6 +101,7 @@ enum class BacnetValueType : uint8_t {
   Unsigned,
   Signed,
   Real,
+  BitString,
   Enumerated,
   CharacterString,
   ObjectIdentifier,
@@ -115,6 +120,8 @@ struct BacnetValue {
   uint32_t unsignedValue = 0;
   int32_t signedValue = 0;
   float realValue = 0.0f;
+  uint32_t bitStringValue = 0;
+  uint8_t bitStringBitCount = 0;
   BacnetObjectId objectValue;
 
   const char* displayText() const {

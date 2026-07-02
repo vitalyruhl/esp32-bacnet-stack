@@ -38,6 +38,25 @@ bool propertyIdFromPropertyListValue(const BacnetValue& value,
   return true;
 }
 
+bool enumValueFromBacnetValue(const BacnetValue& value, uint32_t& output) {
+  if (value.type != BacnetValueType::Enumerated &&
+      value.type != BacnetValueType::Unsigned) {
+    return false;
+  }
+
+  output = value.unsignedValue;
+  return true;
+}
+
+bool booleanValueFromBacnetValue(const BacnetValue& value, bool& output) {
+  if (value.type != BacnetValueType::Boolean) {
+    return false;
+  }
+
+  output = value.booleanValue;
+  return true;
+}
+
 BacnetPropertyReadStatus classifyDetailedReadStatus(
     BacnetReadPropertyPollStatus pollStatus,
     const BacnetValue& value,
@@ -79,6 +98,115 @@ BacnetPropertyReadStatus classifyDetailedReadStatus(
 }
 
 }  // namespace
+
+bool bacnetDecodeStatusFlags(const BacnetValue& value,
+                             BacnetStatusFlags& flags) {
+  if (value.type != BacnetValueType::BitString ||
+      value.bitStringBitCount < 4) {
+    return false;
+  }
+
+  flags.inAlarm = (value.bitStringValue & (1UL << 0)) != 0;
+  flags.fault = (value.bitStringValue & (1UL << 1)) != 0;
+  flags.overridden = (value.bitStringValue & (1UL << 2)) != 0;
+  flags.outOfService = (value.bitStringValue & (1UL << 3)) != 0;
+  return true;
+}
+
+const char* bacnetEventStateText(uint32_t eventState) {
+  switch (eventState) {
+    case 0:
+      return "normal";
+    case 1:
+      return "fault";
+    case 2:
+      return "offnormal";
+    case 3:
+      return "high-limit";
+    case 4:
+      return "low-limit";
+    case 5:
+      return "life-safety-alarm";
+    default:
+      return "event-state";
+  }
+}
+
+const char* bacnetReliabilityText(uint32_t reliability) {
+  switch (reliability) {
+    case 0:
+      return "no-fault-detected";
+    case 1:
+      return "no-sensor";
+    case 2:
+      return "over-range";
+    case 3:
+      return "under-range";
+    case 4:
+      return "open-loop";
+    case 5:
+      return "shorted-loop";
+    case 6:
+      return "no-output";
+    case 7:
+      return "unreliable-other";
+    case 8:
+      return "process-error";
+    case 9:
+      return "multi-state-fault";
+    case 10:
+      return "configuration-error";
+    case 12:
+      return "communication-failure";
+    case 13:
+      return "member-fault";
+    case 14:
+      return "monitored-object-fault";
+    case 15:
+      return "tripped";
+    default:
+      return "reliability";
+  }
+}
+
+BacnetObjectHealthState bacnetDeriveObjectHealthState(
+    const BacnetObjectStatus& status,
+    bool presentValueRequired) {
+  if ((status.outOfServiceStatus == BacnetPropertyReadStatus::Ack &&
+       status.outOfService) ||
+      (status.statusFlagsStatus == BacnetPropertyReadStatus::Ack &&
+       status.statusFlags.outOfService)) {
+    return BacnetObjectHealthState::OutOfService;
+  }
+
+  if ((presentValueRequired &&
+       status.presentValueStatus != BacnetPropertyReadStatus::Ack) ||
+      (status.statusFlagsStatus == BacnetPropertyReadStatus::Ack &&
+       status.statusFlags.fault) ||
+      (status.reliabilityStatus == BacnetPropertyReadStatus::Ack &&
+       status.reliability != 0) ||
+      (status.eventStateStatus == BacnetPropertyReadStatus::Ack &&
+       status.eventState == 1)) {
+    return BacnetObjectHealthState::Error;
+  }
+
+  if ((status.statusFlagsStatus == BacnetPropertyReadStatus::Ack &&
+       status.statusFlags.inAlarm) ||
+      (status.eventStateStatus == BacnetPropertyReadStatus::Ack &&
+       (status.eventState == 2 || status.eventState == 3 ||
+        status.eventState == 4))) {
+    return BacnetObjectHealthState::Warning;
+  }
+
+  if (status.statusFlagsStatus == BacnetPropertyReadStatus::Ack ||
+      status.eventStateStatus == BacnetPropertyReadStatus::Ack ||
+      status.reliabilityStatus == BacnetPropertyReadStatus::Ack ||
+      status.outOfServiceStatus == BacnetPropertyReadStatus::Ack) {
+    return BacnetObjectHealthState::Normal;
+  }
+
+  return BacnetObjectHealthState::Unknown;
+}
 
 BacnetPropertySubscription::BacnetPropertySubscription(
     BacnetDeviceSession& session,
@@ -346,6 +474,76 @@ BacnetDeviceSessionReadStatus BacnetDeviceSession::readProperty(
   return readProperty(
       BacnetObjectId{static_cast<uint16_t>(objectType), objectInstance},
       property, value, timeoutMs, arrayIndex);
+}
+
+BacnetObjectHealthState BacnetDeviceSession::readObjectStatus(
+    BacnetObjectId object,
+    BacnetObjectStatus& status,
+    uint32_t timeoutMs,
+    bool presentValueRequired) {
+  status = BacnetObjectStatus{};
+  status.objectId = object;
+
+  uint32_t errorClass = 0;
+  uint32_t errorCode = 0;
+  status.presentValueStatus = readPropertyDetailed(
+      BacnetPropertyRequest{object, BacnetPropertyId::PresentValue,
+                            kBacnetNoArrayIndex},
+      status.presentValue, timeoutMs, errorClass, errorCode);
+
+  BacnetValue statusFlagsValue;
+  status.statusFlagsStatus = readPropertyDetailed(
+      BacnetPropertyRequest{object, BacnetPropertyId::StatusFlags,
+                            kBacnetNoArrayIndex},
+      statusFlagsValue, timeoutMs, errorClass, errorCode);
+  if (status.statusFlagsStatus == BacnetPropertyReadStatus::Ack &&
+      !bacnetDecodeStatusFlags(statusFlagsValue, status.statusFlags)) {
+    status.statusFlagsStatus = BacnetPropertyReadStatus::DecodeError;
+  }
+
+  BacnetValue eventStateValue;
+  status.eventStateStatus = readPropertyDetailed(
+      BacnetPropertyRequest{object, BacnetPropertyId::EventState,
+                            kBacnetNoArrayIndex},
+      eventStateValue, timeoutMs, errorClass, errorCode);
+  if (status.eventStateStatus == BacnetPropertyReadStatus::Ack &&
+      !enumValueFromBacnetValue(eventStateValue, status.eventState)) {
+    status.eventStateStatus = BacnetPropertyReadStatus::DecodeError;
+  }
+
+  BacnetValue reliabilityValue;
+  status.reliabilityStatus = readPropertyDetailed(
+      BacnetPropertyRequest{object, BacnetPropertyId::Reliability,
+                            kBacnetNoArrayIndex},
+      reliabilityValue, timeoutMs, errorClass, errorCode);
+  if (status.reliabilityStatus == BacnetPropertyReadStatus::Ack &&
+      !enumValueFromBacnetValue(reliabilityValue, status.reliability)) {
+    status.reliabilityStatus = BacnetPropertyReadStatus::DecodeError;
+  }
+
+  BacnetValue outOfServiceValue;
+  status.outOfServiceStatus = readPropertyDetailed(
+      BacnetPropertyRequest{object, BacnetPropertyId::OutOfService,
+                            kBacnetNoArrayIndex},
+      outOfServiceValue, timeoutMs, errorClass, errorCode);
+  if (status.outOfServiceStatus == BacnetPropertyReadStatus::Ack &&
+      !booleanValueFromBacnetValue(outOfServiceValue, status.outOfService)) {
+    status.outOfServiceStatus = BacnetPropertyReadStatus::DecodeError;
+  }
+
+  status.state = bacnetDeriveObjectHealthState(status, presentValueRequired);
+  return status.state;
+}
+
+BacnetObjectHealthState BacnetDeviceSession::readObjectStatus(
+    BacnetObjectType objectType,
+    uint32_t objectInstance,
+    BacnetObjectStatus& status,
+    uint32_t timeoutMs,
+    bool presentValueRequired) {
+  return readObjectStatus(
+      BacnetObjectId{static_cast<uint16_t>(objectType), objectInstance},
+      status, timeoutMs, presentValueRequired);
 }
 
 BacnetPropertyReadStatus BacnetDeviceSession::readPropertyDetailed(
@@ -958,6 +1156,9 @@ bool BacnetDeviceSession::bacnetValueEquals(const BacnetValue& left,
       return left.signedValue == right.signedValue;
     case BacnetValueType::Real:
       return left.realValue == right.realValue;
+    case BacnetValueType::BitString:
+      return left.bitStringValue == right.bitStringValue &&
+             left.bitStringBitCount == right.bitStringBitCount;
     case BacnetValueType::ObjectIdentifier:
       return left.objectValue.type == right.objectValue.type &&
              left.objectValue.instance == right.objectValue.instance;

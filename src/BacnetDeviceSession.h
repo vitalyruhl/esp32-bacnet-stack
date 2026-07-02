@@ -153,6 +153,66 @@ inline const char* bacnetPropertyReadStatusText(BacnetPropertyReadStatus status)
   return "unknown";
 }
 
+enum class BacnetObjectHealthState : uint8_t {
+  Unknown,
+  Normal,
+  Warning,
+  Error,
+  OutOfService,
+};
+
+inline const char* bacnetObjectHealthStateText(
+    BacnetObjectHealthState state) {
+  switch (state) {
+    case BacnetObjectHealthState::Normal:
+      return "Normal";
+    case BacnetObjectHealthState::Warning:
+      return "Warning";
+    case BacnetObjectHealthState::Error:
+      return "Error";
+    case BacnetObjectHealthState::OutOfService:
+      return "OutOfService";
+    case BacnetObjectHealthState::Unknown:
+    default:
+      return "Unknown";
+  }
+}
+
+struct BacnetStatusFlags {
+  bool inAlarm = false;
+  bool fault = false;
+  bool overridden = false;
+  bool outOfService = false;
+};
+
+struct BacnetObjectStatus {
+  BacnetObjectId objectId;
+  BacnetPropertyReadStatus presentValueStatus =
+      BacnetPropertyReadStatus::Skipped;
+  BacnetValue presentValue;
+  BacnetPropertyReadStatus statusFlagsStatus =
+      BacnetPropertyReadStatus::Skipped;
+  BacnetStatusFlags statusFlags;
+  BacnetPropertyReadStatus eventStateStatus =
+      BacnetPropertyReadStatus::Skipped;
+  uint32_t eventState = 0;
+  BacnetPropertyReadStatus reliabilityStatus =
+      BacnetPropertyReadStatus::Skipped;
+  uint32_t reliability = 0;
+  BacnetPropertyReadStatus outOfServiceStatus =
+      BacnetPropertyReadStatus::Skipped;
+  bool outOfService = false;
+  BacnetObjectHealthState state = BacnetObjectHealthState::Unknown;
+};
+
+bool bacnetDecodeStatusFlags(const BacnetValue& value,
+                             BacnetStatusFlags& flags);
+const char* bacnetEventStateText(uint32_t eventState);
+const char* bacnetReliabilityText(uint32_t reliability);
+BacnetObjectHealthState bacnetDeriveObjectHealthState(
+    const BacnetObjectStatus& status,
+    bool presentValueRequired = true);
+
 static constexpr uint32_t kBacnetDefaultReadTimeoutMs = 1000;
 
 struct BacnetSubscribeOptions {
@@ -326,6 +386,17 @@ class BacnetDeviceSession {
       BacnetPropertyId property, BacnetValue& value,
       uint32_t timeoutMs = kDefaultReadTimeoutMs,
       uint32_t arrayIndex = kBacnetNoArrayIndex);
+  BacnetObjectHealthState readObjectStatus(
+      BacnetObjectId object,
+      BacnetObjectStatus& status,
+      uint32_t timeoutMs = kDefaultReadTimeoutMs,
+      bool presentValueRequired = true);
+  BacnetObjectHealthState readObjectStatus(
+      BacnetObjectType objectType,
+      uint32_t objectInstance,
+      BacnetObjectStatus& status,
+      uint32_t timeoutMs = kDefaultReadTimeoutMs,
+      bool presentValueRequired = true);
     BacnetPropertyListReadResult readPropertyList(
       BacnetObjectId object,
       BacnetPropertyId* properties,
