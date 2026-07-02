@@ -4,6 +4,23 @@ This changelog is a curated overview.
 
 ## Unreleased
 
+- Added standard BACnet process object identifiers for AI/AO/AV, BI/BO/BV, and
+  MI/MO/MV to the generic client-facing object model and text helpers.
+- Extended `examples/client-object-list-scan-basic` and
+  `examples/client-demo` to scan and read common process object
+  `present-value` properties without adding device-specific APIs.
+- Extended `examples/hil-wago-client-acceptance` `S02` with optional local
+  AI/AO/BI/BO/BV/MI/MO/MV target coverage that skips unconfigured optional
+  targets and does not perform BACnet writes.
+- Bumped the library and example version constants to `0.17.0`.
+
+- Added caller-buffered BACnet `property-list` discovery and safe read-all APIs
+  for known objects with per-property status reporting and preserved typed
+  `BacnetValue` results where decoding succeeds.
+- Extended `examples/hil-wago-client-acceptance` with optional local `S02`
+  property-list discovery and safe read-all validation without BACnet writes.
+- Bumped the library and example version constants to `0.16.0`.
+
 - Added `BacnetObjectListScanJob` with `beginObjectListScan()` and
   `pollObjectListScan()` for loop-driven, caller-buffered Device `object-list`
   scans.

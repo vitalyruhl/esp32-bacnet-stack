@@ -9,7 +9,8 @@ coverage are still evolving.
 ## Current Status
 
 BACnet/IP client APIs are already usable for common read-oriented use cases,
-while advanced discovery, write flows, and server MVP remain future work.
+including common process object present-value reads, while advanced discovery,
+write flows, and server MVP remain future work.
 
 ## Implementation Matrix
 
@@ -19,24 +20,25 @@ while advanced discovery, write flows, and server MVP remain future work.
 | Client discovery | Known-device session with `BacnetDeviceSession` | ✅ Implemented | Session keeps target identity and drives device-scoped calls. |
 | ReadProperty / values | Generic ReadProperty model | ✅ Implemented | Object + property + optional array index request model is available. |
 | ReadProperty / values | Reading known device/object properties | ✅ Implemented | Works for selected known properties and known object IDs. |
-| ReadProperty / values | Reading selected `present-value` from known AV/MV objects | 🟢 Use-case ready | Suitable for practical value monitoring on known objects. |
+| ReadProperty / values | Reading selected `present-value` from known AI/AO/AV, BI/BO/BV, and MI/MO/MV objects | 🟢 Use-case ready | Suitable for practical value monitoring on known process objects. |
 | ReadProperty / values | Displaying/forwarding selected BACnet values by fallback polling | 🟢 Use-case ready | Property subscription abstraction with fallback polling is available. |
 | ReadProperty / values | Typed value decode coverage | 🟡 Partial | Common value paths are supported; full coverage is still expanding. |
 | Object discovery | Device `object-list` scan | ✅ Implemented | Scans entries from the remote Device object's `object-list`. |
 | Object discovery | Blocking `scanObjectList()` | ✅ Implemented | Source-compatible convenience path remains available. |
 | Object discovery | Non-blocking object-list scan job | ✅ Implemented | Loop-driven scan job is available for responsive applications. |
 | Object discovery | Optional `object-name`, `description`, `present-value` reads during object-list scan | ✅ Implemented | Optional reads are supported during object-list scan flow. |
-| Object discovery | BACnet `property-list` discovery / safe read-all | 🚫 Not implemented · ⏳ Planned | Planned future work, intentionally not shipped yet. |
+| Object discovery | BACnet `property-list` discovery / safe read-all | ✅ Implemented | Caller-buffered APIs discover advertised properties where available and safely attempt each property with per-property status results. |
 | Subscriptions | Property subscription abstraction with fallback polling | 🟢 Use-case ready | Practical for cyclic update use cases without SubscribeCOV. |
 | Subscriptions | Real SubscribeCOV | ⏳ Planned | Not implemented yet. |
 | Writes | WriteProperty | 🚫 Not implemented | No write API shipped in current client runtime. |
 | Writes | PresentValue priority write helpers | ⏳ Planned | Future client capability, not currently implemented. |
 | Writes | Hardware writes | 🚫 Not implemented | Disabled by default; future explicit opt-in only. |
-| Examples / validation | `examples/client-object-list-scan-basic` | ✅ Implemented | Minimal serial-oriented object-list validation example. |
-| Examples / validation | `examples/client-demo` | ✅ Implemented | End-to-end client demo with discovery, scan, and value updates. |
+| Examples / validation | `examples/client-object-list-scan-basic` | ✅ Implemented | Minimal serial-oriented object-list validation example for common process object reads. |
+| Examples / validation | `examples/client-demo` | ✅ Implemented | End-to-end client demo with discovery, scan, and process-value updates. |
 | Examples / validation | `examples/hil-wago-client-acceptance` | 🧪 Local HIL validated | Local hardware acceptance runner for client scenarios. |
 | Examples / validation | HIL scenario S01 non-blocking object-list scan | 🧪 Local HIL validated | Validated on local ESP32/BACnet-IP target setup. |
-| Examples / validation | Future HIL scenarios S02-S08 | ⏳ Planned | Present as scenario blocks and skipped by default unless enabled. |
+| Examples / validation | HIL scenario S02 property-list discovery and safe read-all | ✅ Implemented | Local opt-in scenario in the acceptance runner; skipped by default unless enabled. |
+| Examples / validation | Future HIL scenarios S03-S08 | ⏳ Planned | Present as scenario blocks and skipped by default unless enabled. |
 | Server / transports | BACnet/IP server role | 🧱 Placeholder | Placeholder role exists; not a completed server feature set. |
 | Server / transports | Server MVP | ⏳ Planned | Planned after client runtime completion milestones. |
 | Server / transports | BACnet MS/TP | ⏳ Planned | Scheduled for later transport work. |
@@ -46,7 +48,7 @@ Terminology:
 
 - object-list scan means scanning entries from the remote Device object's `object-list`.
 - optional reads during object-list scan means selected reads such as `object-name`, `description`, and `present-value`.
-- property-list discovery/read-all means discovering all advertised properties of an object and safely reading them; this is future work.
+- property-list discovery/read-all means discovering advertised properties of an object where available and safely reading them with one status per property.
 - for simple use cases that need a few known variables and `present-value` display/forwarding, the current client API is already usable.
 
 Additional status notes:

@@ -30,7 +30,7 @@
 #endif
 
 #ifndef APP_VERSION
-#define APP_VERSION "0.15.0"
+#define APP_VERSION "0.17.0"
 #endif
 #ifndef APP_NAME
 #define APP_NAME "BACnet Client Discovery Demo"
@@ -81,7 +81,7 @@ static constexpr uint32_t kBacnetScanReadTimeoutMs = 3000;
 static constexpr uint32_t kBacnetMaxObjectListEntriesToInspect = 600;
 static constexpr size_t kBacnetMaxFoundObjectsToDisplay = 10;
 static constexpr size_t kBacnetScanResultCapacity =
-    kBacnetMaxFoundObjectsToDisplay * 2;
+  kBacnetMaxFoundObjectsToDisplay * 3;
 static constexpr size_t kBacnetPreviewPropertyCount = 4;
 static constexpr uint32_t kBacnetSubscriptionFallbackPollMs = 30000;
 
@@ -135,12 +135,20 @@ static constexpr BacnetPropertySpec
 
 static BacnetPropertyPreview bacnetDeviceProperties[kBacnetPreviewPropertyCount];
 static BacnetValueObjectPreview analogValues[kBacnetMaxFoundObjectsToDisplay];
+static BacnetValueObjectPreview binaryValues[kBacnetMaxFoundObjectsToDisplay];
 static BacnetValueObjectPreview multiStateValues[kBacnetMaxFoundObjectsToDisplay];
 static BacnetScannedObject scanBuffer[kBacnetScanResultCapacity];
 static BacnetObjectListScanJob scanJob;
 static std::unique_ptr<BacnetDeviceSession> activeBacnetSession;
 static const BacnetObjectType kValueObjectScanFilter[] = {
+  BacnetObjectType::AnalogInput,
+  BacnetObjectType::AnalogOutput,
     BacnetObjectType::AnalogValue,
+  BacnetObjectType::BinaryInput,
+  BacnetObjectType::BinaryOutput,
+  BacnetObjectType::BinaryValue,
+  BacnetObjectType::MultiStateInput,
+  BacnetObjectType::MultiStateOutput,
     BacnetObjectType::MultiStateValue,
 };
 
@@ -165,6 +173,7 @@ static const char GLOBAL_THEME_OVERRIDE[] PROGMEM = R"CSS(
 }
 
 .dv[data-label="Analog Values"] + .rw .val,
+.dv[data-label="Binary Values"] + .rw .val,
 .dv[data-label="Multi-State Values"] + .rw .val {
   display: block !important;
   text-align: left !important;
@@ -364,13 +373,55 @@ static String valueTextIfAck(BacnetDeviceSessionReadStatus status,
 }
 
 static String objectTypePrefix(uint16_t objectType) {
+  if (objectType == static_cast<uint16_t>(BacnetObjectType::AnalogInput)) {
+    return "AI";
+  }
+  if (objectType == static_cast<uint16_t>(BacnetObjectType::AnalogOutput)) {
+    return "AO";
+  }
   if (objectType == static_cast<uint16_t>(BacnetObjectType::AnalogValue)) {
     return "AV";
+  }
+  if (objectType == static_cast<uint16_t>(BacnetObjectType::BinaryInput)) {
+    return "BI";
+  }
+  if (objectType == static_cast<uint16_t>(BacnetObjectType::BinaryOutput)) {
+    return "BO";
+  }
+  if (objectType == static_cast<uint16_t>(BacnetObjectType::BinaryValue)) {
+    return "BV";
+  }
+  if (objectType == static_cast<uint16_t>(BacnetObjectType::MultiStateInput)) {
+    return "MI";
+  }
+  if (objectType == static_cast<uint16_t>(BacnetObjectType::MultiStateOutput)) {
+    return "MO";
   }
   if (objectType == static_cast<uint16_t>(BacnetObjectType::MultiStateValue)) {
     return "MV";
   }
   return "OBJ";
+}
+
+static bool isAnalogProcessObject(uint16_t objectType) {
+  return objectType == static_cast<uint16_t>(BacnetObjectType::AnalogInput) ||
+         objectType == static_cast<uint16_t>(BacnetObjectType::AnalogOutput) ||
+         objectType == static_cast<uint16_t>(BacnetObjectType::AnalogValue);
+}
+
+static bool isBinaryProcessObject(uint16_t objectType) {
+  return objectType == static_cast<uint16_t>(BacnetObjectType::BinaryInput) ||
+         objectType == static_cast<uint16_t>(BacnetObjectType::BinaryOutput) ||
+         objectType == static_cast<uint16_t>(BacnetObjectType::BinaryValue);
+}
+
+static bool isMultiStateProcessObject(uint16_t objectType) {
+  return objectType ==
+             static_cast<uint16_t>(BacnetObjectType::MultiStateInput) ||
+         objectType ==
+             static_cast<uint16_t>(BacnetObjectType::MultiStateOutput) ||
+         objectType ==
+             static_cast<uint16_t>(BacnetObjectType::MultiStateValue);
 }
 
 static String objectLabel(const BacnetScannedObject& scanned) {
@@ -407,6 +458,7 @@ static void resetBacnetPreviews() {
     bacnetDeviceProperties[i].status = BacnetDeviceSessionReadStatus::Skipped;
   }
   resetValueObjects(analogValues, kBacnetMaxFoundObjectsToDisplay);
+  resetValueObjects(binaryValues, kBacnetMaxFoundObjectsToDisplay);
   resetValueObjects(multiStateValues, kBacnetMaxFoundObjectsToDisplay);
   activeBacnetVendorId = 0;
   bacnetDeviceSelected = false;
@@ -484,6 +536,11 @@ static String bacnetValueObjectsSummary(const BacnetValueObjectPreview* objects,
 
 static String bacnetAnalogValuesSummary() {
   return bacnetValueObjectsSummary(analogValues, kBacnetMaxFoundObjectsToDisplay,
+                                   bacnetScanFinished);
+}
+
+static String bacnetBinaryValuesSummary() {
+  return bacnetValueObjectsSummary(binaryValues, kBacnetMaxFoundObjectsToDisplay,
                                    bacnetScanFinished);
 }
 
@@ -567,6 +624,13 @@ static void setupRuntimeUI() {
       .label("AV")
       .addCSSClass("bacnetObjectListValue")
       .order(40);
+
+  bacnetDeviceGroup.divider("Binary Values", 49);
+  bacnetDeviceGroup.value("device0_binaryValues",
+                          []() { return bacnetBinaryValuesSummary(); })
+      .label("BV")
+      .addCSSClass("bacnetObjectListValue")
+      .order(50);
 
   bacnetDeviceGroup.divider("Multi-State Values", 59);
   bacnetDeviceGroup.value("device0_multiStateValues",
@@ -697,19 +761,24 @@ static bool copyScannedObjectToPreview(const BacnetScannedObject& scanned,
 
 static void copyScanResultsToPreviews(const BacnetObjectScanResult& scan,
                                       size_t& analogStored,
+                                      size_t& binaryStored,
                                       size_t& multiStateStored) {
   analogStored = 0;
+  binaryStored = 0;
   multiStateStored = 0;
 
   for (size_t i = 0; i < scan.stored; ++i) {
-    if (scanBuffer[i].objectId.type ==
-        static_cast<uint16_t>(BacnetObjectType::AnalogValue)) {
+    if (isAnalogProcessObject(scanBuffer[i].objectId.type)) {
       if (copyScannedObjectToPreview(scanBuffer[i], analogValues,
                                      kBacnetMaxFoundObjectsToDisplay)) {
         ++analogStored;
       }
-    } else if (scanBuffer[i].objectId.type ==
-               static_cast<uint16_t>(BacnetObjectType::MultiStateValue)) {
+    } else if (isBinaryProcessObject(scanBuffer[i].objectId.type)) {
+      if (copyScannedObjectToPreview(scanBuffer[i], binaryValues,
+                                     kBacnetMaxFoundObjectsToDisplay)) {
+        ++binaryStored;
+      }
+    } else if (isMultiStateProcessObject(scanBuffer[i].objectId.type)) {
       if (copyScannedObjectToPreview(scanBuffer[i], multiStateValues,
                                      kBacnetMaxFoundObjectsToDisplay)) {
         ++multiStateStored;
@@ -747,20 +816,23 @@ static bool beginValueObjectScan(BacnetDeviceSession& session) {
 static void finishValueObjectScan(BacnetDeviceSession& session,
                                   const BacnetObjectScanResult& scan) {
   size_t analogStored = 0;
+  size_t binaryStored = 0;
   size_t multiStateStored = 0;
-  copyScanResultsToPreviews(scan, analogStored, multiStateStored);
+  copyScanResultsToPreviews(scan, analogStored, binaryStored, multiStateStored);
 
   for (size_t i = 0; i < kBacnetMaxFoundObjectsToDisplay; ++i) {
     subscribePresentValue(session, analogValues[i]);
+    subscribePresentValue(session, binaryValues[i]);
     subscribePresentValue(session, multiStateValues[i]);
   }
 
   bacnetScanFinished = true;
   bacnetScanRunning = false;
   bacnetGuiLog(LogLevel::Info,
-               "scan complete objects stored=%u AV stored=%u MV stored=%u",
+               "scan complete objects stored=%u analog stored=%u binary stored=%u multistate stored=%u",
                static_cast<unsigned>(scan.stored),
                static_cast<unsigned>(analogStored),
+               static_cast<unsigned>(binaryStored),
                static_cast<unsigned>(multiStateStored));
 }
 
@@ -828,6 +900,7 @@ static void clearBacnetRuntime() {
     activeBacnetSession->cancelObjectListScan(scanJob);
   }
   resetValueObjects(analogValues, kBacnetMaxFoundObjectsToDisplay);
+  resetValueObjects(binaryValues, kBacnetMaxFoundObjectsToDisplay);
   resetValueObjects(multiStateValues, kBacnetMaxFoundObjectsToDisplay);
   activeBacnetSession.reset();
   bacnetDeviceSelected = false;
@@ -892,6 +965,9 @@ static void pollBacnetSubscriptions() {
   for (size_t i = 0; i < kBacnetMaxFoundObjectsToDisplay; ++i) {
     if (analogValues[i].subscription) {
       activeBacnetSession->poll(*analogValues[i].subscription, now);
+    }
+    if (binaryValues[i].subscription) {
+      activeBacnetSession->poll(*binaryValues[i].subscription, now);
     }
     if (multiStateValues[i].subscription) {
       activeBacnetSession->poll(*multiStateValues[i].subscription, now);

@@ -27,10 +27,10 @@ and ends with a summary.
 Current implemented scenario:
 
 - `S01` non-blocking object-list scan (issue #32 validation)
+- `S02` property-list discovery and safe read-all (issue #34, local opt-in)
 
 Current planned scenario blocks (runner scaffold exists):
 
-- property-list discovery and safe read-all
 - property cache
 - subscribe-any-property
 - fallback polling value change
@@ -40,6 +40,13 @@ Current planned scenario blocks (runner scaffold exists):
 
 Writes are disabled by default. Write scenarios must remain explicit opt-in via
 local secrets flags.
+
+`S02` is skipped by default until `HIL_ENABLE_PROPERTY_LIST_READ_ALL` is
+enabled in local secrets. When enabled, it validates property-list discovery
+or a supported fallback property set plus safe per-property read-all handling
+without BACnet writes. Optional local target instances for AI/AO/BI/BO/BV/MI/
+MO/MV can be added in `src/secret/secrets.h`; missing optional targets should
+be left at `0` so they are skipped instead of failing the run.
 
 ## Build And Run
 

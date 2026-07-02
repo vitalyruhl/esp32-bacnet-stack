@@ -8,6 +8,10 @@
 
 namespace {
 
+constexpr uint32_t kBacnetErrorClassProperty = 2;
+constexpr uint32_t kBacnetErrorCodeUnknownProperty = 32;
+constexpr uint32_t kBacnetErrorCodeInvalidArrayIndex = 42;
+
 bool objectIdFromObjectListValue(const BacnetValue& value,
                                  BacnetObjectId& objectId) {
   if (value.type != BacnetValueType::ObjectIdentifier) {
@@ -21,6 +25,57 @@ bool textEquals(const char* left, const char* right) {
   const char* resolvedLeft = left != nullptr ? left : "";
   const char* resolvedRight = right != nullptr ? right : "";
   return std::strcmp(resolvedLeft, resolvedRight) == 0;
+}
+
+bool propertyIdFromPropertyListValue(const BacnetValue& value,
+                                     BacnetPropertyId& propertyId) {
+  if (value.type != BacnetValueType::Enumerated &&
+      value.type != BacnetValueType::Unsigned) {
+    return false;
+  }
+
+  propertyId = static_cast<BacnetPropertyId>(value.unsignedValue);
+  return true;
+}
+
+BacnetPropertyReadStatus classifyDetailedReadStatus(
+    BacnetReadPropertyPollStatus pollStatus,
+    const BacnetValue& value,
+    uint32_t errorClass,
+    uint32_t errorCode,
+    uint32_t requestArrayIndex) {
+  switch (pollStatus) {
+    case BacnetReadPropertyPollStatus::Ack:
+      if (value.type == BacnetValueType::Unsupported) {
+        return BacnetPropertyReadStatus::UnsupportedDatatype;
+      }
+      if (value.type == BacnetValueType::Empty ||
+          value.type == BacnetValueType::Null) {
+        return BacnetPropertyReadStatus::EmptyValue;
+      }
+      return BacnetPropertyReadStatus::Ack;
+    case BacnetReadPropertyPollStatus::Error:
+      if (errorClass == kBacnetErrorClassProperty &&
+          errorCode == kBacnetErrorCodeUnknownProperty) {
+        return BacnetPropertyReadStatus::UnsupportedProperty;
+      }
+      if (requestArrayIndex != kBacnetNoArrayIndex &&
+          errorClass == kBacnetErrorClassProperty &&
+          errorCode == kBacnetErrorCodeInvalidArrayIndex) {
+        return BacnetPropertyReadStatus::ArrayIndexNotSupported;
+      }
+      return BacnetPropertyReadStatus::Error;
+    case BacnetReadPropertyPollStatus::Reject:
+      return BacnetPropertyReadStatus::Reject;
+    case BacnetReadPropertyPollStatus::Abort:
+      return BacnetPropertyReadStatus::Abort;
+    case BacnetReadPropertyPollStatus::DecodeError:
+      return BacnetPropertyReadStatus::DecodeError;
+    case BacnetReadPropertyPollStatus::None:
+      return BacnetPropertyReadStatus::Timeout;
+  }
+
+  return BacnetPropertyReadStatus::Error;
 }
 
 }  // namespace
@@ -262,39 +317,25 @@ BacnetRemoteObject BacnetDeviceSession::object(BacnetObjectType objectType,
 BacnetDeviceSessionReadStatus BacnetDeviceSession::readProperty(
     BacnetObjectId object, BacnetPropertyId property, BacnetValue& value,
     uint32_t timeoutMs, uint32_t arrayIndex) {
-  value = BacnetValue{};
   const BacnetPropertyRequest request{object, property, arrayIndex};
-  if (inFlightSubscription_ != nullptr || inFlightObjectListScan_ != nullptr) {
-    client_.logger().warn(
-        "BACnet/ReadProperty",
-        "ReadProperty %s,%lu property=%lu skipped: session busy",
-        bacnetObjectTypeText(object.type),
-        static_cast<unsigned long>(object.instance),
-        static_cast<unsigned long>(property));
-    return BacnetDeviceSessionReadStatus::Busy;
-  }
+  uint32_t errorClass = 0;
+  uint32_t errorCode = 0;
+  const BacnetPropertyReadStatus status =
+      readPropertyDetailed(request, value, timeoutMs, errorClass, errorCode);
 
-  const uint8_t invokeId = allocateInvokeId();
-
-  if (!client_.sendReadProperty(address_, request, invokeId, port_)) {
-    return BacnetDeviceSessionReadStatus::SendFailed;
-  }
-
-  const unsigned long startedAt = millis();
-  while (true) {
-    const BacnetReadPropertyPollStatus status =
-        client_.pollReadPropertyStatus(value, invokeId, request);
-    if (status == BacnetReadPropertyPollStatus::Ack) {
+  switch (status) {
+    case BacnetPropertyReadStatus::Ack:
+    case BacnetPropertyReadStatus::EmptyValue:
+    case BacnetPropertyReadStatus::UnsupportedDatatype:
       return BacnetDeviceSessionReadStatus::Ack;
-    }
-    if (status == BacnetReadPropertyPollStatus::Error) {
-      return BacnetDeviceSessionReadStatus::Error;
-    }
-    if (millis() - startedAt >= timeoutMs) {
-      client_.logReadPropertyTimeout(invokeId, request);
+    case BacnetPropertyReadStatus::Timeout:
       return BacnetDeviceSessionReadStatus::Timeout;
-    }
-    yield();
+    case BacnetPropertyReadStatus::SendFailed:
+      return BacnetDeviceSessionReadStatus::SendFailed;
+    case BacnetPropertyReadStatus::Busy:
+      return BacnetDeviceSessionReadStatus::Busy;
+    default:
+      return BacnetDeviceSessionReadStatus::Error;
   }
 }
 
@@ -305,6 +346,163 @@ BacnetDeviceSessionReadStatus BacnetDeviceSession::readProperty(
   return readProperty(
       BacnetObjectId{static_cast<uint16_t>(objectType), objectInstance},
       property, value, timeoutMs, arrayIndex);
+}
+
+BacnetPropertyReadStatus BacnetDeviceSession::readPropertyDetailed(
+    const BacnetPropertyRequest& request,
+    BacnetValue& value,
+    uint32_t timeoutMs,
+    uint32_t& errorClass,
+    uint32_t& errorCode) {
+  value = BacnetValue{};
+  errorClass = 0;
+  errorCode = 0;
+
+  if (inFlightSubscription_ != nullptr || inFlightObjectListScan_ != nullptr) {
+    client_.logger().warn(
+        "BACnet/ReadProperty",
+        "ReadProperty %s,%lu property=%lu skipped: session busy",
+        bacnetObjectTypeText(request.object.type),
+        static_cast<unsigned long>(request.object.instance),
+        static_cast<unsigned long>(request.property));
+    return BacnetPropertyReadStatus::Busy;
+  }
+
+  const uint8_t invokeId = allocateInvokeId();
+  if (!client_.sendReadProperty(address_, request, invokeId, port_)) {
+    return BacnetPropertyReadStatus::SendFailed;
+  }
+
+  const unsigned long startedAt = millis();
+  while (true) {
+    const BacnetReadPropertyPollStatus pollStatus =
+        client_.pollReadPropertyStatus(value, invokeId, request, &errorClass,
+                                       &errorCode);
+    if (pollStatus != BacnetReadPropertyPollStatus::None) {
+      return classifyDetailedReadStatus(pollStatus, value, errorClass,
+                                        errorCode, request.arrayIndex);
+    }
+    if (millis() - startedAt >= timeoutMs) {
+      client_.logReadPropertyTimeout(invokeId, request);
+      return BacnetPropertyReadStatus::Timeout;
+    }
+    yield();
+  }
+}
+
+BacnetPropertyListReadResult BacnetDeviceSession::readPropertyList(
+    BacnetObjectId object,
+    BacnetPropertyId* properties,
+    size_t propertyCapacity,
+    uint32_t timeoutMs) {
+  BacnetPropertyListReadResult result;
+  BacnetValue countValue;
+  uint32_t errorClass = 0;
+  uint32_t errorCode = 0;
+
+  result.status = readPropertyDetailed(
+      BacnetPropertyRequest{object, BacnetPropertyId::PropertyList, 0},
+      countValue, timeoutMs, errorClass, errorCode);
+  if (result.status != BacnetPropertyReadStatus::Ack) {
+    return result;
+  }
+  if (countValue.type != BacnetValueType::Unsigned) {
+    result.status = BacnetPropertyReadStatus::DecodeError;
+    return result;
+  }
+
+  result.advertised = countValue.unsignedValue;
+  result.truncated = result.advertised > propertyCapacity;
+  const size_t limit = result.advertised < propertyCapacity
+                           ? static_cast<size_t>(result.advertised)
+                           : propertyCapacity;
+
+  for (size_t i = 0; i < limit; ++i) {
+    BacnetValue propertyValue;
+    const BacnetPropertyReadStatus status = readPropertyDetailed(
+        BacnetPropertyRequest{object, BacnetPropertyId::PropertyList,
+                              static_cast<uint32_t>(i + 1)},
+        propertyValue, timeoutMs, errorClass, errorCode);
+    if (status != BacnetPropertyReadStatus::Ack) {
+      result.status = status;
+      return result;
+    }
+
+    BacnetPropertyId propertyId = BacnetPropertyId::ObjectName;
+    if (!propertyIdFromPropertyListValue(propertyValue, propertyId)) {
+      result.status = BacnetPropertyReadStatus::DecodeError;
+      return result;
+    }
+
+    if (properties != nullptr) {
+      properties[result.stored] = propertyId;
+    }
+    ++result.stored;
+  }
+
+  return result;
+}
+
+BacnetPropertyListReadResult BacnetDeviceSession::readPropertyList(
+    BacnetObjectType objectType,
+    uint32_t objectInstance,
+    BacnetPropertyId* properties,
+    size_t propertyCapacity,
+    uint32_t timeoutMs) {
+  return readPropertyList(
+      BacnetObjectId{static_cast<uint16_t>(objectType), objectInstance},
+      properties, propertyCapacity, timeoutMs);
+}
+
+BacnetPropertyReadAllResult BacnetDeviceSession::readAllProperties(
+    BacnetObjectId object,
+    const BacnetPropertyId* properties,
+    size_t propertyCount,
+    BacnetPropertyReadResult* results,
+    size_t resultCapacity,
+    uint32_t timeoutMs) {
+  BacnetPropertyReadAllResult summary;
+  summary.requested = propertyCount;
+  if (results == nullptr) {
+    resultCapacity = 0;
+  }
+  summary.truncated = propertyCount > resultCapacity;
+
+  const size_t limit = propertyCount < resultCapacity ? propertyCount : resultCapacity;
+  for (size_t i = 0; i < limit; ++i) {
+    BacnetPropertyReadResult& entry = results[i];
+    entry = BacnetPropertyReadResult{};
+    entry.propertyId = properties[i];
+
+    uint32_t errorClass = 0;
+    uint32_t errorCode = 0;
+    entry.status = readPropertyDetailed(
+        BacnetPropertyRequest{object, properties[i], kBacnetNoArrayIndex},
+        entry.value, timeoutMs, errorClass, errorCode);
+
+    ++summary.attempted;
+    ++summary.stored;
+    if (entry.status == BacnetPropertyReadStatus::Ack) {
+      ++summary.acked;
+    } else {
+      ++summary.failed;
+    }
+  }
+
+  return summary;
+}
+
+BacnetPropertyReadAllResult BacnetDeviceSession::readAllProperties(
+    BacnetObjectType objectType,
+    uint32_t objectInstance,
+    const BacnetPropertyId* properties,
+    size_t propertyCount,
+    BacnetPropertyReadResult* results,
+    size_t resultCapacity,
+    uint32_t timeoutMs) {
+  return readAllProperties(
+      BacnetObjectId{static_cast<uint16_t>(objectType), objectInstance},
+      properties, propertyCount, results, resultCapacity, timeoutMs);
 }
 
 BacnetObjectScanResult BacnetDeviceSession::scanObjectList(

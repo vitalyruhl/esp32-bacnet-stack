@@ -28,6 +28,25 @@
 
 // Optional acceptance expectations.
 // Enable only when your local target really supports these checks.
+#define HIL_ENABLE_PROPERTY_LIST_READ_ALL false
+#define HIL_READ_ALL_TARGET_OBJECT_TYPE BacnetObjectType::AnalogValue
+#define HIL_READ_ALL_TARGET_OBJECT_INSTANCE BACNET_EXPECT_AV_INSTANCE
+#define HIL_S02_MV_INSTANCE BACNET_EXPECT_MV_INSTANCE
+#define HIL_S02_MV_REQUIRED false
+#define HIL_S02_AI_INSTANCE 0
+#define HIL_S02_AI_REQUIRED false
+#define HIL_S02_AO_INSTANCE 0
+#define HIL_S02_AO_REQUIRED false
+#define HIL_S02_BI_INSTANCE 0
+#define HIL_S02_BI_REQUIRED false
+#define HIL_S02_BO_INSTANCE 0
+#define HIL_S02_BO_REQUIRED false
+#define HIL_S02_BV_INSTANCE 0
+#define HIL_S02_BV_REQUIRED false
+#define HIL_S02_MI_INSTANCE 0
+#define HIL_S02_MI_REQUIRED false
+#define HIL_S02_MO_INSTANCE 0
+#define HIL_S02_MO_REQUIRED false
 #define HIL_EXPECT_MOVING_PRESENT_VALUE false
 #define HIL_EXPECT_COV_SUPPORTED false
 

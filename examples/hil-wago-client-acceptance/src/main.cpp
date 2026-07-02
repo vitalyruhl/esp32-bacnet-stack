@@ -54,6 +54,82 @@
 #define HIL_EXPECT_COV_SUPPORTED false
 #endif
 
+#ifndef HIL_ENABLE_PROPERTY_LIST_READ_ALL
+#define HIL_ENABLE_PROPERTY_LIST_READ_ALL false
+#endif
+
+#ifndef HIL_READ_ALL_TARGET_OBJECT_TYPE
+#define HIL_READ_ALL_TARGET_OBJECT_TYPE BacnetObjectType::AnalogValue
+#endif
+
+#ifndef HIL_READ_ALL_TARGET_OBJECT_INSTANCE
+#define HIL_READ_ALL_TARGET_OBJECT_INSTANCE BACNET_EXPECT_AV_INSTANCE
+#endif
+
+#ifndef HIL_S02_MV_INSTANCE
+#define HIL_S02_MV_INSTANCE BACNET_EXPECT_MV_INSTANCE
+#endif
+
+#ifndef HIL_S02_MV_REQUIRED
+#define HIL_S02_MV_REQUIRED false
+#endif
+
+#ifndef HIL_S02_AI_INSTANCE
+#define HIL_S02_AI_INSTANCE 0
+#endif
+
+#ifndef HIL_S02_AI_REQUIRED
+#define HIL_S02_AI_REQUIRED false
+#endif
+
+#ifndef HIL_S02_AO_INSTANCE
+#define HIL_S02_AO_INSTANCE 0
+#endif
+
+#ifndef HIL_S02_AO_REQUIRED
+#define HIL_S02_AO_REQUIRED false
+#endif
+
+#ifndef HIL_S02_BI_INSTANCE
+#define HIL_S02_BI_INSTANCE 0
+#endif
+
+#ifndef HIL_S02_BI_REQUIRED
+#define HIL_S02_BI_REQUIRED false
+#endif
+
+#ifndef HIL_S02_BO_INSTANCE
+#define HIL_S02_BO_INSTANCE 0
+#endif
+
+#ifndef HIL_S02_BO_REQUIRED
+#define HIL_S02_BO_REQUIRED false
+#endif
+
+#ifndef HIL_S02_BV_INSTANCE
+#define HIL_S02_BV_INSTANCE 0
+#endif
+
+#ifndef HIL_S02_BV_REQUIRED
+#define HIL_S02_BV_REQUIRED false
+#endif
+
+#ifndef HIL_S02_MI_INSTANCE
+#define HIL_S02_MI_INSTANCE 0
+#endif
+
+#ifndef HIL_S02_MI_REQUIRED
+#define HIL_S02_MI_REQUIRED false
+#endif
+
+#ifndef HIL_S02_MO_INSTANCE
+#define HIL_S02_MO_INSTANCE 0
+#endif
+
+#ifndef HIL_S02_MO_REQUIRED
+#define HIL_S02_MO_REQUIRED false
+#endif
+
 #ifndef HIL_ENABLE_WRITE_TESTS
 #define HIL_ENABLE_WRITE_TESTS false
 #endif
@@ -71,6 +147,8 @@ constexpr uint32_t kScanReadTimeoutMs = 3000;
 constexpr uint32_t kPollDelayMs = 10;
 constexpr uint32_t kMaxObjectListEntries = 600;
 constexpr size_t kMaxScanResults = 32;
+constexpr size_t kMaxPropertyListEntries = 24;
+constexpr size_t kMaxReadAllResults = 24;
 
 enum class ScenarioOutcome : uint8_t {
   Pass,
@@ -85,6 +163,13 @@ struct ScenarioSummary {
   uint32_t skip = 0;
   uint32_t requiredEnabled = 0;
   uint32_t requiredFailed = 0;
+};
+
+struct S02TargetSpec {
+  const char* label = "";
+  BacnetObjectType type = BacnetObjectType::AnalogValue;
+  uint32_t instance = 0;
+  bool required = false;
 };
 
 BacnetClient client;
@@ -251,6 +336,28 @@ bool hasSafeReadStatus(BacnetDeviceSessionReadStatus status) {
          status == BacnetDeviceSessionReadStatus::Skipped;
 }
 
+bool hasSafePropertyReadStatus(BacnetPropertyReadStatus status) {
+  switch (status) {
+    case BacnetPropertyReadStatus::Ack:
+    case BacnetPropertyReadStatus::UnsupportedProperty:
+    case BacnetPropertyReadStatus::Timeout:
+    case BacnetPropertyReadStatus::Error:
+    case BacnetPropertyReadStatus::Reject:
+    case BacnetPropertyReadStatus::Abort:
+    case BacnetPropertyReadStatus::DecodeError:
+    case BacnetPropertyReadStatus::EmptyValue:
+    case BacnetPropertyReadStatus::UnsupportedDatatype:
+    case BacnetPropertyReadStatus::ArrayIndexNotSupported:
+    case BacnetPropertyReadStatus::SendFailed:
+      return true;
+    case BacnetPropertyReadStatus::Busy:
+    case BacnetPropertyReadStatus::Skipped:
+      return false;
+  }
+
+  return false;
+}
+
 bool objectFound(BacnetObjectType type, uint32_t instance,
                  const BacnetObjectScanResult& summary) {
   const uint16_t rawType = static_cast<uint16_t>(type);
@@ -297,7 +404,14 @@ ScenarioOutcome runNonBlockingObjectListScanScenario() {
   BacnetDeviceSession device(client, BACNET_TARGET_DEVICE_INSTANCE, targetAddress,
                              BACNET_TARGET_PORT);
   const BacnetObjectType valueTypes[] = {
+      BacnetObjectType::AnalogInput,
+      BacnetObjectType::AnalogOutput,
       BacnetObjectType::AnalogValue,
+      BacnetObjectType::BinaryInput,
+      BacnetObjectType::BinaryOutput,
+      BacnetObjectType::BinaryValue,
+      BacnetObjectType::MultiStateInput,
+      BacnetObjectType::MultiStateOutput,
       BacnetObjectType::MultiStateValue,
   };
 
@@ -367,8 +481,138 @@ ScenarioOutcome runNonBlockingObjectListScanScenario() {
 }
 
 ScenarioOutcome runPropertyListSafeReadAllScenario() {
-  printResult("I", "property-list discovery scenario not implemented yet");
-  return ScenarioOutcome::Fail;
+  if (!ensureRuntimeReady()) {
+    return ScenarioOutcome::Fail;
+  }
+
+  BacnetDeviceSession device(client, BACNET_TARGET_DEVICE_INSTANCE, targetAddress,
+                             BACNET_TARGET_PORT);
+  const S02TargetSpec targets[] = {
+      {"primary", HIL_READ_ALL_TARGET_OBJECT_TYPE,
+       HIL_READ_ALL_TARGET_OBJECT_INSTANCE, HIL_READ_ALL_TARGET_OBJECT_INSTANCE != 0},
+      {"multi-state-value", BacnetObjectType::MultiStateValue,
+       HIL_S02_MV_INSTANCE, HIL_S02_MV_REQUIRED},
+      {"analog-input", BacnetObjectType::AnalogInput, HIL_S02_AI_INSTANCE,
+       HIL_S02_AI_REQUIRED},
+      {"analog-output", BacnetObjectType::AnalogOutput, HIL_S02_AO_INSTANCE,
+       HIL_S02_AO_REQUIRED},
+      {"binary-input", BacnetObjectType::BinaryInput, HIL_S02_BI_INSTANCE,
+       HIL_S02_BI_REQUIRED},
+      {"binary-output", BacnetObjectType::BinaryOutput, HIL_S02_BO_INSTANCE,
+       HIL_S02_BO_REQUIRED},
+      {"binary-value", BacnetObjectType::BinaryValue, HIL_S02_BV_INSTANCE,
+       HIL_S02_BV_REQUIRED},
+      {"multi-state-input", BacnetObjectType::MultiStateInput,
+       HIL_S02_MI_INSTANCE, HIL_S02_MI_REQUIRED},
+      {"multi-state-output", BacnetObjectType::MultiStateOutput,
+       HIL_S02_MO_INSTANCE, HIL_S02_MO_REQUIRED},
+  };
+
+  const BacnetPropertyId fallbackProperties[] = {
+      BacnetPropertyId::ObjectName,
+      BacnetPropertyId::Description,
+      BacnetPropertyId::ObjectType,
+      BacnetPropertyId::PresentValue,
+  };
+
+  size_t configuredTargets = 0;
+  size_t validatedTargets = 0;
+  size_t skippedTargets = 0;
+  size_t optionalFailures = 0;
+  size_t requiredFailures = 0;
+
+  for (const S02TargetSpec& target : targets) {
+    if (target.instance == 0) {
+      ++skippedTargets;
+      continue;
+    }
+
+    ++configuredTargets;
+    const BacnetRemoteObject object = device.object(target.type, target.instance);
+    BacnetPropertyId advertisedProperties[kMaxPropertyListEntries] = {};
+    const BacnetPropertyListReadResult propertyList = object.readPropertyList(
+        advertisedProperties, kMaxPropertyListEntries, kScanReadTimeoutMs);
+
+    const BacnetPropertyId* propertiesToRead = advertisedProperties;
+    size_t propertyCount = propertyList.stored;
+    bool usedFallback = false;
+    if (propertyList.status != BacnetPropertyReadStatus::Ack ||
+        propertyCount == 0) {
+      propertiesToRead = fallbackProperties;
+      propertyCount = sizeof(fallbackProperties) / sizeof(fallbackProperties[0]);
+      usedFallback = true;
+    }
+
+    BacnetPropertyReadResult propertyResults[kMaxReadAllResults] = {};
+    const BacnetPropertyReadAllResult readAll = object.readAllProperties(
+        propertiesToRead, propertyCount, propertyResults, kMaxReadAllResults,
+        kScanReadTimeoutMs);
+
+    size_t safeStatusCount = 0;
+    bool presentValueAck = false;
+    for (size_t i = 0; i < readAll.stored; ++i) {
+      if (hasSafePropertyReadStatus(propertyResults[i].status)) {
+        ++safeStatusCount;
+      }
+      if (propertyResults[i].propertyId == BacnetPropertyId::PresentValue &&
+          propertyResults[i].status == BacnetPropertyReadStatus::Ack) {
+        presentValueAck = true;
+      }
+    }
+
+    Serial.print("[HIL] S02 target=");
+    Serial.print(target.label);
+    Serial.print(" object=");
+    Serial.print(bacnetObjectTypeText(target.type));
+    Serial.print(",");
+    Serial.print(target.instance);
+    Serial.print(" source=");
+    Serial.print(usedFallback ? "fallback" : "advertised");
+    Serial.print(" property-list-status=");
+    Serial.print(bacnetPropertyReadStatusText(propertyList.status));
+    Serial.print(" attempted=");
+    Serial.print(readAll.attempted);
+    Serial.print(" acked=");
+    Serial.print(readAll.acked);
+    Serial.print(" failed=");
+    Serial.print(readAll.failed);
+    Serial.print(" present-value-ack=");
+    Serial.println(presentValueAck ? "yes" : "no");
+
+    const bool targetOk = propertyCount > 0 && readAll.attempted > 1 &&
+                          readAll.stored == readAll.attempted &&
+                          safeStatusCount == readAll.attempted &&
+                          presentValueAck &&
+                          (usedFallback ||
+                           propertyList.status == BacnetPropertyReadStatus::Ack);
+    if (targetOk) {
+      ++validatedTargets;
+    } else if (target.required) {
+      ++requiredFailures;
+    } else {
+      ++optionalFailures;
+    }
+  }
+
+  Serial.print("[HIL] S02 configured=");
+  Serial.print(configuredTargets);
+  Serial.print(" validated=");
+  Serial.print(validatedTargets);
+  Serial.print(" optional-failures=");
+  Serial.print(optionalFailures);
+  Serial.print(" required-failures=");
+  Serial.print(requiredFailures);
+  Serial.print(" skipped=");
+  Serial.println(skippedTargets);
+
+  if (configuredTargets == 0) {
+    printResult("I", "S02 target objects not configured");
+    return ScenarioOutcome::Skip;
+  }
+
+  return (validatedTargets > 0 && requiredFailures == 0)
+             ? ScenarioOutcome::Pass
+             : ScenarioOutcome::Fail;
 }
 
 ScenarioOutcome runPropertyCacheScenario() {
@@ -439,8 +683,9 @@ ScenarioOutcome runAcceptanceRunner() {
               runNonBlockingObjectListScanScenario, "disabled");
 
   runScenario(summary, "S02", "property-list discovery and safe read-all",
-              false, false, runPropertyListSafeReadAllScenario,
-              "disabled (future scenario block)");
+              HIL_ENABLE_PROPERTY_LIST_READ_ALL, false,
+              runPropertyListSafeReadAllScenario,
+              "disabled (HIL_ENABLE_PROPERTY_LIST_READ_ALL=false)");
 
   runScenario(summary, "S03", "property cache", false, false,
               runPropertyCacheScenario, "disabled (future scenario block)");

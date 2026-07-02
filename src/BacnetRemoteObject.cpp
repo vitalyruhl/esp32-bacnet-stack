@@ -87,3 +87,18 @@ BacnetDeviceSessionReadStatus BacnetRemoteObject::readPropertyList(
     BacnetValue& value, uint32_t timeoutMs) const {
   return readProperty(BacnetPropertyId::PropertyList, value, timeoutMs);
 }
+
+BacnetPropertyListReadResult BacnetRemoteObject::readPropertyList(
+    BacnetPropertyId* properties, size_t propertyCapacity,
+    uint32_t timeoutMs) const {
+  return session_->readPropertyList(objectId_, properties, propertyCapacity,
+                                    timeoutMs);
+}
+
+BacnetPropertyReadAllResult BacnetRemoteObject::readAllProperties(
+    const BacnetPropertyId* properties, size_t propertyCount,
+    BacnetPropertyReadResult* results, size_t resultCapacity,
+    uint32_t timeoutMs) const {
+  return session_->readAllProperties(objectId_, properties, propertyCount,
+                                     results, resultCapacity, timeoutMs);
+}
