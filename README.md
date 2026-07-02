@@ -8,21 +8,52 @@ coverage are still evolving.
 
 ## Current Status
 
-- Minimal `BacnetClient` discovery support is available for BACnet/IP.
-- `BacnetClient` can build and send Who-Is requests and parse basic I-Am
-  responses.
-- Minimal client-side ReadProperty support is available for device strings,
-  object lists, and selected value object `presentValue` reads.
-- `BacnetDeviceSession` can represent one known remote BACnet/IP device and
-  issue device-scoped ReadProperty calls through a `BacnetClient`.
+BACnet/IP client APIs are already usable for common read-oriented use cases,
+while advanced discovery, write flows, and server MVP remain future work.
+
+## Implementation Matrix
+
+| Area | Capability | Status | Notes |
+| --- | --- | --- | --- |
+| Client discovery | Who-Is / I-Am discovery | ✅ Implemented | Core discovery flow available through `BacnetClient`. |
+| Client discovery | Known-device session with `BacnetDeviceSession` | ✅ Implemented | Session keeps target identity and drives device-scoped calls. |
+| ReadProperty / values | Generic ReadProperty model | ✅ Implemented | Object + property + optional array index request model is available. |
+| ReadProperty / values | Reading known device/object properties | ✅ Implemented | Works for selected known properties and known object IDs. |
+| ReadProperty / values | Reading selected `present-value` from known AV/MV objects | 🟢 Use-case ready | Suitable for practical value monitoring on known objects. |
+| ReadProperty / values | Displaying/forwarding selected BACnet values by fallback polling | 🟢 Use-case ready | Property subscription abstraction with fallback polling is available. |
+| ReadProperty / values | Typed value decode coverage | 🟡 Partial | Common value paths are supported; full coverage is still expanding. |
+| Object discovery | Device `object-list` scan | ✅ Implemented | Scans entries from the remote Device object's `object-list`. |
+| Object discovery | Blocking `scanObjectList()` | ✅ Implemented | Source-compatible convenience path remains available. |
+| Object discovery | Non-blocking object-list scan job | ✅ Implemented | Loop-driven scan job is available for responsive applications. |
+| Object discovery | Optional `object-name`, `description`, `present-value` reads during object-list scan | ✅ Implemented | Optional reads are supported during object-list scan flow. |
+| Object discovery | BACnet `property-list` discovery / safe read-all | 🚫 Not implemented · ⏳ Planned | Planned future work, intentionally not shipped yet. |
+| Subscriptions | Property subscription abstraction with fallback polling | 🟢 Use-case ready | Practical for cyclic update use cases without SubscribeCOV. |
+| Subscriptions | Real SubscribeCOV | ⏳ Planned | Not implemented yet. |
+| Writes | WriteProperty | 🚫 Not implemented | No write API shipped in current client runtime. |
+| Writes | PresentValue priority write helpers | ⏳ Planned | Future client capability, not currently implemented. |
+| Writes | Hardware writes | 🚫 Not implemented | Disabled by default; future explicit opt-in only. |
+| Examples / validation | `examples/client-object-list-scan-basic` | ✅ Implemented | Minimal serial-oriented object-list validation example. |
+| Examples / validation | `examples/client-demo` | ✅ Implemented | End-to-end client demo with discovery, scan, and value updates. |
+| Examples / validation | `examples/hil-wago-client-acceptance` | 🧪 Local HIL validated | Local hardware acceptance runner for client scenarios. |
+| Examples / validation | HIL scenario S01 non-blocking object-list scan | 🧪 Local HIL validated | Validated on local ESP32/BACnet-IP target setup. |
+| Examples / validation | Future HIL scenarios S02-S08 | ⏳ Planned | Present as scenario blocks and skipped by default unless enabled. |
+| Server / transports | BACnet/IP server role | 🧱 Placeholder | Placeholder role exists; not a completed server feature set. |
+| Server / transports | Server MVP | ⏳ Planned | Planned after client runtime completion milestones. |
+| Server / transports | BACnet MS/TP | ⏳ Planned | Scheduled for later transport work. |
+| Server / transports | Imported upstream bacnet-stack files | 🚫 Not implemented | Upstream files are not imported in this repository. |
+
+Terminology:
+
+- object-list scan means scanning entries from the remote Device object's `object-list`.
+- optional reads during object-list scan means selected reads such as `object-name`, `description`, and `present-value`.
+- property-list discovery/read-all means discovering all advertised properties of an object and safely reading them; this is future work.
+- for simple use cases that need a few known variables and `present-value` display/forwarding, the current client API is already usable.
+
+Additional status notes:
+
 - A reusable BACnet logging layer is available with application-owned outputs.
-- Minimal `BacnetServer` role placeholder is available.
 - BACnet/IP is the first target.
-- WriteProperty is not implemented yet.
-- BACnet MS/TP is planned for later work.
-- No upstream `bacnet-stack` source files are imported yet.
-- ESP32 Configuration Manager is not a core dependency. It may be used later
-  only in explicitly optional demo examples.
+- ESP32 Configuration Manager is not a core dependency. It is used only by explicitly optional demo examples.
 
 ## Goals
 
@@ -48,7 +79,8 @@ coverage are still evolving.
 | Path | Purpose |
 | --- | --- |
 | `src/` | Library headers and implementation |
-| `examples/client-demo/` | Minimal BACnet client role demo |
+| `examples/client-demo/` | Optional GUI client demo with discovery, scan, and fallback-polled value updates |
+| `examples/client-object-list-scan-basic/` | Focused object-list scan and value-read example |
 | `examples/hil-wago-client-acceptance/` | Local ESP32/WAGO client acceptance HIL runner |
 | `examples/server-demo/` | Minimal BACnet server role demo |
 | `test/` | PlatformIO Unity tests |
@@ -81,7 +113,7 @@ void loop() {
 
 ## BACnet/IP Client Discovery
 
-The first client slice supports discovery:
+The client discovery layer supports:
 
 - builds standard BACnet/IP Who-Is requests
 - sends Who-Is on UDP port `47808`
@@ -323,7 +355,7 @@ Edit `examples/client-demo/src/secret/secrets.h` for local WiFi, optional
 static IP, optional MAC-priority, and BACnet target values. The `secrets.h` file
 is intentionally ignored by Git and must not be committed.
 
-## Build
+## Build / Validation
 
 Root build:
 
@@ -337,11 +369,20 @@ Tests:
 pio test -e usb --without-uploading --without-testing
 ```
 
-Examples:
+Examples policy:
+
+- Build changed or directly affected examples only.
+- For BACnet client runtime/API changes, also build the local acceptance runner.
 
 ```sh
-pio run -d examples/client-demo -e usb
-pio run -d examples/server-demo -e usb
+pio run -d examples/hil-wago-client-acceptance -e usb
+```
+
+Hardware HIL upload/monitor is local-only and should run only with explicit local approval:
+
+```sh
+pio run -d examples/hil-wago-client-acceptance -e usb -t upload
+pio device monitor -p COM4 -b 115200
 ```
 
 Upload and serial monitor commands are intentionally not part of the default
