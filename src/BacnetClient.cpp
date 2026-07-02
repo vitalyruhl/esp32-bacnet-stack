@@ -28,6 +28,7 @@ constexpr uint8_t kApplicationTagUnsigned = 2;
 constexpr uint8_t kApplicationTagSigned = 3;
 constexpr uint8_t kApplicationTagReal = 4;
 constexpr uint8_t kApplicationTagCharacterString = 7;
+constexpr uint8_t kApplicationTagBitString = 8;
 constexpr uint8_t kApplicationTagEnumerated = 9;
 constexpr uint8_t kApplicationTagObjectIdentifier = 12;
 
@@ -248,6 +249,44 @@ bool parseApplicationReal(const uint8_t* buffer, size_t length, size_t& offset,
   return copyTextValue(value, text);
 }
 
+bool parseApplicationBitString(const uint8_t* buffer, size_t length,
+                               size_t& offset, BacnetValue& value) {
+  size_t valueLength = 0;
+  if (!readApplicationTagHeader(buffer, length, offset,
+                                kApplicationTagBitString, valueLength) ||
+      valueLength < 2 || offset + valueLength > length) {
+    return false;
+  }
+
+  const uint8_t unusedBits = buffer[offset++];
+  const size_t dataLength = valueLength - 1;
+  if (unusedBits > 7 || dataLength > 4) {
+    return false;
+  }
+
+  const uint16_t bitCount =
+      static_cast<uint16_t>((dataLength * 8) - unusedBits);
+  value.type = BacnetValueType::BitString;
+  value.bitStringValue = 0;
+  value.bitStringBitCount =
+      bitCount > UINT8_MAX ? UINT8_MAX : static_cast<uint8_t>(bitCount);
+
+  for (uint8_t bitIndex = 0; bitIndex < value.bitStringBitCount; ++bitIndex) {
+    const uint8_t sourceByte = buffer[offset + (bitIndex / 8)];
+    const uint8_t sourceMask = static_cast<uint8_t>(0x80 >> (bitIndex % 8));
+    if ((sourceByte & sourceMask) != 0 && bitIndex < 32) {
+      value.bitStringValue |= (1UL << bitIndex);
+    }
+  }
+
+  offset += dataLength;
+  char text[BacnetValue::kMaxTextLength] = {};
+  std::snprintf(text, sizeof(text), "bits=0x%08lx/%u",
+                static_cast<unsigned long>(value.bitStringValue),
+                static_cast<unsigned>(value.bitStringBitCount));
+  return copyTextValue(value, text);
+}
+
 bool parseApplicationObjectIdentifier(const uint8_t* buffer, size_t length,
                                       size_t& offset, BacnetValue& value) {
   uint32_t objectIdentifier = 0;
@@ -416,6 +455,9 @@ bool parseReadPropertyApplicationValue(const uint8_t* buffer, size_t length,
   if (tagNumber == kApplicationTagCharacterString) {
     return parseApplicationCharacterString(buffer, length, offset, value);
   }
+  if (tagNumber == kApplicationTagBitString) {
+    return parseApplicationBitString(buffer, length, offset, value);
+  }
   if (tagNumber == kApplicationTagEnumerated) {
     return parseApplicationUnsigned(buffer, length, offset,
                                     kApplicationTagEnumerated, value);
@@ -479,6 +521,18 @@ size_t writeContextUnsigned(uint8_t* buffer, size_t offset, uint8_t tagNumber,
   return offset;
 }
 
+size_t writeContextObjectIdentifier(uint8_t* buffer, size_t offset,
+                                    uint8_t tagNumber,
+                                    BacnetObjectId object) {
+  const uint32_t encoded = encodeObjectId(object);
+  buffer[offset++] = static_cast<uint8_t>((tagNumber << 4) | 0x0C);
+  buffer[offset++] = static_cast<uint8_t>(encoded >> 24);
+  buffer[offset++] = static_cast<uint8_t>(encoded >> 16);
+  buffer[offset++] = static_cast<uint8_t>(encoded >> 8);
+  buffer[offset++] = static_cast<uint8_t>(encoded);
+  return offset;
+}
+
 bool skipNpduAddress(const uint8_t* buffer, size_t length, size_t& offset) {
   if (offset + 3 > length) {
     return false;
@@ -525,6 +579,8 @@ const char* propertyName(BacnetPropertyId property) {
   switch (property) {
     case BacnetPropertyId::Description:
       return "description";
+    case BacnetPropertyId::EventState:
+      return "eventState";
     case BacnetPropertyId::FirmwareRevision:
       return "firmwareRevision";
     case BacnetPropertyId::ModelName:
@@ -537,16 +593,22 @@ const char* propertyName(BacnetPropertyId property) {
       return "objectName";
     case BacnetPropertyId::ObjectType:
       return "objectType";
+    case BacnetPropertyId::OutOfService:
+      return "outOfService";
     case BacnetPropertyId::PresentValue:
       return "presentValue";
     case BacnetPropertyId::PriorityArray:
       return "priorityArray";
     case BacnetPropertyId::PropertyList:
       return "propertyList";
+    case BacnetPropertyId::Reliability:
+      return "reliability";
     case BacnetPropertyId::RelinquishDefault:
       return "relinquishDefault";
     case BacnetPropertyId::StateText:
       return "stateText";
+    case BacnetPropertyId::StatusFlags:
+      return "statusFlags";
     case BacnetPropertyId::VendorName:
       return "vendorName";
     default:
@@ -1057,8 +1119,7 @@ size_t BacnetClient::buildReadPropertyRequest(uint8_t* buffer,
   buffer[offset++] = invokeId;
   buffer[offset++] = kServiceReadProperty;
 
-  offset = writeContextUnsigned(buffer, offset, 0,
-                                encodeObjectId(request.object));
+  offset = writeContextObjectIdentifier(buffer, offset, 0, request.object);
   offset = writeContextUnsigned(buffer, offset, 1,
                                 static_cast<uint32_t>(request.property));
   if (request.arrayIndex != kNoArrayIndex) {

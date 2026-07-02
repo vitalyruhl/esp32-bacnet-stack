@@ -29,3 +29,9 @@
 #define BACNET_TARGET_ADDRESS "192.0.2.101"
 // #define BACNET_TARGET_DEVICE_INSTANCE 9001
 // #define BACNET_TARGET_PORT 47808
+// Optional read-only object status snapshot shown in the browser.
+// Leave instance unset/0 to use the first discovered process object.
+// Use numeric BACnet object type values, for example 2=analog-value,
+// 5=binary-value, 19=multi-state-value.
+// #define BACNET_STATUS_OBJECT_TYPE 2
+// #define BACNET_STATUS_OBJECT_INSTANCE 220

@@ -30,6 +30,7 @@
 // Optional acceptance expectations.
 // Enable only when your local target really supports these reads.
 #define HIL_ENABLE_PROCESS_PRESENT_VALUE_READS true
+#define HIL_ENABLE_PROCESS_STATUS_READS true
 #define HIL_AI100_ANALOG_INPUT 100
 #define HIL_REQUIRE_AI100 true
 #define HIL_AI101_ANALOG_INPUT 101

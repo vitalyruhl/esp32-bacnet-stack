@@ -28,6 +28,7 @@ Current implemented scenario:
 
 - `S01` non-blocking object-list scan (issue #32 validation)
 - `S02` common process object `present-value` reads (local read-only validation)
+- `S03` common process object status reads (local read-only validation)
 
 Current planned scenario blocks (runner scaffold exists):
 
@@ -46,6 +47,11 @@ local secrets flags.
 BACnet writes. Required objects fail the scenario when unreadable or decoded
 with an unexpected value type. Optional objects can be set to `0` in
 `src/secret/secrets.h` so they are skipped.
+
+`S03` is enabled by default in the local secrets template and reads
+`status-flags`, `event-state`, `reliability`, and `out-of-service` where
+available. Unsupported status properties are reported per property and do not
+abort the scenario. The derived object state is conservative and read-only.
 
 ## Build And Run
 
