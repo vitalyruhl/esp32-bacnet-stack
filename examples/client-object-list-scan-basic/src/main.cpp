@@ -18,7 +18,7 @@
 #endif
 
 #ifndef APP_VERSION
-#define APP_VERSION "0.13.0"
+#define APP_VERSION "0.14.0"
 #endif
 
 #ifndef MY_USE_DHCP

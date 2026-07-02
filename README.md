@@ -138,8 +138,9 @@ if (status == BacnetDeviceSessionReadStatus::Ack) {
 }
 ```
 
-The non-blocking `examples/client-demo` firmware keeps its own request state
-machine for UI-friendly scanning.
+The `examples/client-demo` firmware now keeps BACnet protocol behavior in the
+reusable library APIs and limits its own BACnet code to configuration, GUI
+binding, display rows, and log adaptation.
 
 `BacnetRemoteObject` and `BacnetProperty` provide lightweight wrappers over
 the same session read path:
@@ -225,8 +226,9 @@ for (size_t i = 0; i < scan.stored; ++i) {
 }
 ```
 
-The scan API does not add range probing, async scheduling, refresh state,
-cache, queue, callbacks, or subscriptions.
+The scan API does not add range probing, async scheduling, cache, or queue
+state. Present-value refresh for scanned objects is handled through the
+property subscription API with fallback polling.
 
 The `examples/client-object-list-scan-basic` project is a minimal serial-only
 hardware validation sketch for known BACnet/IP devices. It uses local
@@ -235,16 +237,15 @@ hardware validation sketch for known BACnet/IP devices. It uses local
 compact object id, object-name, description, and present-value output.
 
 The `examples/client-demo` firmware also includes a lightweight BACnet/IP
-Discovery card for demo visibility. It shows only the first discovered device,
-keeps the BME280 status card unchanged, and uses the Device Object
-`object-list` property as the primary path for AV/MV discovery. Up to 10 found
-Analog Value objects and up to 10 found Multi-State Value objects are displayed
-with `description` or `objectName` plus `presentValue` status/value.
-WiFi-friendly discovery, object-list, ReadProperty, and inter-request timing
-values are configurable near the top of `examples/client-demo/src/main.cpp`.
-AV200/MV2000 range probing remains a disabled debug fallback, not the normal
-discovery strategy. BACnet scan activity is written through the BACnet logger
-and forwarded to the ConfigurationManager GUI log by the demo adapter.
+Discovery card for demo visibility. It selects the configured BACnet/IP device
+or the first discovered I-Am device, keeps the BME280 status card unchanged,
+and calls `BacnetDeviceSession::scanObjectList()` for AV/MV discovery. Up to
+10 found Analog Value objects and up to 10 found Multi-State Value objects are
+displayed with `description` or `objectName` plus `presentValue` status/value.
+The demo refreshes present values through `BacnetProperty::subscribe()` with
+fallback polling. BACnet scan and subscription activity is written through the
+BACnet logger and forwarded to the ConfigurationManager GUI log by the demo
+adapter.
 
 ## BACnet Logging
 
