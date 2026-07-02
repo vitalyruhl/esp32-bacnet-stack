@@ -4,13 +4,21 @@ This changelog is a curated overview.
 
 ## Unreleased
 
+- Added `BacnetObjectListScanJob` with `beginObjectListScan()` and
+  `pollObjectListScan()` for loop-driven, caller-buffered Device `object-list`
+  scans.
+- Preserved blocking `scanObjectList()` compatibility by routing it through the
+  same scan job state machine.
+- Updated `examples/client-demo` to drive object-list discovery from the
+  non-blocking scan API.
+- Bumped the library and example version constants to `0.15.0`.
+
 - Refactored `examples/client-demo` into a thin ConfigurationManager/UI demo
   over reusable `BacnetDeviceSession`, object-list scan, property, subscription,
   and logging APIs.
 - Removed demo-owned BACnet object-list scan state, range probing, active
   ReadProperty invoke tracking, and manual present-value refresh loops from the
   client demo.
-- Bumped the library and example version constants to `0.14.0`.
 
 - Added `BacnetProperty::subscribe()` with a caller-owned
   `BacnetPropertySubscription` handle for callback-based property updates.

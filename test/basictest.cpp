@@ -631,6 +631,90 @@ void test_bacnet_device_session_scan_object_list_invalid_target() {
   TEST_ASSERT_EQUAL_UINT32(0, zeroCapacityResult.stored);
 }
 
+void test_bacnet_object_list_scan_job_initial_state() {
+  BacnetObjectListScanJob job;
+
+  TEST_ASSERT_TRUE(job.isIdle());
+  TEST_ASSERT_FALSE(job.isActive());
+  TEST_ASSERT_FALSE(job.isComplete());
+  TEST_ASSERT_FALSE(job.isFailed());
+  TEST_ASSERT_FALSE(job.isCancelled());
+  TEST_ASSERT_FALSE(job.isTerminal());
+  TEST_ASSERT_FALSE(job.requestInFlight());
+  TEST_ASSERT_EQUAL_UINT8(
+      static_cast<uint8_t>(BacnetObjectListScanJobStatus::Idle),
+      static_cast<uint8_t>(job.status()));
+  TEST_ASSERT_EQUAL_UINT8(
+      static_cast<uint8_t>(BacnetObjectListScanPhase::Idle),
+      static_cast<uint8_t>(job.phase()));
+  TEST_ASSERT_EQUAL_STRING("idle",
+                           bacnetObjectListScanJobStatusText(job.status()));
+  TEST_ASSERT_EQUAL_STRING("idle", bacnetObjectListScanPhaseText(job.phase()));
+  TEST_ASSERT_EQUAL_UINT32(0, job.currentIndex());
+  TEST_ASSERT_EQUAL_UINT32(0, job.summary().stored);
+
+  const BacnetObjectListScanProgress progress = job.progress();
+  TEST_ASSERT_EQUAL_UINT8(
+      static_cast<uint8_t>(BacnetObjectListScanJobStatus::Idle),
+      static_cast<uint8_t>(progress.status));
+  TEST_ASSERT_EQUAL_UINT8(
+      static_cast<uint8_t>(BacnetObjectListScanPhase::Idle),
+      static_cast<uint8_t>(progress.phase));
+  TEST_ASSERT_FALSE(progress.requestInFlight);
+  TEST_ASSERT_EQUAL_UINT32(0, progress.currentIndex);
+}
+
+void test_bacnet_object_list_scan_job_reports_send_failure() {
+  BacnetClient client;
+  BacnetDeviceSession session(client, 1234, IPAddress(0, 0, 0, 0));
+  BacnetObjectListScanJob job;
+  BacnetObjectScanOptions options;
+  options.readTimeoutMs = 0;
+  BacnetScannedObject results[1];
+
+  const bool started =
+      session.beginObjectListScan(job, options, results, 1, 1000);
+
+  TEST_ASSERT_FALSE(started);
+  TEST_ASSERT_TRUE(job.isFailed());
+  TEST_ASSERT_TRUE(job.isTerminal());
+  TEST_ASSERT_FALSE(job.requestInFlight());
+  TEST_ASSERT_EQUAL_UINT8(
+      static_cast<uint8_t>(BacnetObjectListScanPhase::Failed),
+      static_cast<uint8_t>(job.phase()));
+  TEST_ASSERT_EQUAL_UINT8(
+      static_cast<uint8_t>(BacnetDeviceSessionReadStatus::SendFailed),
+      static_cast<uint8_t>(job.summary().objectListCountStatus));
+  TEST_ASSERT_EQUAL_UINT32(0, job.summary().stored);
+}
+
+void test_bacnet_object_list_scan_job_busy_protects_blocking_read() {
+  BacnetClient client;
+  TEST_ASSERT_TRUE(client.begin(47813));
+  BacnetDeviceSession session(client, 1234, IPAddress(192, 0, 2, 50));
+  BacnetObjectListScanJob job;
+  BacnetObjectScanOptions options;
+  options.readTimeoutMs = 1000;
+  BacnetScannedObject results[1];
+
+  const bool started =
+      session.beginObjectListScan(job, options, results, 1, 1000);
+  if (!started || !job.requestInFlight()) {
+    TEST_IGNORE_MESSAGE("UDP send did not enter object-list scan in-flight state");
+  }
+
+  BacnetValue value;
+  const auto status =
+      session.readProperty(BacnetObjectType::AnalogValue, 200,
+                           BacnetPropertyId::PresentValue, value, 1);
+
+  TEST_ASSERT_EQUAL_UINT8(
+      static_cast<uint8_t>(BacnetDeviceSessionReadStatus::Busy),
+      static_cast<uint8_t>(status));
+  session.cancelObjectListScan(job);
+  TEST_ASSERT_TRUE(job.isCancelled());
+}
+
 void test_bacnet_server_lifecycle() {
   BacnetServer server;
 
@@ -918,6 +1002,9 @@ void setup() {
   RUN_TEST(test_bacnet_object_scan_options_filter_object_types);
   RUN_TEST(test_bacnet_scanned_object_defaults_are_skipped);
   RUN_TEST(test_bacnet_device_session_scan_object_list_invalid_target);
+  RUN_TEST(test_bacnet_object_list_scan_job_initial_state);
+  RUN_TEST(test_bacnet_object_list_scan_job_reports_send_failure);
+  RUN_TEST(test_bacnet_object_list_scan_job_busy_protects_blocking_read);
   RUN_TEST(test_bacnet_server_lifecycle);
   RUN_TEST(test_bacnet_subscribe_options_defaults);
   RUN_TEST(test_bacnet_property_subscription_is_move_only);
