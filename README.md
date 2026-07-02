@@ -49,6 +49,7 @@ coverage are still evolving.
 | --- | --- |
 | `src/` | Library headers and implementation |
 | `examples/client-demo/` | Minimal BACnet client role demo |
+| `examples/hil-wago-client-acceptance/` | Local ESP32/WAGO client acceptance HIL runner |
 | `examples/server-demo/` | Minimal BACnet server role demo |
 | `test/` | PlatformIO Unity tests |
 | `docs/` | Project documentation |
@@ -200,7 +201,7 @@ Subscription notes:
 - `requestRefresh()` schedules an immediate one-shot read when idle.
 - `stop()` deactivates the subscription and suppresses further polling.
 
-`BacnetDeviceSession::scanObjectList()` adds a blocking convenience scan over
+`BacnetDeviceSession::scanObjectList()` keeps the blocking convenience scan over
 the remote Device object's `object-list` property. The caller owns the result
 buffer and optional filters:
 
@@ -226,8 +227,47 @@ for (size_t i = 0; i < scan.stored; ++i) {
 }
 ```
 
-The scan API does not add range probing, async scheduling, cache, or queue
-state. Present-value refresh for scanned objects is handled through the
+The blocking scan is implemented on top of the same small scan job used by the
+non-blocking API. Applications that must keep `loop()` responsive can drive the
+scan explicitly:
+
+```cpp
+static BacnetScannedObject foundObjects[10];
+static BacnetObjectListScanJob scanJob;
+static const BacnetObjectType valueTypes[] = {
+    BacnetObjectType::AnalogValue,
+    BacnetObjectType::MultiStateValue,
+};
+
+void startScan(BacnetDeviceSession& device) {
+  BacnetObjectScanOptions scanOptions;
+  bacnetSetObjectTypeFilter(scanOptions, valueTypes);
+  scanOptions.maxObjectListEntries = 600;
+  scanOptions.readObjectName = true;
+  scanOptions.readDescription = true;
+  scanOptions.readPresentValue = true;
+
+  device.beginObjectListScan(scanJob, scanOptions, foundObjects, 10);
+}
+
+void loopScan(BacnetDeviceSession& device) {
+  if (scanJob.isActive()) {
+    device.pollObjectListScan(scanJob);
+  }
+
+  if (scanJob.isComplete()) {
+    const BacnetObjectScanResult& scan = scanJob.summary();
+    // Consume foundObjects[0..scan.stored).
+  }
+}
+```
+
+`BacnetObjectListScanJob::progress()` exposes the scan status, phase, current
+object-list index, in-flight flag, and summary counters. The scan job stores the
+options by value, but pointer fields such as `objectTypes` still reference
+caller-owned storage; keep those arrays and the result buffer alive until the
+job reaches a terminal state. One session processes one object-list scan job at
+a time. Present-value refresh for scanned objects is handled through the
 property subscription API with fallback polling.
 
 The `examples/client-object-list-scan-basic` project is a minimal serial-only
@@ -239,7 +279,7 @@ compact object id, object-name, description, and present-value output.
 The `examples/client-demo` firmware also includes a lightweight BACnet/IP
 Discovery card for demo visibility. It selects the configured BACnet/IP device
 or the first discovered I-Am device, keeps the BME280 status card unchanged,
-and calls `BacnetDeviceSession::scanObjectList()` for AV/MV discovery. Up to
+and drives a `BacnetObjectListScanJob` from `loop()` for AV/MV discovery. Up to
 10 found Analog Value objects and up to 10 found Multi-State Value objects are
 displayed with `description` or `objectName` plus `presentValue` status/value.
 The demo refreshes present values through `BacnetProperty::subscribe()` with

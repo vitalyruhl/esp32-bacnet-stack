@@ -8,12 +8,75 @@
 #include <cstdint>
 
 class BacnetDeviceSession;
+class BacnetObjectListScanJob;
 class BacnetProperty;
 class BacnetRemoteObject;
 class BacnetPropertySubscription;
 struct BacnetObjectScanOptions;
 struct BacnetObjectScanResult;
 struct BacnetScannedObject;
+
+enum class BacnetObjectListScanJobStatus : uint8_t {
+  Idle,
+  Active,
+  Complete,
+  Failed,
+  Cancelled,
+};
+
+inline const char* bacnetObjectListScanJobStatusText(
+    BacnetObjectListScanJobStatus status) {
+  switch (status) {
+    case BacnetObjectListScanJobStatus::Idle:
+      return "idle";
+    case BacnetObjectListScanJobStatus::Active:
+      return "active";
+    case BacnetObjectListScanJobStatus::Complete:
+      return "complete";
+    case BacnetObjectListScanJobStatus::Failed:
+      return "failed";
+    case BacnetObjectListScanJobStatus::Cancelled:
+      return "cancelled";
+  }
+  return "unknown";
+}
+
+enum class BacnetObjectListScanPhase : uint8_t {
+  Idle,
+  ReadObjectListCount,
+  ReadObjectListEntry,
+  ReadObjectName,
+  ReadDescription,
+  ReadPresentValue,
+  Complete,
+  Failed,
+  Cancelled,
+};
+
+inline const char* bacnetObjectListScanPhaseText(
+    BacnetObjectListScanPhase phase) {
+  switch (phase) {
+    case BacnetObjectListScanPhase::Idle:
+      return "idle";
+    case BacnetObjectListScanPhase::ReadObjectListCount:
+      return "read-object-list-count";
+    case BacnetObjectListScanPhase::ReadObjectListEntry:
+      return "read-object-list-entry";
+    case BacnetObjectListScanPhase::ReadObjectName:
+      return "read-object-name";
+    case BacnetObjectListScanPhase::ReadDescription:
+      return "read-description";
+    case BacnetObjectListScanPhase::ReadPresentValue:
+      return "read-present-value";
+    case BacnetObjectListScanPhase::Complete:
+      return "complete";
+    case BacnetObjectListScanPhase::Failed:
+      return "failed";
+    case BacnetObjectListScanPhase::Cancelled:
+      return "cancelled";
+  }
+  return "unknown";
+}
 
 enum class BacnetDeviceSessionReadStatus : uint8_t {
   Ack,
@@ -197,6 +260,14 @@ class BacnetDeviceSession {
       const BacnetObjectScanOptions& options,
       BacnetScannedObject* results,
       size_t resultCapacity);
+  bool beginObjectListScan(BacnetObjectListScanJob& job,
+                           const BacnetObjectScanOptions& options,
+                           BacnetScannedObject* results,
+                           size_t resultCapacity,
+                           uint32_t nowMs = millis());
+  void pollObjectListScan(BacnetObjectListScanJob& job,
+                          uint32_t nowMs = millis());
+  void cancelObjectListScan(BacnetObjectListScanJob& job);
   void poll(BacnetPropertySubscription& subscription,
             uint32_t nowMs = millis());
   void poll(BacnetPropertySubscription* subscriptions,
@@ -205,11 +276,26 @@ class BacnetDeviceSession {
 
  private:
   friend class BacnetPropertySubscription;
+  friend class BacnetObjectListScanJob;
 
   static const char* subscriptionPollTriggerText(
       BacnetPropertySubscription::PollTrigger trigger);
   static bool bacnetValueEquals(const BacnetValue& left,
                                 const BacnetValue& right);
+  bool tryStartObjectListScanRead(BacnetObjectListScanJob& job,
+                                  const BacnetPropertyRequest& request,
+                                  BacnetObjectListScanPhase phase,
+                                  uint32_t nowMs);
+  void pollInFlightObjectListScan(uint32_t nowMs);
+  void finishObjectListScanRead(BacnetObjectListScanJob& job,
+                                BacnetDeviceSessionReadStatus status,
+                                const BacnetValue* value,
+                                uint32_t nowMs);
+  void advanceObjectListScan(BacnetObjectListScanJob& job, uint32_t nowMs);
+  void completeObjectListScan(BacnetObjectListScanJob& job);
+  void failObjectListScan(BacnetObjectListScanJob& job,
+                          BacnetDeviceSessionReadStatus status);
+  void releaseObjectListScan(BacnetObjectListScanJob& job);
   void pollInFlightSubscription(uint32_t nowMs);
   void tryStartSubscriptionPoll(BacnetPropertySubscription& subscription,
                                 uint32_t nowMs);
@@ -226,6 +312,7 @@ class BacnetDeviceSession {
   uint16_t port_ = BacnetClient::kDefaultPort;
   uint8_t nextInvokeId_ = 1;
   BacnetPropertySubscription* inFlightSubscription_ = nullptr;
+  BacnetObjectListScanJob* inFlightObjectListScan_ = nullptr;
   size_t roundRobinSubscriptionIndex_ = 0;
 };
 
@@ -276,4 +363,58 @@ struct BacnetObjectScanResult {
   size_t found = 0;
   size_t stored = 0;
   bool truncated = false;
+};
+
+struct BacnetObjectListScanProgress {
+  BacnetObjectListScanJobStatus status = BacnetObjectListScanJobStatus::Idle;
+  BacnetObjectListScanPhase phase = BacnetObjectListScanPhase::Idle;
+  uint32_t currentIndex = 0;
+  bool requestInFlight = false;
+  BacnetObjectScanResult summary;
+};
+
+class BacnetObjectListScanJob {
+ public:
+  BacnetObjectListScanJob() = default;
+
+  BacnetObjectListScanJob(const BacnetObjectListScanJob&) = delete;
+  BacnetObjectListScanJob& operator=(const BacnetObjectListScanJob&) = delete;
+
+  BacnetObjectListScanJobStatus status() const;
+  BacnetObjectListScanPhase phase() const;
+  bool isIdle() const;
+  bool isActive() const;
+  bool isComplete() const;
+  bool isFailed() const;
+  bool isCancelled() const;
+  bool isTerminal() const;
+  bool requestInFlight() const;
+  uint32_t currentIndex() const;
+  const BacnetObjectScanResult& summary() const;
+  BacnetObjectListScanProgress progress() const;
+
+ private:
+  friend class BacnetDeviceSession;
+
+  void clear();
+  void clearInFlightState();
+
+  BacnetDeviceSession* session_ = nullptr;
+  BacnetObjectScanOptions options_;
+  BacnetScannedObject* results_ = nullptr;
+  size_t resultCapacity_ = 0;
+  BacnetObjectScanResult result_;
+  BacnetObjectListScanJobStatus status_ = BacnetObjectListScanJobStatus::Idle;
+  BacnetObjectListScanPhase phase_ = BacnetObjectListScanPhase::Idle;
+  uint32_t currentIndex_ = 0;
+  uint32_t maxIndex_ = 0;
+  bool requestInFlight_ = false;
+  uint8_t inFlightInvokeId_ = 0;
+  uint32_t inFlightStartedAtMs_ = 0;
+  BacnetPropertyRequest inFlightRequest_;
+  BacnetValue inFlightValue_;
+  BacnetObjectId currentObject_;
+  size_t currentStoreIndex_ = 0;
+  bool hasCurrentStoreIndex_ = false;
+  bool truncationLogged_ = false;
 };

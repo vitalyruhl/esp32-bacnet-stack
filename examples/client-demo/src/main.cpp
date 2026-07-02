@@ -30,7 +30,7 @@
 #endif
 
 #ifndef APP_VERSION
-#define APP_VERSION "0.14.0"
+#define APP_VERSION "0.15.0"
 #endif
 #ifndef APP_NAME
 #define APP_NAME "BACnet Client Discovery Demo"
@@ -137,7 +137,12 @@ static BacnetPropertyPreview bacnetDeviceProperties[kBacnetPreviewPropertyCount]
 static BacnetValueObjectPreview analogValues[kBacnetMaxFoundObjectsToDisplay];
 static BacnetValueObjectPreview multiStateValues[kBacnetMaxFoundObjectsToDisplay];
 static BacnetScannedObject scanBuffer[kBacnetScanResultCapacity];
+static BacnetObjectListScanJob scanJob;
 static std::unique_ptr<BacnetDeviceSession> activeBacnetSession;
+static const BacnetObjectType kValueObjectScanFilter[] = {
+    BacnetObjectType::AnalogValue,
+    BacnetObjectType::MultiStateValue,
+};
 
 static const char GLOBAL_THEME_OVERRIDE[] PROGMEM = R"CSS(
 .myCSSTempClass { color:rgb(198, 16, 16) !important; font-weight:900!important; font-size: 1.2rem!important; }
@@ -713,51 +718,41 @@ static void copyScanResultsToPreviews(const BacnetObjectScanResult& scan,
   }
 }
 
-static BacnetObjectScanResult scanValueObjects(BacnetDeviceSession& session,
-                                               size_t& analogStored,
-                                               size_t& multiStateStored) {
-  for (size_t i = 0; i < kBacnetScanResultCapacity; ++i) {
-    scanBuffer[i] = BacnetScannedObject{};
-  }
-
+static BacnetObjectScanOptions makeValueObjectScanOptions() {
   BacnetObjectScanOptions options;
-  const BacnetObjectType filter[] = {
-      BacnetObjectType::AnalogValue,
-      BacnetObjectType::MultiStateValue,
-  };
-  bacnetSetObjectTypeFilter(options, filter);
+  bacnetSetObjectTypeFilter(options, kValueObjectScanFilter);
   options.maxObjectListEntries = kBacnetMaxObjectListEntriesToInspect;
   options.readTimeoutMs = kBacnetScanReadTimeoutMs;
   options.readObjectName = true;
   options.readDescription = true;
   options.readPresentValue = true;
-
-  const BacnetObjectScanResult scan =
-      session.scanObjectList(options, scanBuffer, kBacnetScanResultCapacity);
-  copyScanResultsToPreviews(scan, analogStored, multiStateStored);
-  return scan;
+  return options;
 }
 
-static void scanSelectedBacnetDevice() {
-  if (!activeBacnetSession || !bacnetScanRequested || bacnetScanRunning ||
-      bacnetScanFinished) {
-    return;
+static bool beginValueObjectScan(BacnetDeviceSession& session) {
+  for (size_t i = 0; i < kBacnetScanResultCapacity; ++i) {
+    scanBuffer[i] = BacnetScannedObject{};
   }
 
-  bacnetScanRequested = false;
-  bacnetScanRunning = true;
-  bacnetGuiLog(LogLevel::Info, "scanning selected device %lu",
-               static_cast<unsigned long>(activeBacnetSession->deviceInstance()));
+  const BacnetObjectScanOptions options = makeValueObjectScanOptions();
+  if (!session.beginObjectListScan(scanJob, options, scanBuffer,
+                                   kBacnetScanResultCapacity)) {
+    bacnetGuiLog(LogLevel::Warn, "scan start failed status=%s",
+                 bacnetObjectListScanJobStatusText(scanJob.status()));
+    return scanJob.isTerminal();
+  }
+  return true;
+}
 
-  readDeviceProperties(*activeBacnetSession);
+static void finishValueObjectScan(BacnetDeviceSession& session,
+                                  const BacnetObjectScanResult& scan) {
   size_t analogStored = 0;
   size_t multiStateStored = 0;
-  const BacnetObjectScanResult scan =
-      scanValueObjects(*activeBacnetSession, analogStored, multiStateStored);
+  copyScanResultsToPreviews(scan, analogStored, multiStateStored);
 
   for (size_t i = 0; i < kBacnetMaxFoundObjectsToDisplay; ++i) {
-    subscribePresentValue(*activeBacnetSession, analogValues[i]);
-    subscribePresentValue(*activeBacnetSession, multiStateValues[i]);
+    subscribePresentValue(session, analogValues[i]);
+    subscribePresentValue(session, multiStateValues[i]);
   }
 
   bacnetScanFinished = true;
@@ -767,6 +762,36 @@ static void scanSelectedBacnetDevice() {
                static_cast<unsigned>(scan.stored),
                static_cast<unsigned>(analogStored),
                static_cast<unsigned>(multiStateStored));
+}
+
+static void scanSelectedBacnetDevice() {
+  if (!activeBacnetSession || bacnetScanFinished) {
+    return;
+  }
+
+  if (bacnetScanRequested && !bacnetScanRunning) {
+    bacnetScanRequested = false;
+    bacnetScanRunning = true;
+    bacnetGuiLog(
+        LogLevel::Info, "scanning selected device %lu",
+        static_cast<unsigned long>(activeBacnetSession->deviceInstance()));
+
+    readDeviceProperties(*activeBacnetSession);
+    if (!beginValueObjectScan(*activeBacnetSession)) {
+      bacnetScanRunning = false;
+      bacnetScanFinished = true;
+      return;
+    }
+  }
+
+  if (!bacnetScanRunning) {
+    return;
+  }
+
+  activeBacnetSession->pollObjectListScan(scanJob, millis());
+  if (scanJob.isTerminal()) {
+    finishValueObjectScan(*activeBacnetSession, scanJob.summary());
+  }
 }
 
 static void selectBacnetDevice(uint32_t deviceInstance,
@@ -799,6 +824,9 @@ static void selectBacnetDevice(uint32_t deviceInstance,
 }
 
 static void clearBacnetRuntime() {
+  if (activeBacnetSession && scanJob.isActive()) {
+    activeBacnetSession->cancelObjectListScan(scanJob);
+  }
   resetValueObjects(analogValues, kBacnetMaxFoundObjectsToDisplay);
   resetValueObjects(multiStateValues, kBacnetMaxFoundObjectsToDisplay);
   activeBacnetSession.reset();
