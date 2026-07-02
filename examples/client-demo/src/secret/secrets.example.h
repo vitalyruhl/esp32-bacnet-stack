@@ -27,4 +27,5 @@
 // Optional BACnet validation target. Keep real local values in secrets.h.
 #define BACNET_WHOIS_DESTINATION "192.0.2.255"
 #define BACNET_TARGET_ADDRESS "192.0.2.101"
-// #define BACNET_ALLOW_CONFIGURED_TARGET_FALLBACK 1
+// #define BACNET_TARGET_DEVICE_INSTANCE 9001
+// #define BACNET_TARGET_PORT 47808
