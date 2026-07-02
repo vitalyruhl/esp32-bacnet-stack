@@ -49,6 +49,7 @@ coverage are still evolving.
 | --- | --- |
 | `src/` | Library headers and implementation |
 | `examples/client-demo/` | Minimal BACnet client role demo |
+| `examples/hil-wago-client-acceptance/` | Local ESP32/WAGO client acceptance HIL runner |
 | `examples/server-demo/` | Minimal BACnet server role demo |
 | `test/` | PlatformIO Unity tests |
 | `docs/` | Project documentation |
