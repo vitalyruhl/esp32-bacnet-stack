@@ -1,0 +1,4 @@
+OBJECT_MANAGER;VERSION;2;
+Device;Name;FB Instance Name;Mapping Variable Name;Date List;Description;Object Identifier;Object Name;Object Type;Present Value;Time Before Operation;
+BACNet_Testserver;callendar_0;callendar_0;;;;25165824;callendar_0;CALENDAR;false;0;
+BACNet_Testserver;callendar_1;callendar_1;;;;25165825;callendar_1;CALENDAR;false;0;
