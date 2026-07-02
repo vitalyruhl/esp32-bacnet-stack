@@ -37,7 +37,7 @@ write flows, and server MVP remain future work.
 | Examples / validation | `examples/client-demo` | ✅ Implemented | End-to-end client demo with discovery, scan, and process-value updates. |
 | Examples / validation | `examples/hil-wago-client-acceptance` | 🧪 Local HIL validated | Local hardware acceptance runner for client scenarios. |
 | Examples / validation | HIL scenario S01 non-blocking object-list scan | 🧪 Local HIL validated | Validated on local ESP32/BACnet-IP target setup. |
-| Examples / validation | HIL scenario S02 property-list discovery and safe read-all | ✅ Implemented | Local opt-in scenario in the acceptance runner; skipped by default unless enabled. |
+| Examples / validation | HIL scenario S02 common process present-value reads | ✅ Implemented | Enabled by default in the local secrets template; can be disabled with `HIL_ENABLE_PROCESS_PRESENT_VALUE_READS`. |
 | Examples / validation | Future HIL scenarios S03-S08 | ⏳ Planned | Present as scenario blocks and skipped by default unless enabled. |
 | Server / transports | BACnet/IP server role | 🧱 Placeholder | Placeholder role exists; not a completed server feature set. |
 | Server / transports | Server MVP | ⏳ Planned | Planned after client runtime completion milestones. |
