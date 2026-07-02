@@ -105,6 +105,54 @@ inline const char* bacnetReadStatusText(BacnetDeviceSessionReadStatus status) {
   return "unknown";
 }
 
+enum class BacnetPropertyReadStatus : uint8_t {
+  Ack,
+  UnsupportedProperty,
+  Timeout,
+  Error,
+  Reject,
+  Abort,
+  DecodeError,
+  EmptyValue,
+  UnsupportedDatatype,
+  ArrayIndexNotSupported,
+  SendFailed,
+  Busy,
+  Skipped,
+};
+
+inline const char* bacnetPropertyReadStatusText(BacnetPropertyReadStatus status) {
+  switch (status) {
+    case BacnetPropertyReadStatus::Ack:
+      return "ok";
+    case BacnetPropertyReadStatus::UnsupportedProperty:
+      return "unsupported-property";
+    case BacnetPropertyReadStatus::Timeout:
+      return "timeout";
+    case BacnetPropertyReadStatus::Error:
+      return "error";
+    case BacnetPropertyReadStatus::Reject:
+      return "reject";
+    case BacnetPropertyReadStatus::Abort:
+      return "abort";
+    case BacnetPropertyReadStatus::DecodeError:
+      return "decode-error";
+    case BacnetPropertyReadStatus::EmptyValue:
+      return "empty";
+    case BacnetPropertyReadStatus::UnsupportedDatatype:
+      return "unsupported-datatype";
+    case BacnetPropertyReadStatus::ArrayIndexNotSupported:
+      return "array-index-not-supported";
+    case BacnetPropertyReadStatus::SendFailed:
+      return "send-failed";
+    case BacnetPropertyReadStatus::Busy:
+      return "busy";
+    case BacnetPropertyReadStatus::Skipped:
+      return "skipped";
+  }
+  return "unknown";
+}
+
 static constexpr uint32_t kBacnetDefaultReadTimeoutMs = 1000;
 
 struct BacnetSubscribeOptions {
@@ -148,6 +196,28 @@ struct BacnetSubscriptionNotification {
   BacnetSubscriptionNotificationReason reason =
       BacnetSubscriptionNotificationReason::None;
   void* userData = nullptr;
+};
+
+struct BacnetPropertyListReadResult {
+  BacnetPropertyReadStatus status = BacnetPropertyReadStatus::Skipped;
+  uint32_t advertised = 0;
+  size_t stored = 0;
+  bool truncated = false;
+};
+
+struct BacnetPropertyReadResult {
+  BacnetPropertyId propertyId = BacnetPropertyId::ObjectName;
+  BacnetPropertyReadStatus status = BacnetPropertyReadStatus::Skipped;
+  BacnetValue value;
+};
+
+struct BacnetPropertyReadAllResult {
+  size_t requested = 0;
+  size_t attempted = 0;
+  size_t stored = 0;
+  size_t acked = 0;
+  size_t failed = 0;
+  bool truncated = false;
 };
 
 using BacnetSubscriptionCallback =
@@ -256,6 +326,32 @@ class BacnetDeviceSession {
       BacnetPropertyId property, BacnetValue& value,
       uint32_t timeoutMs = kDefaultReadTimeoutMs,
       uint32_t arrayIndex = kBacnetNoArrayIndex);
+    BacnetPropertyListReadResult readPropertyList(
+      BacnetObjectId object,
+      BacnetPropertyId* properties,
+      size_t propertyCapacity,
+      uint32_t timeoutMs = kDefaultReadTimeoutMs);
+    BacnetPropertyListReadResult readPropertyList(
+      BacnetObjectType objectType,
+      uint32_t objectInstance,
+      BacnetPropertyId* properties,
+      size_t propertyCapacity,
+      uint32_t timeoutMs = kDefaultReadTimeoutMs);
+    BacnetPropertyReadAllResult readAllProperties(
+      BacnetObjectId object,
+      const BacnetPropertyId* properties,
+      size_t propertyCount,
+      BacnetPropertyReadResult* results,
+      size_t resultCapacity,
+      uint32_t timeoutMs = kDefaultReadTimeoutMs);
+    BacnetPropertyReadAllResult readAllProperties(
+      BacnetObjectType objectType,
+      uint32_t objectInstance,
+      const BacnetPropertyId* properties,
+      size_t propertyCount,
+      BacnetPropertyReadResult* results,
+      size_t resultCapacity,
+      uint32_t timeoutMs = kDefaultReadTimeoutMs);
   BacnetObjectScanResult scanObjectList(
       const BacnetObjectScanOptions& options,
       BacnetScannedObject* results,
@@ -282,6 +378,12 @@ class BacnetDeviceSession {
       BacnetPropertySubscription::PollTrigger trigger);
   static bool bacnetValueEquals(const BacnetValue& left,
                                 const BacnetValue& right);
+    BacnetPropertyReadStatus readPropertyDetailed(
+      const BacnetPropertyRequest& request,
+      BacnetValue& value,
+      uint32_t timeoutMs,
+      uint32_t& errorClass,
+      uint32_t& errorCode);
   bool tryStartObjectListScanRead(BacnetObjectListScanJob& job,
                                   const BacnetPropertyRequest& request,
                                   BacnetObjectListScanPhase phase,

@@ -24,15 +24,36 @@ struct BacnetObjectId {
 };
 
 enum class BacnetObjectType : uint16_t {
+  AnalogInput = 0,
+  AnalogOutput = 1,
   AnalogValue = 2,
+  BinaryInput = 3,
+  BinaryOutput = 4,
+  BinaryValue = 5,
   Device = 8,
+  MultiStateInput = 13,
+  MultiStateOutput = 14,
   MultiStateValue = 19,
 };
 
 inline const char* bacnetObjectTypeText(BacnetObjectType objectType) {
   switch (objectType) {
+    case BacnetObjectType::AnalogInput:
+      return "analog-input";
+    case BacnetObjectType::AnalogOutput:
+      return "analog-output";
     case BacnetObjectType::AnalogValue:
       return "analog-value";
+    case BacnetObjectType::BinaryInput:
+      return "binary-input";
+    case BacnetObjectType::BinaryOutput:
+      return "binary-output";
+    case BacnetObjectType::BinaryValue:
+      return "binary-value";
+    case BacnetObjectType::MultiStateInput:
+      return "multi-state-input";
+    case BacnetObjectType::MultiStateOutput:
+      return "multi-state-output";
     case BacnetObjectType::MultiStateValue:
       return "multi-state-value";
     case BacnetObjectType::Device:
@@ -105,6 +126,9 @@ enum class BacnetReadPropertyPollStatus {
   None,
   Ack,
   Error,
+  Reject,
+  Abort,
+  DecodeError,
 };
 
 class BacnetClient {
@@ -143,9 +167,19 @@ class BacnetClient {
   BacnetReadPropertyPollStatus pollReadPropertyStatus(
       BacnetValue& value, uint8_t expectedInvokeId,
       const BacnetPropertyRequest& expectedRequest);
+    BacnetReadPropertyPollStatus pollReadPropertyStatus(
+      BacnetValue& value, uint8_t expectedInvokeId,
+      const BacnetPropertyRequest& expectedRequest,
+      uint32_t* errorClass,
+      uint32_t* errorCode);
   BacnetReadPropertyPollStatus pollReadPropertyStatus(
       BacnetValue& value, uint8_t expectedInvokeId,
       BacnetPropertyId expectedProperty);
+    BacnetReadPropertyPollStatus pollReadPropertyStatus(
+      BacnetValue& value, uint8_t expectedInvokeId,
+      BacnetPropertyId expectedProperty,
+      uint32_t* errorClass,
+      uint32_t* errorCode);
 
   static size_t buildWhoIsRequest(uint8_t* buffer, size_t bufferSize);
   static bool parseIAmResponse(const uint8_t* buffer, size_t length,
@@ -169,6 +203,11 @@ class BacnetClient {
   static bool parseReadPropertyError(const uint8_t* buffer, size_t length,
                                      uint8_t expectedInvokeId,
                                      BacnetValue& value);
+  static bool parseReadPropertyError(const uint8_t* buffer, size_t length,
+                                     uint8_t expectedInvokeId,
+                                     BacnetValue& value,
+                                     uint32_t* errorClass,
+                                     uint32_t* errorCode);
 
  private:
   static constexpr size_t kMaxDiscoveryPacketSize = 512;

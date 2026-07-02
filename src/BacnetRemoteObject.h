@@ -55,6 +55,16 @@ class BacnetRemoteObject {
   BacnetDeviceSessionReadStatus readPropertyList(
       BacnetValue& value,
       uint32_t timeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs) const;
+  BacnetPropertyListReadResult readPropertyList(
+      BacnetPropertyId* properties,
+      size_t propertyCapacity,
+      uint32_t timeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs) const;
+  BacnetPropertyReadAllResult readAllProperties(
+      const BacnetPropertyId* properties,
+      size_t propertyCount,
+      BacnetPropertyReadResult* results,
+      size_t resultCapacity,
+      uint32_t timeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs) const;
 
  private:
   BacnetDeviceSession* session_;

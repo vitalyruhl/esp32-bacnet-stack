@@ -440,6 +440,58 @@ void test_bacnet_client_parses_read_property_error() {
                           static_cast<uint8_t>(value.type));
 }
 
+  void test_bacnet_client_parses_read_property_error_codes() {
+    const uint8_t response[] = {
+      0x81, 0x0A, 0x00, 0x0D, 0x01, 0x00, 0x50,
+      0x04, 0x0C, 0x91, 0x02, 0x91, 0x20,
+    };
+    BacnetValue value;
+    uint32_t errorClass = 0;
+    uint32_t errorCode = 0;
+
+    TEST_ASSERT_TRUE(BacnetClient::parseReadPropertyError(response,
+                              sizeof(response), 4,
+                              value, &errorClass,
+                              &errorCode));
+    TEST_ASSERT_EQUAL_UINT32(2, errorClass);
+    TEST_ASSERT_EQUAL_UINT32(32, errorCode);
+  }
+
+  void test_bacnet_client_parses_property_list_count_ack() {
+    const uint8_t response[] = {
+      0x81, 0x0A, 0x00, 0x17, 0x01, 0x00, 0x30, 0x09, 0x0C, 0x02, 0x00, 0x04,
+      0xD2, 0x1A, 0x01, 0x73, 0x29, 0x00, 0x3E, 0x21, 0x03, 0x3F,
+    };
+    const BacnetPropertyRequest request{
+      BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::Device), 1234},
+      BacnetPropertyId::PropertyList, 0};
+    BacnetValue value;
+
+    TEST_ASSERT_TRUE(BacnetClient::parseReadPropertyAck(
+      response, sizeof(response), 9, request, value));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetValueType::Unsigned),
+                static_cast<uint8_t>(value.type));
+    TEST_ASSERT_EQUAL_UINT32(3, value.unsignedValue);
+  }
+
+  void test_bacnet_client_parses_property_list_entry_ack() {
+    const uint8_t response[] = {
+      0x81, 0x0A, 0x00, 0x17, 0x01, 0x00, 0x30, 0x0A, 0x0C, 0x02, 0x00, 0x04,
+      0xD2, 0x1A, 0x01, 0x73, 0x29, 0x01, 0x3E, 0x91, 0x4D, 0x3F,
+    };
+    const BacnetPropertyRequest request{
+      BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::Device), 1234},
+      BacnetPropertyId::PropertyList, 1};
+    BacnetValue value;
+
+    TEST_ASSERT_TRUE(BacnetClient::parseReadPropertyAck(
+      response, sizeof(response), 10, request, value));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetValueType::Enumerated),
+                static_cast<uint8_t>(value.type));
+    TEST_ASSERT_EQUAL_UINT32(
+      static_cast<uint32_t>(BacnetPropertyId::ObjectName), value.unsignedValue);
+  }
+
 void test_bacnet_device_session_keeps_remote_device_metadata() {
   BacnetClient client;
   IPAddress address(192, 168, 1, 50);
@@ -542,6 +594,51 @@ void test_bacnet_property_read_reports_send_failure() {
   TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetValueType::Empty),
                           static_cast<uint8_t>(value.type));
 }
+
+  void test_bacnet_remote_object_property_list_reports_send_failure() {
+    BacnetClient client;
+    BacnetDeviceSession session(client, 1234, IPAddress(0, 0, 0, 0));
+    const BacnetRemoteObject object =
+      session.object(BacnetObjectType::AnalogValue, 200);
+    BacnetPropertyId properties[4] = {};
+
+    const BacnetPropertyListReadResult result =
+      object.readPropertyList(properties, 4, 0);
+
+    TEST_ASSERT_EQUAL_UINT8(
+      static_cast<uint8_t>(BacnetPropertyReadStatus::SendFailed),
+      static_cast<uint8_t>(result.status));
+    TEST_ASSERT_EQUAL_UINT32(0, static_cast<uint32_t>(result.advertised));
+    TEST_ASSERT_EQUAL_UINT32(0, static_cast<uint32_t>(result.stored));
+  }
+
+  void test_bacnet_remote_object_read_all_attempts_each_property() {
+    BacnetClient client;
+    BacnetDeviceSession session(client, 1234, IPAddress(0, 0, 0, 0));
+    const BacnetRemoteObject object =
+      session.object(BacnetObjectType::AnalogValue, 200);
+    const BacnetPropertyId properties[] = {
+      BacnetPropertyId::ObjectName,
+      BacnetPropertyId::PresentValue,
+    };
+    BacnetPropertyReadResult results[2] = {};
+
+    const BacnetPropertyReadAllResult summary = object.readAllProperties(
+      properties, 2, results, 2, 0);
+
+    TEST_ASSERT_EQUAL_UINT32(2, static_cast<uint32_t>(summary.requested));
+    TEST_ASSERT_EQUAL_UINT32(2, static_cast<uint32_t>(summary.attempted));
+    TEST_ASSERT_EQUAL_UINT32(2, static_cast<uint32_t>(summary.stored));
+    TEST_ASSERT_EQUAL_UINT32(0, static_cast<uint32_t>(summary.acked));
+    TEST_ASSERT_EQUAL_UINT32(2, static_cast<uint32_t>(summary.failed));
+    TEST_ASSERT_FALSE(summary.truncated);
+    TEST_ASSERT_EQUAL_UINT8(
+      static_cast<uint8_t>(BacnetPropertyReadStatus::SendFailed),
+      static_cast<uint8_t>(results[0].status));
+    TEST_ASSERT_EQUAL_UINT8(
+      static_cast<uint8_t>(BacnetPropertyReadStatus::SendFailed),
+      static_cast<uint8_t>(results[1].status));
+  }
 
 void test_bacnet_object_scan_options_defaults() {
   BacnetObjectScanOptions options;
@@ -992,12 +1089,17 @@ void setup() {
   RUN_TEST(test_bacnet_client_parses_object_list_entry_ack);
   RUN_TEST(test_bacnet_client_parses_object_list_ack);
   RUN_TEST(test_bacnet_client_parses_read_property_error);
+  RUN_TEST(test_bacnet_client_parses_read_property_error_codes);
+  RUN_TEST(test_bacnet_client_parses_property_list_count_ack);
+  RUN_TEST(test_bacnet_client_parses_property_list_entry_ack);
   RUN_TEST(test_bacnet_device_session_keeps_remote_device_metadata);
   RUN_TEST(test_bacnet_device_session_reports_send_failure);
   RUN_TEST(test_bacnet_device_session_creates_remote_object);
   RUN_TEST(test_bacnet_remote_object_creates_property_request);
   RUN_TEST(test_bacnet_remote_object_read_reports_send_failure);
   RUN_TEST(test_bacnet_property_read_reports_send_failure);
+  RUN_TEST(test_bacnet_remote_object_property_list_reports_send_failure);
+  RUN_TEST(test_bacnet_remote_object_read_all_attempts_each_property);
   RUN_TEST(test_bacnet_object_scan_options_defaults);
   RUN_TEST(test_bacnet_object_scan_options_filter_object_types);
   RUN_TEST(test_bacnet_scanned_object_defaults_are_skipped);

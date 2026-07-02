@@ -496,10 +496,24 @@ bool skipNpduAddress(const uint8_t* buffer, size_t length, size_t& offset) {
 
 const char* objectTypeName(uint16_t objectType) {
   switch (objectType) {
+    case static_cast<uint16_t>(BacnetObjectType::AnalogInput):
+      return "analog-input";
+    case static_cast<uint16_t>(BacnetObjectType::AnalogOutput):
+      return "analog-output";
     case static_cast<uint16_t>(BacnetObjectType::AnalogValue):
       return "analog-value";
+    case static_cast<uint16_t>(BacnetObjectType::BinaryInput):
+      return "binary-input";
+    case static_cast<uint16_t>(BacnetObjectType::BinaryOutput):
+      return "binary-output";
+    case static_cast<uint16_t>(BacnetObjectType::BinaryValue):
+      return "binary-value";
     case static_cast<uint16_t>(BacnetObjectType::Device):
       return "device";
+    case static_cast<uint16_t>(BacnetObjectType::MultiStateInput):
+      return "multi-state-input";
+    case static_cast<uint16_t>(BacnetObjectType::MultiStateOutput):
+      return "multi-state-output";
     case static_cast<uint16_t>(BacnetObjectType::MultiStateValue):
       return "multi-state-value";
     default:
@@ -560,6 +574,49 @@ const char* readPropertyUnexpectedStatus(const uint8_t* buffer, size_t length) {
     return "abort";
   }
   return "unexpected APDU";
+}
+
+enum class ReadPropertyResponseKind : uint8_t {
+  Unrelated,
+  Ack,
+  Error,
+  Reject,
+  Abort,
+};
+
+ReadPropertyResponseKind classifyReadPropertyResponse(
+    const uint8_t* buffer,
+    size_t length,
+    uint8_t expectedInvokeId) {
+  if (buffer == nullptr || length < 8 || buffer[0] != kBvlcTypeBacnetIp ||
+      (buffer[1] != kBvlcOriginalUnicastNpdu &&
+       buffer[1] != kBvlcOriginalBroadcastNpdu) ||
+      readUint16(&buffer[2]) != length) {
+    return ReadPropertyResponseKind::Unrelated;
+  }
+
+  size_t offset = 4;
+  if (!readNpduHeader(buffer, length, offset) || offset >= length) {
+    return ReadPropertyResponseKind::Unrelated;
+  }
+
+  const uint8_t apduType = buffer[offset] & 0xF0;
+  if (apduType == kApduComplexAck || apduType == kApduError) {
+    if (offset + 3 > length || buffer[offset + 1] != expectedInvokeId ||
+        buffer[offset + 2] != kServiceReadProperty) {
+      return ReadPropertyResponseKind::Unrelated;
+    }
+    return apduType == kApduComplexAck ? ReadPropertyResponseKind::Ack
+                                       : ReadPropertyResponseKind::Error;
+  }
+
+  if ((apduType == kApduReject || apduType == kApduAbort) &&
+      offset + 2 <= length && buffer[offset + 1] == expectedInvokeId) {
+    return apduType == kApduReject ? ReadPropertyResponseKind::Reject
+                                   : ReadPropertyResponseKind::Abort;
+  }
+
+  return ReadPropertyResponseKind::Unrelated;
 }
 }  // namespace
 
@@ -758,6 +815,14 @@ void BacnetClient::logReadPropertyTimeout(
 BacnetReadPropertyPollStatus BacnetClient::pollReadPropertyStatus(
     BacnetValue& value, uint8_t expectedInvokeId,
     const BacnetPropertyRequest& expectedRequest) {
+  return pollReadPropertyStatus(value, expectedInvokeId, expectedRequest,
+                                nullptr, nullptr);
+}
+
+BacnetReadPropertyPollStatus BacnetClient::pollReadPropertyStatus(
+    BacnetValue& value, uint8_t expectedInvokeId,
+    const BacnetPropertyRequest& expectedRequest, uint32_t* errorClass,
+    uint32_t* errorCode) {
   if (!running_) {
     return BacnetReadPropertyPollStatus::None;
   }
@@ -774,38 +839,69 @@ BacnetReadPropertyPollStatus BacnetClient::pollReadPropertyStatus(
     return BacnetReadPropertyPollStatus::None;
   }
 
-  if (parseReadPropertyAck(packet, static_cast<size_t>(bytesRead),
-                           expectedInvokeId, expectedRequest, value)) {
-    logger_.info("BACnet/ReadProperty", "ReadProperty %s,%lu %s = %s invoke %u",
-                 objectTypeName(expectedRequest.object.type),
-                 static_cast<unsigned long>(expectedRequest.object.instance),
-                 propertyName(expectedRequest.property), value.displayText(),
-                 static_cast<unsigned>(expectedInvokeId));
-    return BacnetReadPropertyPollStatus::Ack;
+  switch (classifyReadPropertyResponse(packet, static_cast<size_t>(bytesRead),
+                                       expectedInvokeId)) {
+    case ReadPropertyResponseKind::Ack:
+      if (parseReadPropertyAck(packet, static_cast<size_t>(bytesRead),
+                               expectedInvokeId, expectedRequest, value)) {
+        logger_.info("BACnet/ReadProperty",
+                     "ReadProperty %s,%lu %s = %s invoke %u",
+                     objectTypeName(expectedRequest.object.type),
+                     static_cast<unsigned long>(expectedRequest.object.instance),
+                     propertyName(expectedRequest.property), value.displayText(),
+                     static_cast<unsigned>(expectedInvokeId));
+        return BacnetReadPropertyPollStatus::Ack;
+      }
+      logger_.warn("BACnet/ReadProperty",
+                   "ReadProperty %s,%lu %s decode error invoke %u",
+                   objectTypeName(expectedRequest.object.type),
+                   static_cast<unsigned long>(expectedRequest.object.instance),
+                   propertyName(expectedRequest.property),
+                   static_cast<unsigned>(expectedInvokeId));
+      return BacnetReadPropertyPollStatus::DecodeError;
+    case ReadPropertyResponseKind::Error:
+      if (parseReadPropertyError(packet, static_cast<size_t>(bytesRead),
+                                 expectedInvokeId, value, errorClass,
+                                 errorCode)) {
+        logger_.warn("BACnet/ReadProperty",
+                     "ReadProperty %s,%lu %s error %s invoke %u",
+                     objectTypeName(expectedRequest.object.type),
+                     static_cast<unsigned long>(expectedRequest.object.instance),
+                     propertyName(expectedRequest.property), value.displayText(),
+                     static_cast<unsigned>(expectedInvokeId));
+        return BacnetReadPropertyPollStatus::Error;
+      }
+      logger_.warn("BACnet/ReadProperty",
+                   "ReadProperty %s,%lu %s malformed error invoke %u",
+                   objectTypeName(expectedRequest.object.type),
+                   static_cast<unsigned long>(expectedRequest.object.instance),
+                   propertyName(expectedRequest.property),
+                   static_cast<unsigned>(expectedInvokeId));
+      return BacnetReadPropertyPollStatus::DecodeError;
+    case ReadPropertyResponseKind::Reject:
+      setTextValue(value, BacnetValueType::Error, "reject");
+      return BacnetReadPropertyPollStatus::Reject;
+    case ReadPropertyResponseKind::Abort:
+      setTextValue(value, BacnetValueType::Error, "abort");
+      return BacnetReadPropertyPollStatus::Abort;
+    case ReadPropertyResponseKind::Unrelated:
+      return BacnetReadPropertyPollStatus::None;
   }
-  if (parseReadPropertyError(packet, static_cast<size_t>(bytesRead),
-                             expectedInvokeId, value)) {
-    logger_.warn("BACnet/ReadProperty",
-                 "ReadProperty %s,%lu %s error %s invoke %u",
-                 objectTypeName(expectedRequest.object.type),
-                 static_cast<unsigned long>(expectedRequest.object.instance),
-                 propertyName(expectedRequest.property), value.displayText(),
-                 static_cast<unsigned>(expectedInvokeId));
-    return BacnetReadPropertyPollStatus::Error;
-  }
-  logger_.warn("BACnet/ReadProperty",
-               "ReadProperty %s,%lu %s %s invoke %u",
-               objectTypeName(expectedRequest.object.type),
-               static_cast<unsigned long>(expectedRequest.object.instance),
-               propertyName(expectedRequest.property),
-               readPropertyUnexpectedStatus(packet, static_cast<size_t>(bytesRead)),
-               static_cast<unsigned>(expectedInvokeId));
+
   return BacnetReadPropertyPollStatus::None;
 }
 
 BacnetReadPropertyPollStatus BacnetClient::pollReadPropertyStatus(
     BacnetValue& value, uint8_t expectedInvokeId,
     BacnetPropertyId expectedProperty) {
+  return pollReadPropertyStatus(value, expectedInvokeId, expectedProperty,
+                                nullptr, nullptr);
+}
+
+BacnetReadPropertyPollStatus BacnetClient::pollReadPropertyStatus(
+    BacnetValue& value, uint8_t expectedInvokeId,
+    BacnetPropertyId expectedProperty, uint32_t* errorClass,
+    uint32_t* errorCode) {
   if (!running_) {
     return BacnetReadPropertyPollStatus::None;
   }
@@ -822,24 +918,45 @@ BacnetReadPropertyPollStatus BacnetClient::pollReadPropertyStatus(
     return BacnetReadPropertyPollStatus::None;
   }
 
-  if (parseReadPropertyAck(packet, static_cast<size_t>(bytesRead),
-                           expectedInvokeId, expectedProperty, value)) {
-    logger_.info("BACnet/ReadProperty", "ReadProperty %s = %s invoke %u",
-                 propertyName(expectedProperty), value.displayText(),
-                 static_cast<unsigned>(expectedInvokeId));
-    return BacnetReadPropertyPollStatus::Ack;
+  switch (classifyReadPropertyResponse(packet, static_cast<size_t>(bytesRead),
+                                       expectedInvokeId)) {
+    case ReadPropertyResponseKind::Ack:
+      if (parseReadPropertyAck(packet, static_cast<size_t>(bytesRead),
+                               expectedInvokeId, expectedProperty, value)) {
+        logger_.info("BACnet/ReadProperty", "ReadProperty %s = %s invoke %u",
+                     propertyName(expectedProperty), value.displayText(),
+                     static_cast<unsigned>(expectedInvokeId));
+        return BacnetReadPropertyPollStatus::Ack;
+      }
+      logger_.warn("BACnet/ReadProperty",
+                   "ReadProperty %s decode error invoke %u",
+                   propertyName(expectedProperty),
+                   static_cast<unsigned>(expectedInvokeId));
+      return BacnetReadPropertyPollStatus::DecodeError;
+    case ReadPropertyResponseKind::Error:
+      if (parseReadPropertyError(packet, static_cast<size_t>(bytesRead),
+                                 expectedInvokeId, value, errorClass,
+                                 errorCode)) {
+        logger_.warn("BACnet/ReadProperty", "ReadProperty %s error %s invoke %u",
+                     propertyName(expectedProperty), value.displayText(),
+                     static_cast<unsigned>(expectedInvokeId));
+        return BacnetReadPropertyPollStatus::Error;
+      }
+      logger_.warn("BACnet/ReadProperty",
+                   "ReadProperty %s malformed error invoke %u",
+                   propertyName(expectedProperty),
+                   static_cast<unsigned>(expectedInvokeId));
+      return BacnetReadPropertyPollStatus::DecodeError;
+    case ReadPropertyResponseKind::Reject:
+      setTextValue(value, BacnetValueType::Error, "reject");
+      return BacnetReadPropertyPollStatus::Reject;
+    case ReadPropertyResponseKind::Abort:
+      setTextValue(value, BacnetValueType::Error, "abort");
+      return BacnetReadPropertyPollStatus::Abort;
+    case ReadPropertyResponseKind::Unrelated:
+      return BacnetReadPropertyPollStatus::None;
   }
-  if (parseReadPropertyError(packet, static_cast<size_t>(bytesRead),
-                             expectedInvokeId, value)) {
-    logger_.warn("BACnet/ReadProperty", "ReadProperty %s error %s invoke %u",
-                 propertyName(expectedProperty), value.displayText(),
-                 static_cast<unsigned>(expectedInvokeId));
-    return BacnetReadPropertyPollStatus::Error;
-  }
-  logger_.warn("BACnet/ReadProperty", "ReadProperty %s %s invoke %u",
-               propertyName(expectedProperty),
-               readPropertyUnexpectedStatus(packet, static_cast<size_t>(bytesRead)),
-               static_cast<unsigned>(expectedInvokeId));
+
   return BacnetReadPropertyPollStatus::None;
 }
 
@@ -1068,6 +1185,15 @@ bool BacnetClient::parseReadPropertyAck(const uint8_t* buffer, size_t length,
 bool BacnetClient::parseReadPropertyError(const uint8_t* buffer, size_t length,
                                           uint8_t expectedInvokeId,
                                           BacnetValue& value) {
+  return parseReadPropertyError(buffer, length, expectedInvokeId, value,
+                                nullptr, nullptr);
+}
+
+bool BacnetClient::parseReadPropertyError(const uint8_t* buffer, size_t length,
+                                          uint8_t expectedInvokeId,
+                                          BacnetValue& value,
+                                          uint32_t* errorClass,
+                                          uint32_t* errorCode) {
   value = BacnetValue{};
   if (buffer == nullptr || length < 13 || buffer[0] != kBvlcTypeBacnetIp ||
       buffer[1] != kBvlcOriginalUnicastNpdu || readUint16(&buffer[2]) != length) {
@@ -1082,18 +1208,30 @@ bool BacnetClient::parseReadPropertyError(const uint8_t* buffer, size_t length,
     return false;
   }
 
-  uint32_t errorClass = 0;
-  uint32_t errorCode = 0;
+  uint32_t parsedErrorClass = 0;
+  uint32_t parsedErrorCode = 0;
   char text[BacnetValue::kMaxTextLength] = {};
   if (readApplicationValue(buffer, length, offset, kApplicationTagEnumerated,
-                           errorClass) &&
+                           parsedErrorClass) &&
       readApplicationValue(buffer, length, offset, kApplicationTagEnumerated,
-                           errorCode)) {
+                           parsedErrorCode)) {
     std::snprintf(text, sizeof(text), "error class %lu code %lu",
-                  static_cast<unsigned long>(errorClass),
-                  static_cast<unsigned long>(errorCode));
+                  static_cast<unsigned long>(parsedErrorClass),
+                  static_cast<unsigned long>(parsedErrorCode));
+    if (errorClass != nullptr) {
+      *errorClass = parsedErrorClass;
+    }
+    if (errorCode != nullptr) {
+      *errorCode = parsedErrorCode;
+    }
   } else {
     std::snprintf(text, sizeof(text), "error");
+    if (errorClass != nullptr) {
+      *errorClass = 0;
+    }
+    if (errorCode != nullptr) {
+      *errorCode = 0;
+    }
   }
 
   return setTextValue(value, BacnetValueType::Error, text);

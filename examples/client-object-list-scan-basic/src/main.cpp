@@ -18,7 +18,7 @@
 #endif
 
 #ifndef APP_VERSION
-#define APP_VERSION "0.15.0"
+#define APP_VERSION "0.17.0"
 #endif
 
 #ifndef MY_USE_DHCP
@@ -124,9 +124,23 @@ void printObjectId(BacnetObjectId objectId) {
 }
 
 bool isPresentValueSubscriptionCandidate(BacnetObjectId objectId) {
-  return objectId.type == static_cast<uint16_t>(BacnetObjectType::AnalogValue) ||
-         objectId.type ==
-             static_cast<uint16_t>(BacnetObjectType::MultiStateValue);
+  return objectId.type == static_cast<uint16_t>(BacnetObjectType::AnalogInput) ||
+     objectId.type ==
+       static_cast<uint16_t>(BacnetObjectType::AnalogOutput) ||
+     objectId.type ==
+       static_cast<uint16_t>(BacnetObjectType::AnalogValue) ||
+     objectId.type ==
+       static_cast<uint16_t>(BacnetObjectType::BinaryInput) ||
+     objectId.type ==
+       static_cast<uint16_t>(BacnetObjectType::BinaryOutput) ||
+     objectId.type ==
+       static_cast<uint16_t>(BacnetObjectType::BinaryValue) ||
+     objectId.type ==
+       static_cast<uint16_t>(BacnetObjectType::MultiStateInput) ||
+     objectId.type ==
+       static_cast<uint16_t>(BacnetObjectType::MultiStateOutput) ||
+     objectId.type ==
+       static_cast<uint16_t>(BacnetObjectType::MultiStateValue);
 }
 
 void printSubscriptionReason(const BacnetSubscriptionNotification& notification) {
@@ -245,8 +259,8 @@ bool startPresentValueSubscription(BacnetDeviceSession& session,
     return true;
   }
 
-  Serial.println("[W] no scanned analog-value or multi-state-value object for "
-                 "present-value subscription");
+  Serial.println("[W] no scanned process object found for present-value "
+                 "subscription");
   return false;
 }
 
@@ -275,7 +289,14 @@ void runScan() {
   Serial.println(static_cast<uint16_t>(BACNET_TARGET_PORT));
 
   const BacnetObjectType valueObjectTypes[] = {
+      BacnetObjectType::AnalogInput,
+      BacnetObjectType::AnalogOutput,
       BacnetObjectType::AnalogValue,
+      BacnetObjectType::BinaryInput,
+      BacnetObjectType::BinaryOutput,
+      BacnetObjectType::BinaryValue,
+      BacnetObjectType::MultiStateInput,
+      BacnetObjectType::MultiStateOutput,
       BacnetObjectType::MultiStateValue,
   };
 
