@@ -28,25 +28,18 @@ uint32_t BacnetProperty::arrayIndex() const {
 }
 
 BacnetPropertySubscription BacnetProperty::subscribe(
-    BacnetSubscriptionCallback callback,
-    void* userData,
-    const BacnetSubscribeOptions& options) const {
-  BacnetPropertySubscription subscription(*session_, objectId_, propertyId_,
-                                          arrayIndex_, options, callback,
-                                          userData);
+  BacnetSubscriptionCallback callback,
+  void* userData,
+  const BacnetSubscribeOptions& options) const {
+  BacnetPropertySubscription subscription(*session_, objectId_, propertyId_, arrayIndex_, options, callback, userData);
   session_->client().logger().info(
-      "BACnet/Subscription", "subscription created %s,%lu %u array=%lu",
-      bacnetObjectTypeText(objectId_.type),
-      static_cast<unsigned long>(objectId_.instance),
-      static_cast<unsigned>(propertyId_),
-      static_cast<unsigned long>(arrayIndex_));
+    "BACnet/Subscription", "subscription created %s,%lu %u array=%lu", bacnetObjectTypeText(objectId_.type), static_cast<unsigned long>(objectId_.instance), static_cast<unsigned>(propertyId_), static_cast<unsigned long>(arrayIndex_));
   return subscription;
 }
 
 BacnetDeviceSessionReadStatus BacnetProperty::read(
-    BacnetValue& value, uint32_t timeoutMs) const {
-  return session_->readProperty(objectId_, propertyId_, value, timeoutMs,
-                                arrayIndex_);
+  BacnetValue& value, uint32_t timeoutMs) const {
+  return session_->readProperty(objectId_, propertyId_, value, timeoutMs, arrayIndex_);
 }
 
 BacnetRemoteObject::BacnetRemoteObject(BacnetDeviceSession& session,
@@ -63,42 +56,36 @@ BacnetProperty BacnetRemoteObject::property(BacnetPropertyId id,
 }
 
 BacnetDeviceSessionReadStatus BacnetRemoteObject::readProperty(
-    BacnetPropertyId id, BacnetValue& value, uint32_t timeoutMs,
-    uint32_t arrayIndex) const {
+  BacnetPropertyId id, BacnetValue& value, uint32_t timeoutMs, uint32_t arrayIndex) const {
   return session_->readProperty(objectId_, id, value, timeoutMs, arrayIndex);
 }
 
 BacnetDeviceSessionReadStatus BacnetRemoteObject::readObjectName(
-    BacnetValue& value, uint32_t timeoutMs) const {
+  BacnetValue& value, uint32_t timeoutMs) const {
   return readProperty(BacnetPropertyId::ObjectName, value, timeoutMs);
 }
 
 BacnetDeviceSessionReadStatus BacnetRemoteObject::readDescription(
-    BacnetValue& value, uint32_t timeoutMs) const {
+  BacnetValue& value, uint32_t timeoutMs) const {
   return readProperty(BacnetPropertyId::Description, value, timeoutMs);
 }
 
 BacnetDeviceSessionReadStatus BacnetRemoteObject::readPresentValue(
-    BacnetValue& value, uint32_t timeoutMs) const {
+  BacnetValue& value, uint32_t timeoutMs) const {
   return readProperty(BacnetPropertyId::PresentValue, value, timeoutMs);
 }
 
 BacnetDeviceSessionReadStatus BacnetRemoteObject::readPropertyList(
-    BacnetValue& value, uint32_t timeoutMs) const {
+  BacnetValue& value, uint32_t timeoutMs) const {
   return readProperty(BacnetPropertyId::PropertyList, value, timeoutMs);
 }
 
 BacnetPropertyListReadResult BacnetRemoteObject::readPropertyList(
-    BacnetPropertyId* properties, size_t propertyCapacity,
-    uint32_t timeoutMs) const {
-  return session_->readPropertyList(objectId_, properties, propertyCapacity,
-                                    timeoutMs);
+  BacnetPropertyId* properties, size_t propertyCapacity, uint32_t timeoutMs) const {
+  return session_->readPropertyList(objectId_, properties, propertyCapacity, timeoutMs);
 }
 
 BacnetPropertyReadAllResult BacnetRemoteObject::readAllProperties(
-    const BacnetPropertyId* properties, size_t propertyCount,
-    BacnetPropertyReadResult* results, size_t resultCapacity,
-    uint32_t timeoutMs) const {
-  return session_->readAllProperties(objectId_, properties, propertyCount,
-                                     results, resultCapacity, timeoutMs);
+  const BacnetPropertyId* properties, size_t propertyCount, BacnetPropertyReadResult* results, size_t resultCapacity, uint32_t timeoutMs) const {
+  return session_->readAllProperties(objectId_, properties, propertyCount, results, resultCapacity, timeoutMs);
 }

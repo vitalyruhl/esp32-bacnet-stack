@@ -7,24 +7,22 @@
 #include <cstdint>
 
 class BacnetProperty {
- public:
-  BacnetProperty(BacnetDeviceSession& session, BacnetObjectId objectId,
-                 BacnetPropertyId propertyId,
-                 uint32_t arrayIndex = kBacnetNoArrayIndex);
+public:
+  BacnetProperty(BacnetDeviceSession& session, BacnetObjectId objectId, BacnetPropertyId propertyId, uint32_t arrayIndex = kBacnetNoArrayIndex);
 
   BacnetPropertyRequest request() const;
   BacnetObjectId objectId() const;
   BacnetPropertyId propertyId() const;
   uint32_t arrayIndex() const;
   BacnetPropertySubscription subscribe(
-      BacnetSubscriptionCallback callback,
-      void* userData = nullptr,
-      const BacnetSubscribeOptions& options = BacnetSubscribeOptions{}) const;
+    BacnetSubscriptionCallback callback,
+    void* userData = nullptr,
+    const BacnetSubscribeOptions& options = BacnetSubscribeOptions{}) const;
   BacnetDeviceSessionReadStatus read(
-      BacnetValue& value,
-      uint32_t timeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs) const;
+    BacnetValue& value,
+    uint32_t timeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs) const;
 
- private:
+private:
   BacnetDeviceSession* session_;
   BacnetObjectId objectId_;
   BacnetPropertyId propertyId_ = BacnetPropertyId::ObjectName;
@@ -32,41 +30,39 @@ class BacnetProperty {
 };
 
 class BacnetRemoteObject {
- public:
+public:
   BacnetRemoteObject(BacnetDeviceSession& session, BacnetObjectId objectId);
 
   BacnetObjectId objectId() const;
   BacnetProperty property(
-      BacnetPropertyId id,
-      uint32_t arrayIndex = kBacnetNoArrayIndex) const;
+    BacnetPropertyId id,
+    uint32_t arrayIndex = kBacnetNoArrayIndex) const;
   BacnetDeviceSessionReadStatus readProperty(
-      BacnetPropertyId id, BacnetValue& value,
-      uint32_t timeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs,
-      uint32_t arrayIndex = kBacnetNoArrayIndex) const;
+    BacnetPropertyId id, BacnetValue& value, uint32_t timeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs, uint32_t arrayIndex = kBacnetNoArrayIndex) const;
   BacnetDeviceSessionReadStatus readObjectName(
-      BacnetValue& value,
-      uint32_t timeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs) const;
+    BacnetValue& value,
+    uint32_t timeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs) const;
   BacnetDeviceSessionReadStatus readDescription(
-      BacnetValue& value,
-      uint32_t timeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs) const;
+    BacnetValue& value,
+    uint32_t timeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs) const;
   BacnetDeviceSessionReadStatus readPresentValue(
-      BacnetValue& value,
-      uint32_t timeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs) const;
+    BacnetValue& value,
+    uint32_t timeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs) const;
   BacnetDeviceSessionReadStatus readPropertyList(
-      BacnetValue& value,
-      uint32_t timeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs) const;
+    BacnetValue& value,
+    uint32_t timeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs) const;
   BacnetPropertyListReadResult readPropertyList(
-      BacnetPropertyId* properties,
-      size_t propertyCapacity,
-      uint32_t timeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs) const;
+    BacnetPropertyId* properties,
+    size_t propertyCapacity,
+    uint32_t timeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs) const;
   BacnetPropertyReadAllResult readAllProperties(
-      const BacnetPropertyId* properties,
-      size_t propertyCount,
-      BacnetPropertyReadResult* results,
-      size_t resultCapacity,
-      uint32_t timeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs) const;
+    const BacnetPropertyId* properties,
+    size_t propertyCount,
+    BacnetPropertyReadResult* results,
+    size_t resultCapacity,
+    uint32_t timeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs) const;
 
- private:
+private:
   BacnetDeviceSession* session_;
   BacnetObjectId objectId_;
 };

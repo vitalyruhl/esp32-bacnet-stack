@@ -5,7 +5,7 @@
 #include <cstdint>
 
 class BacnetServer {
- public:
+public:
   static constexpr uint16_t kDefaultPort = 47808;
 
   BacnetServer() = default;
@@ -17,7 +17,7 @@ class BacnetServer {
   uint32_t deviceInstance() const;
   uint16_t port() const;
 
- private:
+private:
   bool running_ = false;
   uint32_t deviceInstance_ = 0;
   uint16_t port_ = kDefaultPort;

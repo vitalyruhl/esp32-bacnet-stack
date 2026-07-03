@@ -324,11 +324,7 @@ const char* expectedPresentValueTypeText(BacnetObjectType type) {
   return "unknown";
 }
 
-void printS02ObjectLine(ScenarioOutcome outcome, const S02TargetSpec& target,
-                        BacnetDeviceSessionReadStatus status,
-                        const BacnetValue* value,
-                        bool expectedTypeOk,
-                        bool configured) {
+void printS02ObjectLine(ScenarioOutcome outcome, const S02TargetSpec& target, BacnetDeviceSessionReadStatus status, const BacnetValue* value, bool expectedTypeOk, bool configured) {
   Serial.print("[");
   Serial.print(scenarioOutcomeText(outcome));
   Serial.print("] S02 ");
@@ -387,8 +383,7 @@ void printResult(const char* status, const char* message) {
   Serial.println(message);
 }
 
-void printScenarioLine(ScenarioOutcome outcome, const char* id,
-                       const char* scenarioName, const char* detail) {
+void printScenarioLine(ScenarioOutcome outcome, const char* id, const char* scenarioName, const char* detail) {
   Serial.print("[");
   Serial.print(scenarioOutcomeText(outcome));
   Serial.print("] ");
@@ -402,8 +397,7 @@ void printScenarioLine(ScenarioOutcome outcome, const char* id,
   Serial.println();
 }
 
-void recordScenario(ScenarioSummary& summary, ScenarioOutcome outcome,
-                    bool required, bool enabled) {
+void recordScenario(ScenarioSummary& summary, ScenarioOutcome outcome, bool required, bool enabled) {
   ++summary.total;
   if (enabled && required) {
     ++summary.requiredEnabled;
@@ -544,8 +538,7 @@ bool hasSafePropertyReadStatus(BacnetPropertyReadStatus status) {
   return false;
 }
 
-bool objectFound(BacnetObjectType type, uint32_t instance,
-                 const BacnetObjectScanResult& summary) {
+bool objectFound(BacnetObjectType type, uint32_t instance, const BacnetObjectScanResult& summary) {
   const uint16_t rawType = static_cast<uint16_t>(type);
   for (size_t i = 0; i < summary.stored; ++i) {
     if (scanResults[i].objectId.type == rawType &&
@@ -587,18 +580,17 @@ ScenarioOutcome runNonBlockingObjectListScanScenario() {
     return ScenarioOutcome::Fail;
   }
 
-  BacnetDeviceSession device(client, BACNET_TARGET_DEVICE_INSTANCE, targetAddress,
-                             BACNET_TARGET_PORT);
+  BacnetDeviceSession device(client, BACNET_TARGET_DEVICE_INSTANCE, targetAddress, BACNET_TARGET_PORT);
   const BacnetObjectType valueTypes[] = {
-      BacnetObjectType::AnalogInput,
-      BacnetObjectType::AnalogOutput,
-      BacnetObjectType::AnalogValue,
-      BacnetObjectType::BinaryInput,
-      BacnetObjectType::BinaryOutput,
-      BacnetObjectType::BinaryValue,
-      BacnetObjectType::MultiStateInput,
-      BacnetObjectType::MultiStateOutput,
-      BacnetObjectType::MultiStateValue,
+    BacnetObjectType::AnalogInput,
+    BacnetObjectType::AnalogOutput,
+    BacnetObjectType::AnalogValue,
+    BacnetObjectType::BinaryInput,
+    BacnetObjectType::BinaryOutput,
+    BacnetObjectType::BinaryValue,
+    BacnetObjectType::MultiStateInput,
+    BacnetObjectType::MultiStateOutput,
+    BacnetObjectType::MultiStateValue,
   };
 
   BacnetObjectScanOptions options;
@@ -609,8 +601,7 @@ ScenarioOutcome runNonBlockingObjectListScanScenario() {
   options.readDescription = true;
   options.readPresentValue = true;
 
-  if (!device.beginObjectListScan(scanJob, options, scanResults,
-                                  kMaxScanResults)) {
+  if (!device.beginObjectListScan(scanJob, options, scanResults, kMaxScanResults)) {
     printResult("FAIL", "beginObjectListScan failed");
     return ScenarioOutcome::Fail;
   }
@@ -636,21 +627,19 @@ ScenarioOutcome runNonBlockingObjectListScanScenario() {
   const BacnetObjectScanResult& summary = scanJob.summary();
   printSummary(summary);
 
-    const bool requireExpectedAv = BACNET_EXPECT_AV_INSTANCE != 0;
-    const bool requireExpectedMv = BACNET_EXPECT_MV_INSTANCE != 0;
-    const bool expectedAvFound =
-      !requireExpectedAv ||
-      objectFound(BacnetObjectType::AnalogValue, BACNET_EXPECT_AV_INSTANCE,
-            summary);
-    const bool expectedMvFound =
-      !requireExpectedMv ||
-      objectFound(BacnetObjectType::MultiStateValue, BACNET_EXPECT_MV_INSTANCE,
-            summary);
+  const bool requireExpectedAv = BACNET_EXPECT_AV_INSTANCE != 0;
+  const bool requireExpectedMv = BACNET_EXPECT_MV_INSTANCE != 0;
+  const bool expectedAvFound =
+    !requireExpectedAv ||
+    objectFound(BacnetObjectType::AnalogValue, BACNET_EXPECT_AV_INSTANCE, summary);
+  const bool expectedMvFound =
+    !requireExpectedMv ||
+    objectFound(BacnetObjectType::MultiStateValue, BACNET_EXPECT_MV_INSTANCE, summary);
 
   Serial.print("[HIL] expected-av=");
-    Serial.print(requireExpectedAv ? (expectedAvFound ? "yes" : "no") : "skip");
+  Serial.print(requireExpectedAv ? (expectedAvFound ? "yes" : "no") : "skip");
   Serial.print(" expected-mv=");
-    Serial.println(requireExpectedMv ? (expectedMvFound ? "yes" : "no") : "skip");
+  Serial.println(requireExpectedMv ? (expectedMvFound ? "yes" : "no") : "skip");
 
   bool ok = true;
   ok = ok && !scanJob.isActive();
@@ -757,45 +746,26 @@ ScenarioOutcome runCommonProcessPresentValueReadScenario() {
     return ScenarioOutcome::Fail;
   }
 
-  BacnetDeviceSession device(client, BACNET_TARGET_DEVICE_INSTANCE, targetAddress,
-                             BACNET_TARGET_PORT);
+  BacnetDeviceSession device(client, BACNET_TARGET_DEVICE_INSTANCE, targetAddress, BACNET_TARGET_PORT);
   const S02TargetSpec targets[] = {
-      {"AI100", BacnetObjectType::AnalogInput, HIL_AI100_ANALOG_INPUT,
-       HIL_REQUIRE_AI100},
-      {"AI101", BacnetObjectType::AnalogInput, HIL_AI101_ANALOG_INPUT,
-       HIL_REQUIRE_AI101},
-      {"AO110", BacnetObjectType::AnalogOutput, HIL_AO110_ANALOG_OUTPUT,
-       HIL_REQUIRE_AO110},
-      {"AO111", BacnetObjectType::AnalogOutput, HIL_AO111_ANALOG_OUTPUT,
-       HIL_REQUIRE_AO111},
-      {"AV220", BacnetObjectType::AnalogValue, HIL_AV220_ANALOG_VALUE,
-       HIL_REQUIRE_AV220},
-      {"AV221", BacnetObjectType::AnalogValue, HIL_AV221_ANALOG_VALUE,
-       HIL_REQUIRE_AV221},
-      {"BI300", BacnetObjectType::BinaryInput, HIL_BI300_BINARY_INPUT,
-       HIL_REQUIRE_BI300},
-      {"BI301", BacnetObjectType::BinaryInput, HIL_BI301_BINARY_INPUT,
-       HIL_REQUIRE_BI301},
-      {"BO310", BacnetObjectType::BinaryOutput, HIL_BO310_BINARY_OUTPUT,
-       HIL_REQUIRE_BO310},
-      {"BO311", BacnetObjectType::BinaryOutput, HIL_BO311_BINARY_OUTPUT,
-       HIL_REQUIRE_BO311},
-      {"BV320", BacnetObjectType::BinaryValue, HIL_BV320_BINARY_VALUE,
-       HIL_REQUIRE_BV320},
-      {"BV321", BacnetObjectType::BinaryValue, HIL_BV321_BINARY_VALUE,
-       HIL_REQUIRE_BV321},
-      {"MI400", BacnetObjectType::MultiStateInput, HIL_MI400_MULTISTATE_INPUT,
-       HIL_REQUIRE_MI400},
-      {"MI401", BacnetObjectType::MultiStateInput, HIL_MI401_MULTISTATE_INPUT,
-       HIL_REQUIRE_MI401},
-      {"MO410", BacnetObjectType::MultiStateOutput,
-       HIL_MO410_MULTISTATE_OUTPUT, HIL_REQUIRE_MO410},
-      {"MO411", BacnetObjectType::MultiStateOutput,
-       HIL_MO411_MULTISTATE_OUTPUT, HIL_REQUIRE_MO411},
-      {"MV2020", BacnetObjectType::MultiStateValue,
-       HIL_MV2020_MULTISTATE_VALUE, HIL_REQUIRE_MV2020},
-      {"MV2021", BacnetObjectType::MultiStateValue,
-       HIL_MV2021_MULTISTATE_VALUE, HIL_REQUIRE_MV2021},
+    {"AI100", BacnetObjectType::AnalogInput, HIL_AI100_ANALOG_INPUT, HIL_REQUIRE_AI100},
+    {"AI101", BacnetObjectType::AnalogInput, HIL_AI101_ANALOG_INPUT, HIL_REQUIRE_AI101},
+    {"AO110", BacnetObjectType::AnalogOutput, HIL_AO110_ANALOG_OUTPUT, HIL_REQUIRE_AO110},
+    {"AO111", BacnetObjectType::AnalogOutput, HIL_AO111_ANALOG_OUTPUT, HIL_REQUIRE_AO111},
+    {"AV220", BacnetObjectType::AnalogValue, HIL_AV220_ANALOG_VALUE, HIL_REQUIRE_AV220},
+    {"AV221", BacnetObjectType::AnalogValue, HIL_AV221_ANALOG_VALUE, HIL_REQUIRE_AV221},
+    {"BI300", BacnetObjectType::BinaryInput, HIL_BI300_BINARY_INPUT, HIL_REQUIRE_BI300},
+    {"BI301", BacnetObjectType::BinaryInput, HIL_BI301_BINARY_INPUT, HIL_REQUIRE_BI301},
+    {"BO310", BacnetObjectType::BinaryOutput, HIL_BO310_BINARY_OUTPUT, HIL_REQUIRE_BO310},
+    {"BO311", BacnetObjectType::BinaryOutput, HIL_BO311_BINARY_OUTPUT, HIL_REQUIRE_BO311},
+    {"BV320", BacnetObjectType::BinaryValue, HIL_BV320_BINARY_VALUE, HIL_REQUIRE_BV320},
+    {"BV321", BacnetObjectType::BinaryValue, HIL_BV321_BINARY_VALUE, HIL_REQUIRE_BV321},
+    {"MI400", BacnetObjectType::MultiStateInput, HIL_MI400_MULTISTATE_INPUT, HIL_REQUIRE_MI400},
+    {"MI401", BacnetObjectType::MultiStateInput, HIL_MI401_MULTISTATE_INPUT, HIL_REQUIRE_MI401},
+    {"MO410", BacnetObjectType::MultiStateOutput, HIL_MO410_MULTISTATE_OUTPUT, HIL_REQUIRE_MO410},
+    {"MO411", BacnetObjectType::MultiStateOutput, HIL_MO411_MULTISTATE_OUTPUT, HIL_REQUIRE_MO411},
+    {"MV2020", BacnetObjectType::MultiStateValue, HIL_MV2020_MULTISTATE_VALUE, HIL_REQUIRE_MV2020},
+    {"MV2021", BacnetObjectType::MultiStateValue, HIL_MV2021_MULTISTATE_VALUE, HIL_REQUIRE_MV2021},
   };
 
   size_t configuredTargets = 0;
@@ -807,21 +777,23 @@ ScenarioOutcome runCommonProcessPresentValueReadScenario() {
   for (const S02TargetSpec& target : targets) {
     if (target.instance == 0) {
       ++skippedTargets;
-      printS02ObjectLine(ScenarioOutcome::Skip, target,
-                         BacnetDeviceSessionReadStatus::Skipped, nullptr,
-                         false, false);
+      printS02ObjectLine(ScenarioOutcome::Skip, target, BacnetDeviceSessionReadStatus::Skipped, nullptr, false, false);
       continue;
     }
 
     ++configuredTargets;
     BacnetValue value;
     const BacnetDeviceSessionReadStatus status =
-        device.object(target.type, target.instance)
-            .readPresentValue(value, kScanReadTimeoutMs);
+      device.object(target.type, target.instance)
+        .readPresentValue(value, kScanReadTimeoutMs);
     const bool targetOk = status == BacnetDeviceSessionReadStatus::Ack &&
                           hasExpectedPresentValueType(target.type, value);
     printS02ObjectLine(targetOk ? ScenarioOutcome::Pass : ScenarioOutcome::Fail,
-                       target, status, &value, targetOk, true);
+                       target,
+                       status,
+                       &value,
+                       targetOk,
+                       true);
 
     if (targetOk) {
       ++passedTargets;
@@ -849,8 +821,8 @@ ScenarioOutcome runCommonProcessPresentValueReadScenario() {
   }
 
   return (passedTargets > 0 && requiredFailures == 0)
-             ? ScenarioOutcome::Pass
-             : ScenarioOutcome::Fail;
+           ? ScenarioOutcome::Pass
+           : ScenarioOutcome::Fail;
 }
 
 ScenarioOutcome runCommonProcessStatusReadScenario() {
@@ -858,45 +830,26 @@ ScenarioOutcome runCommonProcessStatusReadScenario() {
     return ScenarioOutcome::Fail;
   }
 
-  BacnetDeviceSession device(client, BACNET_TARGET_DEVICE_INSTANCE, targetAddress,
-                             BACNET_TARGET_PORT);
+  BacnetDeviceSession device(client, BACNET_TARGET_DEVICE_INSTANCE, targetAddress, BACNET_TARGET_PORT);
   const S02TargetSpec targets[] = {
-      {"AI100", BacnetObjectType::AnalogInput, HIL_AI100_ANALOG_INPUT,
-       HIL_REQUIRE_AI100},
-      {"AI101", BacnetObjectType::AnalogInput, HIL_AI101_ANALOG_INPUT,
-       HIL_REQUIRE_AI101},
-      {"AO110", BacnetObjectType::AnalogOutput, HIL_AO110_ANALOG_OUTPUT,
-       HIL_REQUIRE_AO110},
-      {"AO111", BacnetObjectType::AnalogOutput, HIL_AO111_ANALOG_OUTPUT,
-       HIL_REQUIRE_AO111},
-      {"AV220", BacnetObjectType::AnalogValue, HIL_AV220_ANALOG_VALUE,
-       HIL_REQUIRE_AV220},
-      {"AV221", BacnetObjectType::AnalogValue, HIL_AV221_ANALOG_VALUE,
-       HIL_REQUIRE_AV221},
-      {"BI300", BacnetObjectType::BinaryInput, HIL_BI300_BINARY_INPUT,
-       HIL_REQUIRE_BI300},
-      {"BI301", BacnetObjectType::BinaryInput, HIL_BI301_BINARY_INPUT,
-       HIL_REQUIRE_BI301},
-      {"BO310", BacnetObjectType::BinaryOutput, HIL_BO310_BINARY_OUTPUT,
-       HIL_REQUIRE_BO310},
-      {"BO311", BacnetObjectType::BinaryOutput, HIL_BO311_BINARY_OUTPUT,
-       HIL_REQUIRE_BO311},
-      {"BV320", BacnetObjectType::BinaryValue, HIL_BV320_BINARY_VALUE,
-       HIL_REQUIRE_BV320},
-      {"BV321", BacnetObjectType::BinaryValue, HIL_BV321_BINARY_VALUE,
-       HIL_REQUIRE_BV321},
-      {"MI400", BacnetObjectType::MultiStateInput, HIL_MI400_MULTISTATE_INPUT,
-       HIL_REQUIRE_MI400},
-      {"MI401", BacnetObjectType::MultiStateInput, HIL_MI401_MULTISTATE_INPUT,
-       HIL_REQUIRE_MI401},
-      {"MO410", BacnetObjectType::MultiStateOutput,
-       HIL_MO410_MULTISTATE_OUTPUT, HIL_REQUIRE_MO410},
-      {"MO411", BacnetObjectType::MultiStateOutput,
-       HIL_MO411_MULTISTATE_OUTPUT, HIL_REQUIRE_MO411},
-      {"MV2020", BacnetObjectType::MultiStateValue,
-       HIL_MV2020_MULTISTATE_VALUE, HIL_REQUIRE_MV2020},
-      {"MV2021", BacnetObjectType::MultiStateValue,
-       HIL_MV2021_MULTISTATE_VALUE, HIL_REQUIRE_MV2021},
+    {"AI100", BacnetObjectType::AnalogInput, HIL_AI100_ANALOG_INPUT, HIL_REQUIRE_AI100},
+    {"AI101", BacnetObjectType::AnalogInput, HIL_AI101_ANALOG_INPUT, HIL_REQUIRE_AI101},
+    {"AO110", BacnetObjectType::AnalogOutput, HIL_AO110_ANALOG_OUTPUT, HIL_REQUIRE_AO110},
+    {"AO111", BacnetObjectType::AnalogOutput, HIL_AO111_ANALOG_OUTPUT, HIL_REQUIRE_AO111},
+    {"AV220", BacnetObjectType::AnalogValue, HIL_AV220_ANALOG_VALUE, HIL_REQUIRE_AV220},
+    {"AV221", BacnetObjectType::AnalogValue, HIL_AV221_ANALOG_VALUE, HIL_REQUIRE_AV221},
+    {"BI300", BacnetObjectType::BinaryInput, HIL_BI300_BINARY_INPUT, HIL_REQUIRE_BI300},
+    {"BI301", BacnetObjectType::BinaryInput, HIL_BI301_BINARY_INPUT, HIL_REQUIRE_BI301},
+    {"BO310", BacnetObjectType::BinaryOutput, HIL_BO310_BINARY_OUTPUT, HIL_REQUIRE_BO310},
+    {"BO311", BacnetObjectType::BinaryOutput, HIL_BO311_BINARY_OUTPUT, HIL_REQUIRE_BO311},
+    {"BV320", BacnetObjectType::BinaryValue, HIL_BV320_BINARY_VALUE, HIL_REQUIRE_BV320},
+    {"BV321", BacnetObjectType::BinaryValue, HIL_BV321_BINARY_VALUE, HIL_REQUIRE_BV321},
+    {"MI400", BacnetObjectType::MultiStateInput, HIL_MI400_MULTISTATE_INPUT, HIL_REQUIRE_MI400},
+    {"MI401", BacnetObjectType::MultiStateInput, HIL_MI401_MULTISTATE_INPUT, HIL_REQUIRE_MI401},
+    {"MO410", BacnetObjectType::MultiStateOutput, HIL_MO410_MULTISTATE_OUTPUT, HIL_REQUIRE_MO410},
+    {"MO411", BacnetObjectType::MultiStateOutput, HIL_MO411_MULTISTATE_OUTPUT, HIL_REQUIRE_MO411},
+    {"MV2020", BacnetObjectType::MultiStateValue, HIL_MV2020_MULTISTATE_VALUE, HIL_REQUIRE_MV2020},
+    {"MV2021", BacnetObjectType::MultiStateValue, HIL_MV2021_MULTISTATE_VALUE, HIL_REQUIRE_MV2021},
   };
 
   size_t configuredTargets = 0;
@@ -909,19 +862,19 @@ ScenarioOutcome runCommonProcessStatusReadScenario() {
     if (target.instance == 0) {
       ++skippedTargets;
       BacnetObjectStatus skippedStatus;
-      printStatusSnapshotLine(ScenarioOutcome::Skip, target, skippedStatus,
-                              false);
+      printStatusSnapshotLine(ScenarioOutcome::Skip, target, skippedStatus, false);
       continue;
     }
 
     ++configuredTargets;
     BacnetObjectStatus status;
-    device.readObjectStatus(target.type, target.instance, status,
-                            kScanReadTimeoutMs, target.required);
+    device.readObjectStatus(target.type, target.instance, status, kScanReadTimeoutMs, target.required);
     const bool targetOk = hasSafeObjectStatusSnapshot(status, target.required);
     printStatusSnapshotLine(targetOk ? ScenarioOutcome::Pass
                                      : ScenarioOutcome::Fail,
-                            target, status, true);
+                            target,
+                            status,
+                            true);
 
     if (targetOk) {
       ++passedTargets;
@@ -949,8 +902,8 @@ ScenarioOutcome runCommonProcessStatusReadScenario() {
   }
 
   return (passedTargets > 0 && requiredFailures == 0)
-             ? ScenarioOutcome::Pass
-             : ScenarioOutcome::Fail;
+           ? ScenarioOutcome::Pass
+           : ScenarioOutcome::Fail;
 }
 
 ScenarioOutcome runPropertyCacheScenario() {
@@ -984,9 +937,7 @@ ScenarioOutcome runPresentValuePriorityWriteScenario() {
   return ScenarioOutcome::Fail;
 }
 
-void runScenario(ScenarioSummary& summary, const char* id,
-                 const char* scenarioName, bool enabled, bool required,
-                 ScenarioOutcome (*scenarioRunner)(), const char* skipReason) {
+void runScenario(ScenarioSummary& summary, const char* id, const char* scenarioName, bool enabled, bool required, ScenarioOutcome (*scenarioRunner)(), const char* skipReason) {
   if (!enabled) {
     printScenarioLine(ScenarioOutcome::Skip, id, scenarioName, skipReason);
     recordScenario(summary, ScenarioOutcome::Skip, required, false);
@@ -1017,43 +968,23 @@ ScenarioOutcome runAcceptanceRunner() {
   printFinalSummary(summary, ScenarioOutcome::Skip);
   return ScenarioOutcome::Skip;
 #else
-  runScenario(summary, "S01", "non-blocking object-list scan", true, true,
-              runNonBlockingObjectListScanScenario, "disabled");
+  runScenario(summary, "S01", "non-blocking object-list scan", true, true, runNonBlockingObjectListScanScenario, "disabled");
 
-  runScenario(summary, "S02", "common process present-value reads",
-              HIL_ENABLE_PROCESS_PRESENT_VALUE_READS, false,
-              runCommonProcessPresentValueReadScenario,
-              "disabled (HIL_ENABLE_PROCESS_PRESENT_VALUE_READS=false)");
+  runScenario(summary, "S02", "common process present-value reads", HIL_ENABLE_PROCESS_PRESENT_VALUE_READS, false, runCommonProcessPresentValueReadScenario, "disabled (HIL_ENABLE_PROCESS_PRESENT_VALUE_READS=false)");
 
-  runScenario(summary, "S03", "common process object status reads",
-              HIL_ENABLE_PROCESS_STATUS_READS, false,
-              runCommonProcessStatusReadScenario,
-              "disabled (HIL_ENABLE_PROCESS_STATUS_READS=false)");
+  runScenario(summary, "S03", "common process object status reads", HIL_ENABLE_PROCESS_STATUS_READS, false, runCommonProcessStatusReadScenario, "disabled (HIL_ENABLE_PROCESS_STATUS_READS=false)");
 
-  runScenario(summary, "S04", "property cache", false, false,
-              runPropertyCacheScenario, "disabled (future scenario block)");
+  runScenario(summary, "S04", "property cache", false, false, runPropertyCacheScenario, "disabled (future scenario block)");
 
-  runScenario(summary, "S05", "subscribe-any-property", false, false,
-              runSubscribeAnyPropertyScenario,
-              "disabled (future scenario block)");
+  runScenario(summary, "S05", "subscribe-any-property", false, false, runSubscribeAnyPropertyScenario, "disabled (future scenario block)");
 
-  runScenario(summary, "S06", "fallback polling value change",
-              HIL_EXPECT_MOVING_PRESENT_VALUE, false,
-              runFallbackPollingValueChangeScenario,
-              "disabled (HIL_EXPECT_MOVING_PRESENT_VALUE=false)");
+  runScenario(summary, "S06", "fallback polling value change", HIL_EXPECT_MOVING_PRESENT_VALUE, false, runFallbackPollingValueChangeScenario, "disabled (HIL_EXPECT_MOVING_PRESENT_VALUE=false)");
 
-  runScenario(summary, "S07", "SubscribeCOV where supported",
-              HIL_EXPECT_COV_SUPPORTED, false, runSubscribeCovScenario,
-              "disabled (HIL_EXPECT_COV_SUPPORTED=false)");
+  runScenario(summary, "S07", "SubscribeCOV where supported", HIL_EXPECT_COV_SUPPORTED, false, runSubscribeCovScenario, "disabled (HIL_EXPECT_COV_SUPPORTED=false)");
 
-  runScenario(summary, "S08", "WriteProperty (explicit opt-in)",
-              HIL_ENABLE_WRITE_TESTS, false, runWritePropertyScenario,
-              "disabled (HIL_ENABLE_WRITE_TESTS=false)");
+  runScenario(summary, "S08", "WriteProperty (explicit opt-in)", HIL_ENABLE_WRITE_TESTS, false, runWritePropertyScenario, "disabled (HIL_ENABLE_WRITE_TESTS=false)");
 
-  runScenario(summary, "S09", "PresentValue priority write (explicit opt-in)",
-              HIL_ENABLE_PRIORITY_WRITE_TESTS, false,
-              runPresentValuePriorityWriteScenario,
-              "disabled (HIL_ENABLE_PRIORITY_WRITE_TESTS=false)");
+  runScenario(summary, "S09", "PresentValue priority write (explicit opt-in)", HIL_ENABLE_PRIORITY_WRITE_TESTS, false, runPresentValuePriorityWriteScenario, "disabled (HIL_ENABLE_PRIORITY_WRITE_TESTS=false)");
 
   ScenarioOutcome finalOutcome = ScenarioOutcome::Skip;
   if (summary.fail > 0 || summary.requiredFailed > 0) {
@@ -1067,7 +998,7 @@ ScenarioOutcome runAcceptanceRunner() {
 #endif
 }
 
-}  // namespace
+} // namespace
 
 void setup() {
   Serial.begin(115200);

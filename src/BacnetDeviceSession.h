@@ -25,7 +25,7 @@ enum class BacnetObjectListScanJobStatus : uint8_t {
 };
 
 inline const char* bacnetObjectListScanJobStatusText(
-    BacnetObjectListScanJobStatus status) {
+  BacnetObjectListScanJobStatus status) {
   switch (status) {
     case BacnetObjectListScanJobStatus::Idle:
       return "idle";
@@ -54,7 +54,7 @@ enum class BacnetObjectListScanPhase : uint8_t {
 };
 
 inline const char* bacnetObjectListScanPhaseText(
-    BacnetObjectListScanPhase phase) {
+  BacnetObjectListScanPhase phase) {
   switch (phase) {
     case BacnetObjectListScanPhase::Idle:
       return "idle";
@@ -162,7 +162,7 @@ enum class BacnetObjectHealthState : uint8_t {
 };
 
 inline const char* bacnetObjectHealthStateText(
-    BacnetObjectHealthState state) {
+  BacnetObjectHealthState state) {
   switch (state) {
     case BacnetObjectHealthState::Normal:
       return "Normal";
@@ -188,19 +188,19 @@ struct BacnetStatusFlags {
 struct BacnetObjectStatus {
   BacnetObjectId objectId;
   BacnetPropertyReadStatus presentValueStatus =
-      BacnetPropertyReadStatus::Skipped;
+    BacnetPropertyReadStatus::Skipped;
   BacnetValue presentValue;
   BacnetPropertyReadStatus statusFlagsStatus =
-      BacnetPropertyReadStatus::Skipped;
+    BacnetPropertyReadStatus::Skipped;
   BacnetStatusFlags statusFlags;
   BacnetPropertyReadStatus eventStateStatus =
-      BacnetPropertyReadStatus::Skipped;
+    BacnetPropertyReadStatus::Skipped;
   uint32_t eventState = 0;
   BacnetPropertyReadStatus reliabilityStatus =
-      BacnetPropertyReadStatus::Skipped;
+    BacnetPropertyReadStatus::Skipped;
   uint32_t reliability = 0;
   BacnetPropertyReadStatus outOfServiceStatus =
-      BacnetPropertyReadStatus::Skipped;
+    BacnetPropertyReadStatus::Skipped;
   bool outOfService = false;
   BacnetObjectHealthState state = BacnetObjectHealthState::Unknown;
 };
@@ -210,8 +210,8 @@ bool bacnetDecodeStatusFlags(const BacnetValue& value,
 const char* bacnetEventStateText(uint32_t eventState);
 const char* bacnetReliabilityText(uint32_t reliability);
 BacnetObjectHealthState bacnetDeriveObjectHealthState(
-    const BacnetObjectStatus& status,
-    bool presentValueRequired = true);
+  const BacnetObjectStatus& status,
+  bool presentValueRequired = true);
 
 static constexpr uint32_t kBacnetDefaultReadTimeoutMs = 1000;
 
@@ -230,15 +230,15 @@ enum class BacnetSubscriptionNotificationReason : uint8_t {
 };
 
 inline BacnetSubscriptionNotificationReason operator|(
-    BacnetSubscriptionNotificationReason left,
-    BacnetSubscriptionNotificationReason right) {
+  BacnetSubscriptionNotificationReason left,
+  BacnetSubscriptionNotificationReason right) {
   return static_cast<BacnetSubscriptionNotificationReason>(
-      static_cast<uint8_t>(left) | static_cast<uint8_t>(right));
+    static_cast<uint8_t>(left) | static_cast<uint8_t>(right));
 }
 
 inline bool bacnetSubscriptionReasonContains(
-    BacnetSubscriptionNotificationReason reasons,
-    BacnetSubscriptionNotificationReason testReason) {
+  BacnetSubscriptionNotificationReason reasons,
+  BacnetSubscriptionNotificationReason testReason) {
   return (static_cast<uint8_t>(reasons) & static_cast<uint8_t>(testReason)) !=
          0;
 }
@@ -254,7 +254,7 @@ struct BacnetSubscriptionNotification {
   bool valueChanged = false;
   bool statusChanged = false;
   BacnetSubscriptionNotificationReason reason =
-      BacnetSubscriptionNotificationReason::None;
+    BacnetSubscriptionNotificationReason::None;
   void* userData = nullptr;
 };
 
@@ -281,10 +281,10 @@ struct BacnetPropertyReadAllResult {
 };
 
 using BacnetSubscriptionCallback =
-    void (*)(const BacnetSubscriptionNotification& notification);
+  void (*)(const BacnetSubscriptionNotification& notification);
 
 class BacnetPropertySubscription {
- public:
+public:
   BacnetPropertySubscription(BacnetDeviceSession& session,
                              BacnetObjectId objectId,
                              BacnetPropertyId propertyId,
@@ -295,11 +295,11 @@ class BacnetPropertySubscription {
 
   BacnetPropertySubscription(const BacnetPropertySubscription&) = delete;
   BacnetPropertySubscription& operator=(const BacnetPropertySubscription&) =
-      delete;
+    delete;
 
   BacnetPropertySubscription(BacnetPropertySubscription&& other) noexcept;
   BacnetPropertySubscription& operator=(
-      BacnetPropertySubscription&& other) noexcept;
+    BacnetPropertySubscription&& other) noexcept;
   ~BacnetPropertySubscription();
 
   BacnetObjectId objectId() const;
@@ -317,7 +317,7 @@ class BacnetPropertySubscription {
   void stop();
   void requestRefresh();
 
- private:
+private:
   friend class BacnetDeviceSession;
   friend class BacnetProperty;
 
@@ -352,7 +352,7 @@ class BacnetPropertySubscription {
   uint32_t lastUpdateMs_ = 0;
   uint32_t nextPollAtMs_ = 0;
   BacnetSubscriptionNotificationReason lastNotificationReason_ =
-      BacnetSubscriptionNotificationReason::None;
+    BacnetSubscriptionNotificationReason::None;
 
   uint8_t inFlightInvokeId_ = 0;
   unsigned long inFlightStartedAt_ = 0;
@@ -360,22 +360,20 @@ class BacnetPropertySubscription {
 };
 
 class BacnetDeviceSession {
- public:
+public:
   static constexpr uint32_t kDefaultReadTimeoutMs = kBacnetDefaultReadTimeoutMs;
 
-  BacnetDeviceSession(BacnetClient& client, uint32_t deviceInstance,
-                      IPAddress address,
-                      uint16_t port = BacnetClient::kDefaultPort);
+  BacnetDeviceSession(BacnetClient& client, uint32_t deviceInstance, IPAddress address, uint16_t port = BacnetClient::kDefaultPort);
 
   static BacnetDeviceSession fromEndpoint(
-      BacnetClient& client,
-      uint32_t deviceInstance,
-      IPAddress address,
-      uint16_t port = BacnetClient::kDefaultPort);
+    BacnetClient& client,
+    uint32_t deviceInstance,
+    IPAddress address,
+    uint16_t port = BacnetClient::kDefaultPort);
   static BacnetDeviceSession fromIAm(
-      BacnetClient& client,
-      const BacnetIAmDevice& device,
-      uint16_t port = BacnetClient::kDefaultPort);
+    BacnetClient& client,
+    const BacnetIAmDevice& device,
+    uint16_t port = BacnetClient::kDefaultPort);
 
   BacnetClient& client();
   const BacnetClient& client() const;
@@ -388,55 +386,50 @@ class BacnetDeviceSession {
                             uint32_t objectInstance);
 
   BacnetDeviceSessionReadStatus readProperty(
-      BacnetObjectId object, BacnetPropertyId property, BacnetValue& value,
-      uint32_t timeoutMs = kDefaultReadTimeoutMs,
-      uint32_t arrayIndex = kBacnetNoArrayIndex);
+    BacnetObjectId object, BacnetPropertyId property, BacnetValue& value, uint32_t timeoutMs = kDefaultReadTimeoutMs, uint32_t arrayIndex = kBacnetNoArrayIndex);
   BacnetDeviceSessionReadStatus readProperty(
-      BacnetObjectType objectType, uint32_t objectInstance,
-      BacnetPropertyId property, BacnetValue& value,
-      uint32_t timeoutMs = kDefaultReadTimeoutMs,
-      uint32_t arrayIndex = kBacnetNoArrayIndex);
+    BacnetObjectType objectType, uint32_t objectInstance, BacnetPropertyId property, BacnetValue& value, uint32_t timeoutMs = kDefaultReadTimeoutMs, uint32_t arrayIndex = kBacnetNoArrayIndex);
   BacnetObjectHealthState readObjectStatus(
-      BacnetObjectId object,
-      BacnetObjectStatus& status,
-      uint32_t timeoutMs = kDefaultReadTimeoutMs,
-      bool presentValueRequired = true);
+    BacnetObjectId object,
+    BacnetObjectStatus& status,
+    uint32_t timeoutMs = kDefaultReadTimeoutMs,
+    bool presentValueRequired = true);
   BacnetObjectHealthState readObjectStatus(
-      BacnetObjectType objectType,
-      uint32_t objectInstance,
-      BacnetObjectStatus& status,
-      uint32_t timeoutMs = kDefaultReadTimeoutMs,
-      bool presentValueRequired = true);
-    BacnetPropertyListReadResult readPropertyList(
-      BacnetObjectId object,
-      BacnetPropertyId* properties,
-      size_t propertyCapacity,
-      uint32_t timeoutMs = kDefaultReadTimeoutMs);
-    BacnetPropertyListReadResult readPropertyList(
-      BacnetObjectType objectType,
-      uint32_t objectInstance,
-      BacnetPropertyId* properties,
-      size_t propertyCapacity,
-      uint32_t timeoutMs = kDefaultReadTimeoutMs);
-    BacnetPropertyReadAllResult readAllProperties(
-      BacnetObjectId object,
-      const BacnetPropertyId* properties,
-      size_t propertyCount,
-      BacnetPropertyReadResult* results,
-      size_t resultCapacity,
-      uint32_t timeoutMs = kDefaultReadTimeoutMs);
-    BacnetPropertyReadAllResult readAllProperties(
-      BacnetObjectType objectType,
-      uint32_t objectInstance,
-      const BacnetPropertyId* properties,
-      size_t propertyCount,
-      BacnetPropertyReadResult* results,
-      size_t resultCapacity,
-      uint32_t timeoutMs = kDefaultReadTimeoutMs);
+    BacnetObjectType objectType,
+    uint32_t objectInstance,
+    BacnetObjectStatus& status,
+    uint32_t timeoutMs = kDefaultReadTimeoutMs,
+    bool presentValueRequired = true);
+  BacnetPropertyListReadResult readPropertyList(
+    BacnetObjectId object,
+    BacnetPropertyId* properties,
+    size_t propertyCapacity,
+    uint32_t timeoutMs = kDefaultReadTimeoutMs);
+  BacnetPropertyListReadResult readPropertyList(
+    BacnetObjectType objectType,
+    uint32_t objectInstance,
+    BacnetPropertyId* properties,
+    size_t propertyCapacity,
+    uint32_t timeoutMs = kDefaultReadTimeoutMs);
+  BacnetPropertyReadAllResult readAllProperties(
+    BacnetObjectId object,
+    const BacnetPropertyId* properties,
+    size_t propertyCount,
+    BacnetPropertyReadResult* results,
+    size_t resultCapacity,
+    uint32_t timeoutMs = kDefaultReadTimeoutMs);
+  BacnetPropertyReadAllResult readAllProperties(
+    BacnetObjectType objectType,
+    uint32_t objectInstance,
+    const BacnetPropertyId* properties,
+    size_t propertyCount,
+    BacnetPropertyReadResult* results,
+    size_t resultCapacity,
+    uint32_t timeoutMs = kDefaultReadTimeoutMs);
   BacnetObjectScanResult scanObjectList(
-      const BacnetObjectScanOptions& options,
-      BacnetScannedObject* results,
-      size_t resultCapacity);
+    const BacnetObjectScanOptions& options,
+    BacnetScannedObject* results,
+    size_t resultCapacity);
   bool beginObjectListScan(BacnetObjectListScanJob& job,
                            const BacnetObjectScanOptions& options,
                            BacnetScannedObject* results,
@@ -451,20 +444,20 @@ class BacnetDeviceSession {
             size_t count,
             uint32_t nowMs = millis());
 
- private:
+private:
   friend class BacnetPropertySubscription;
   friend class BacnetObjectListScanJob;
 
   static const char* subscriptionPollTriggerText(
-      BacnetPropertySubscription::PollTrigger trigger);
+    BacnetPropertySubscription::PollTrigger trigger);
   static bool bacnetValueEquals(const BacnetValue& left,
                                 const BacnetValue& right);
-    BacnetPropertyReadStatus readPropertyDetailed(
-      const BacnetPropertyRequest& request,
-      BacnetValue& value,
-      uint32_t timeoutMs,
-      uint32_t& errorClass,
-      uint32_t& errorCode);
+  BacnetPropertyReadStatus readPropertyDetailed(
+    const BacnetPropertyRequest& request,
+    BacnetValue& value,
+    uint32_t timeoutMs,
+    uint32_t& errorClass,
+    uint32_t& errorCode);
   bool tryStartObjectListScanRead(BacnetObjectListScanJob& job,
                                   const BacnetPropertyRequest& request,
                                   BacnetObjectListScanPhase phase,
@@ -514,8 +507,8 @@ struct BacnetObjectScanOptions {
 
 template <size_t N>
 inline void bacnetSetObjectTypeFilter(
-    BacnetObjectScanOptions& options,
-    const BacnetObjectType (&objectTypes)[N]) {
+  BacnetObjectScanOptions& options,
+  const BacnetObjectType (&objectTypes)[N]) {
   options.objectTypes = objectTypes;
   options.objectTypeCount = N;
 }
@@ -528,19 +521,19 @@ inline void bacnetClearObjectTypeFilter(BacnetObjectScanOptions& options) {
 struct BacnetScannedObject {
   BacnetObjectId objectId;
   BacnetDeviceSessionReadStatus objectNameStatus =
-      BacnetDeviceSessionReadStatus::Skipped;
+    BacnetDeviceSessionReadStatus::Skipped;
   BacnetValue objectName;
   BacnetDeviceSessionReadStatus descriptionStatus =
-      BacnetDeviceSessionReadStatus::Skipped;
+    BacnetDeviceSessionReadStatus::Skipped;
   BacnetValue description;
   BacnetDeviceSessionReadStatus presentValueStatus =
-      BacnetDeviceSessionReadStatus::Skipped;
+    BacnetDeviceSessionReadStatus::Skipped;
   BacnetValue presentValue;
 };
 
 struct BacnetObjectScanResult {
   BacnetDeviceSessionReadStatus objectListCountStatus =
-      BacnetDeviceSessionReadStatus::Skipped;
+    BacnetDeviceSessionReadStatus::Skipped;
   uint32_t objectListCount = 0;
   uint32_t inspected = 0;
   size_t found = 0;
@@ -557,7 +550,7 @@ struct BacnetObjectListScanProgress {
 };
 
 class BacnetObjectListScanJob {
- public:
+public:
   BacnetObjectListScanJob() = default;
 
   BacnetObjectListScanJob(const BacnetObjectListScanJob&) = delete;
@@ -576,7 +569,7 @@ class BacnetObjectListScanJob {
   const BacnetObjectScanResult& summary() const;
   BacnetObjectListScanProgress progress() const;
 
- private:
+private:
   friend class BacnetDeviceSession;
 
   void clear();
