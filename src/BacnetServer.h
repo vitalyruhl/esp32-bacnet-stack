@@ -10,7 +10,7 @@ public:
 
   BacnetServer() = default;
 
-  bool begin(uint32_t deviceInstance, uint16_t port = kDefaultPort);
+  bool begin(uint32_t deviceInstanceValue, uint16_t portValue = kDefaultPort);
   void end();
 
   bool isRunning() const;

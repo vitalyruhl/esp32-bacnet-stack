@@ -454,8 +454,8 @@ BacnetRemoteObject BacnetDeviceSession::object(BacnetObjectType objectType,
 }
 
 BacnetDeviceSessionReadStatus BacnetDeviceSession::readProperty(
-  BacnetObjectId object, BacnetPropertyId property, BacnetValue& value, uint32_t timeoutMs, uint32_t arrayIndex) {
-  const BacnetPropertyRequest request{object, property, arrayIndex};
+  BacnetObjectId objectId, BacnetPropertyId property, BacnetValue& value, uint32_t timeoutMs, uint32_t arrayIndex) {
+  const BacnetPropertyRequest request{objectId, property, arrayIndex};
   uint32_t errorClass = 0;
   uint32_t errorCode = 0;
   const BacnetPropertyReadStatus status =
@@ -488,17 +488,17 @@ BacnetDeviceSessionReadStatus BacnetDeviceSession::readProperty(
 }
 
 BacnetObjectHealthState BacnetDeviceSession::readObjectStatus(
-  BacnetObjectId object,
+  BacnetObjectId objectId,
   BacnetObjectStatus& status,
   uint32_t timeoutMs,
   bool presentValueRequired) {
   status = BacnetObjectStatus{};
-  status.objectId = object;
+  status.objectId = objectId;
 
   uint32_t errorClass = 0;
   uint32_t errorCode = 0;
   status.presentValueStatus = readPropertyDetailed(
-    BacnetPropertyRequest{object, BacnetPropertyId::PresentValue, kBacnetNoArrayIndex},
+    BacnetPropertyRequest{objectId, BacnetPropertyId::PresentValue, kBacnetNoArrayIndex},
     status.presentValue,
     timeoutMs,
     errorClass,
@@ -506,7 +506,7 @@ BacnetObjectHealthState BacnetDeviceSession::readObjectStatus(
 
   BacnetValue statusFlagsValue;
   status.statusFlagsStatus = readPropertyDetailed(
-    BacnetPropertyRequest{object, BacnetPropertyId::StatusFlags, kBacnetNoArrayIndex},
+    BacnetPropertyRequest{objectId, BacnetPropertyId::StatusFlags, kBacnetNoArrayIndex},
     statusFlagsValue,
     timeoutMs,
     errorClass,
@@ -518,7 +518,7 @@ BacnetObjectHealthState BacnetDeviceSession::readObjectStatus(
 
   BacnetValue eventStateValue;
   status.eventStateStatus = readPropertyDetailed(
-    BacnetPropertyRequest{object, BacnetPropertyId::EventState, kBacnetNoArrayIndex},
+    BacnetPropertyRequest{objectId, BacnetPropertyId::EventState, kBacnetNoArrayIndex},
     eventStateValue,
     timeoutMs,
     errorClass,
@@ -530,7 +530,7 @@ BacnetObjectHealthState BacnetDeviceSession::readObjectStatus(
 
   BacnetValue reliabilityValue;
   status.reliabilityStatus = readPropertyDetailed(
-    BacnetPropertyRequest{object, BacnetPropertyId::Reliability, kBacnetNoArrayIndex},
+    BacnetPropertyRequest{objectId, BacnetPropertyId::Reliability, kBacnetNoArrayIndex},
     reliabilityValue,
     timeoutMs,
     errorClass,
@@ -542,7 +542,7 @@ BacnetObjectHealthState BacnetDeviceSession::readObjectStatus(
 
   BacnetValue outOfServiceValue;
   status.outOfServiceStatus = readPropertyDetailed(
-    BacnetPropertyRequest{object, BacnetPropertyId::OutOfService, kBacnetNoArrayIndex},
+    BacnetPropertyRequest{objectId, BacnetPropertyId::OutOfService, kBacnetNoArrayIndex},
     outOfServiceValue,
     timeoutMs,
     errorClass,
@@ -1295,22 +1295,35 @@ void BacnetDeviceSession::finishSubscriptionPoll(
       static_cast<unsigned long>(subscription.arrayIndex_));
   }
 
-  BacnetSubscriptionNotificationReason reasons =
-    BacnetSubscriptionNotificationReason::None;
+  uint8_t reasonBits = 0;
   if (firstValue) {
-    reasons = reasons | BacnetSubscriptionNotificationReason::FirstValue;
+    reasonBits |= static_cast<uint8_t>(BacnetSubscriptionNotificationReason::FirstValue);
   }
   if (valueChanged) {
-    reasons = reasons | BacnetSubscriptionNotificationReason::ValueChanged;
+    reasonBits |= static_cast<uint8_t>(BacnetSubscriptionNotificationReason::ValueChanged);
     client_.logger().debug(
-      "BACnet/Subscription", "value changed %s,%lu %u array=%lu", bacnetObjectTypeText(subscription.objectId_.type), static_cast<unsigned long>(subscription.objectId_.instance), static_cast<unsigned>(subscription.propertyId_), static_cast<unsigned long>(subscription.arrayIndex_));
+      "BACnet/Subscription",
+      "value changed %s,%lu %u array=%lu",
+      bacnetObjectTypeText(subscription.objectId_.type),
+      static_cast<unsigned long>(subscription.objectId_.instance),
+      static_cast<unsigned>(subscription.propertyId_),
+      static_cast<unsigned long>(subscription.arrayIndex_));
   }
   if (statusChanged && subscription.options_.notifyOnStatusChange) {
-    reasons = reasons | BacnetSubscriptionNotificationReason::StatusChanged;
+    reasonBits |= static_cast<uint8_t>(BacnetSubscriptionNotificationReason::StatusChanged);
     client_.logger().debug(
-      "BACnet/Subscription", "status changed %s->%s %s,%lu %u array=%lu", bacnetReadStatusText(previousStatus), bacnetReadStatusText(status), bacnetObjectTypeText(subscription.objectId_.type), static_cast<unsigned long>(subscription.objectId_.instance), static_cast<unsigned>(subscription.propertyId_), static_cast<unsigned long>(subscription.arrayIndex_));
+      "BACnet/Subscription",
+      "status changed %s->%s %s,%lu %u array=%lu",
+      bacnetReadStatusText(previousStatus),
+      bacnetReadStatusText(status),
+      bacnetObjectTypeText(subscription.objectId_.type),
+      static_cast<unsigned long>(subscription.objectId_.instance),
+      static_cast<unsigned>(subscription.propertyId_),
+      static_cast<unsigned long>(subscription.arrayIndex_));
   }
 
+  const BacnetSubscriptionNotificationReason reasons =
+    static_cast<BacnetSubscriptionNotificationReason>(reasonBits);
   subscription.lastNotificationReason_ = reasons;
   if (subscription.callback_ != nullptr &&
       reasons != BacnetSubscriptionNotificationReason::None) {
@@ -1355,12 +1368,12 @@ uint8_t BacnetDeviceSession::allocateInvokeId() {
 }
 
 bool BacnetObjectScanOptions::acceptsObjectType(
-  BacnetObjectId objectId) const {
+  BacnetObjectId objectTypeId) const {
   if (objectTypes == nullptr || objectTypeCount == 0) {
     return true;
   }
   for (size_t i = 0; i < objectTypeCount; ++i) {
-    if (static_cast<uint16_t>(objectTypes[i]) == objectId.type) {
+    if (static_cast<uint16_t>(objectTypes[i]) == objectTypeId.type) {
       return true;
     }
   }

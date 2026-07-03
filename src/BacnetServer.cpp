@@ -2,9 +2,9 @@
 
 #include "BacnetServer.h"
 
-bool BacnetServer::begin(uint32_t deviceInstance, uint16_t port) {
-  deviceInstance_ = deviceInstance;
-  port_ = port;
+bool BacnetServer::begin(uint32_t deviceInstanceValue, uint16_t portValue) {
+  deviceInstance_ = deviceInstanceValue;
+  port_ = portValue;
   running_ = true;
   return running_;
 }

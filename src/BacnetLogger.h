@@ -113,7 +113,7 @@ public:
   BacnetLogger() = default;
 
   void addOutput(BacnetLogOutput& output);
-  bool removeOutput(BacnetLogOutput& output);
+  bool removeOutput(const BacnetLogOutput& output);
   void clearOutputs();
   size_t outputCount() const;
 

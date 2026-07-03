@@ -52,7 +52,7 @@ bool readApplicationValue(const uint8_t* buffer, size_t length, size_t& offset, 
   const uint8_t valueLength = tag & 0x07;
 
   if (isContextTag || tagNumber != expectedTag || valueLength == 0 ||
-      valueLength > 4 || valueLength == 5 || offset + valueLength > length) {
+      valueLength > 4 || offset + valueLength > length) {
     return false;
   }
 
@@ -75,7 +75,7 @@ bool readContextValue(const uint8_t* buffer, size_t length, size_t& offset, uint
   const uint8_t valueLength = tag & 0x07;
 
   if (!isContextTag || tagNumber != expectedTag || valueLength == 0 ||
-      valueLength > 4 || valueLength == 5 || offset + valueLength > length) {
+      valueLength > 4 || offset + valueLength > length) {
     return false;
   }
 
@@ -977,7 +977,7 @@ bool BacnetClient::parseIAmResponse(const uint8_t* buffer, size_t length, Bacnet
   }
 
   size_t offset = 4;
-  if (buffer[offset++] != kNpduVersion || offset >= length) {
+  if (buffer[offset++] != kNpduVersion) {
     return false;
   }
 
@@ -987,7 +987,7 @@ bool BacnetClient::parseIAmResponse(const uint8_t* buffer, size_t length, Bacnet
   }
 
   if ((npduControl & 0x20) != 0) {
-    if (!skipNpduAddress(buffer, length, offset) || offset >= length) {
+    if (!skipNpduAddress(buffer, length, offset)) {
       return false;
     }
     ++offset;

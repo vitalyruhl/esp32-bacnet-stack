@@ -29,6 +29,7 @@ Write-Host "Running cppcheck on: $($Files -join ', ')"
     -DARDUINO=10819 `
     -DESP32 `
     -DPROGMEM= `
+    --suppress=unknownMacro:examples/client-demo/src/main.cpp `
     --quiet `
     @Files
 

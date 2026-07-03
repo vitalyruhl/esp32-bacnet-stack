@@ -69,7 +69,7 @@ void BacnetLogger::addOutput(BacnetLogOutput& output) {
   outputs_[outputCount_++] = &output;
 }
 
-bool BacnetLogger::removeOutput(BacnetLogOutput& output) {
+bool BacnetLogger::removeOutput(const BacnetLogOutput& output) {
   for (size_t i = 0; i < outputCount_; ++i) {
     if (outputs_[i] == &output) {
       for (size_t j = i; j + 1 < outputCount_; ++j) {
