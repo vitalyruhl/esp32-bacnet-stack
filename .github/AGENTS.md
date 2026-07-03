@@ -236,7 +236,6 @@ Serena memories, generated snapshots, summaries, and previous reports may help o
 - Distinguish command failure, no matches, missing files, and missing tools.
 - Failed commands are not evidence about repository content.
 
-
 ## Serena Index Freshness
 
 - Do not run `serena project index .` before every task.
@@ -257,7 +256,6 @@ Serena indexing does not replace mandatory direct governance reads, direct file 
 
 - When governance context is reused for file-changing, workflow, risky, or validation-sensitive tasks, report the reuse briefly and explain why it is safe. Do not list governance file names unless loading failed, drift was found, governance changed, or the user asks.
 
-
 ## Validation
 
 - Use configured/enabled GitHub Actions/checks when present; do not invent CI.
@@ -275,12 +273,33 @@ Serena indexing does not replace mandatory direct governance reads, direct file 
 - full_precommit: `pwsh -NoProfile -ExecutionPolicy Bypass -File tools/run-precommit-full.ps1`
 - Report required validation that cannot run.
 
+### Validation Ordering
+
+Validation commands that may modify files MUST run before expensive build/test
+validation.
+
+Autofix-capable validation includes:
+
+- `pre-commit`
+- formatter hooks
+- clang-format wrappers
+- line-ending fixers
+- EOF fixers
+- generated-file refreshers
+- tooling wrappers that may modify files
+- `cppcheck` when run through the configured `pre-commit` path if that wrapper
+  may modify files or is coupled with formatting
+
+Only after the latest autofix-capable validation run exits successfully and
+leaves the working tree unchanged may expensive validation run, such as the
+project-profile PlatformIO root build, mandatory tests, affected example
+builds, and OTA builds when relevant.
+
 ### Autofix-Aware Validation
 
-Validation commands that may modify files, especially `pre-commit`,
-formatters, line-ending fixers, EOF fixers, generated-file refreshes, or
-tooling wrappers, are not considered passed when they exit non-zero or modify
-the working tree.
+Validation commands that may modify files, especially autofix-capable
+validation from the Validation Ordering rule, are not considered passed when
+they exit non-zero or modify the working tree.
 
 After every validation command that may modify files, run `git status --short`
 before reporting the validation result.
@@ -290,14 +309,35 @@ If validation modifies files:
 - report the validation as `FAILED/AUTOFIXED`, not `OK`
 - report the modified files
 - inspect the focused diff
+- verify the modifications stay within the intended scope
 - rerun the same validation after the changes are included in the intended
   scope
 - only report `OK` after a subsequent run exits successfully and leaves the
   working tree unchanged
 
+Repeat the same autofix-capable validation until it exits successfully and the
+working tree remains unchanged.
+
+After expensive validation, run `git status --short`.
+
+If any file changed after expensive validation:
+
+- stop and report the modified files
+- do not claim the expensive validation passed for the changed state
+- return to the autofix-first sequence and rerun or validly reuse expensive
+  validation only for the final post-autofix file state
+
+A PlatformIO build/test result is valid only for the final post-autofix file
+state. Do not report pre-autofix PlatformIO validation as covering post-autofix
+files. Do not list validation commands as passed if they ran before the latest
+relevant file modifications.
+
 Never mark pre-commit, formatting, linting, or wrapper validation as passed
 based only on the final hook names shown in output. The command exit status and
 post-validation working-tree state are part of the validation result.
+
+If a wrapper covers formatter/cppcheck behavior, report it as wrapper-covered
+instead of listing each underlying command as independently executed.
 
 ## Validation Reuse
 
