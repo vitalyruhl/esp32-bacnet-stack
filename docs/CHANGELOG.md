@@ -4,6 +4,11 @@ This changelog is a curated overview.
 
 ## Unreleased
 
+- Added `BacnetProperty::lastValue()`, `BacnetProperty::lastStatus()`, and
+  `BacnetProperty::lastUpdateMs()` cache accessors,
+  `readAllAdvertisedProperties()` helpers for property-list-driven reads, and
+  bumped the library/example versions to `0.23.0`.
+
 - Added client-side BACnet property cache storage for collected/read
   properties and bumped the library/example versions to `0.22.0`.
 

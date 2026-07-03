@@ -27,6 +27,8 @@ Current public responsibilities:
 - read compact object health through `readObjectStatus()`
 - collect a property's advertised property list through `readPropertyList()`
 - safely attempt all collected properties through `readAllProperties()`
+- use `readAllAdvertisedProperties()` to read the advertised property list and
+  then attempt every collected property without aborting on one property failure
 - inspect the latest collected/read property cache through `cachedProperty()`
 	and `cachedPropertyCount()`
 - create `BacnetRemoteObject` wrappers through `object()`
@@ -42,7 +44,7 @@ Current public responsibilities:
 - create one `BacnetProperty` wrapper through `property()`
 - read one property through `readProperty()`
 - read convenience properties through `readObjectName()`, `readDescription()`, `readPresentValue()`, and `readPropertyList()`
-- use the property-list and read-all helpers through `readPropertyList()` and `readAllProperties()`
+- use the property-list and read-all helpers through `readPropertyList()`, `readAllProperties()`, and `readAllAdvertisedProperties()`
 
 ### `BacnetProperty`
 
@@ -50,6 +52,8 @@ Current public responsibilities:
 
 - describe one object/property/array-index request through `request()`
 - perform one property read through `read()`
+- inspect the cached read state through `lastValue()`, `lastStatus()`, and
+	`lastUpdateMs()`
 - create a caller-owned subscription handle through `subscribe()`
 
 ## Common Result Types

@@ -995,6 +995,30 @@ void test_bacnet_device_session_caches_failed_read_status() {
   TEST_ASSERT_FALSE(cached.hasValue);
 }
 
+void test_bacnet_property_exposes_cached_read_state() {
+  BacnetClient client;
+  BacnetDeviceSession session(client, 1234, IPAddress(0, 0, 0, 0));
+  const BacnetProperty property = session.object(BacnetObjectType::Device, 1234)
+                                    .property(BacnetPropertyId::ObjectName);
+  BacnetValue value;
+
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetValueType::Empty),
+                          static_cast<uint8_t>(property.lastValue().type));
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetPropertyReadStatus::Skipped),
+                          static_cast<uint8_t>(property.lastStatus()));
+  TEST_ASSERT_EQUAL_UINT32(0, property.lastUpdateMs());
+
+  const BacnetDeviceSessionReadStatus status = property.read(value, 0);
+
+  TEST_ASSERT_EQUAL_UINT8(
+    static_cast<uint8_t>(BacnetDeviceSessionReadStatus::SendFailed),
+    static_cast<uint8_t>(status));
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetValueType::Empty),
+                          static_cast<uint8_t>(property.lastValue().type));
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetPropertyReadStatus::SendFailed),
+                          static_cast<uint8_t>(property.lastStatus()));
+}
+
 void test_bacnet_device_session_creates_remote_object() {
   BacnetClient client;
   BacnetDeviceSession session(client, 1234, IPAddress(192, 168, 1, 50));
@@ -1110,6 +1134,43 @@ void test_bacnet_remote_object_read_all_attempts_each_property() {
   TEST_ASSERT_EQUAL_UINT8(
     static_cast<uint8_t>(BacnetPropertyReadStatus::SendFailed),
     static_cast<uint8_t>(results[1].status));
+
+  BacnetCachedProperty cached;
+  TEST_ASSERT_TRUE(session.cachedProperty(
+    object.objectId(), BacnetPropertyId::ObjectName, cached));
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetPropertyReadStatus::SendFailed),
+                          static_cast<uint8_t>(cached.status));
+  TEST_ASSERT_TRUE(session.cachedProperty(
+    object.objectId(), BacnetPropertyId::PresentValue, cached));
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetPropertyReadStatus::SendFailed),
+                          static_cast<uint8_t>(cached.status));
+}
+
+void test_bacnet_remote_object_read_all_advertised_reports_property_list_failure() {
+  BacnetClient client;
+  BacnetDeviceSession session(client, 1234, IPAddress(0, 0, 0, 0));
+  const BacnetRemoteObject object =
+    session.object(BacnetObjectType::AnalogValue, 200);
+  BacnetPropertyId properties[4] = {};
+  BacnetPropertyReadResult results[4] = {};
+
+  const BacnetPropertyReadAllResult summary = object.readAllAdvertisedProperties(
+    properties, 4, results, 4, 0);
+
+  TEST_ASSERT_EQUAL_UINT8(
+    static_cast<uint8_t>(BacnetPropertyReadStatus::SendFailed),
+    static_cast<uint8_t>(summary.propertyListStatus));
+  TEST_ASSERT_EQUAL_UINT32(0, summary.advertised);
+  TEST_ASSERT_EQUAL_UINT32(0, static_cast<uint32_t>(summary.collected));
+  TEST_ASSERT_EQUAL_UINT32(0, static_cast<uint32_t>(summary.requested));
+  TEST_ASSERT_EQUAL_UINT32(0, static_cast<uint32_t>(summary.attempted));
+  TEST_ASSERT_EQUAL_UINT32(0, static_cast<uint32_t>(summary.stored));
+
+  BacnetCachedProperty cached;
+  TEST_ASSERT_TRUE(session.cachedProperty(
+    object.objectId(), BacnetPropertyId::PropertyList, cached, 0));
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetPropertyReadStatus::SendFailed),
+                          static_cast<uint8_t>(cached.status));
 }
 
 void test_bacnet_object_scan_options_defaults() {
@@ -1581,12 +1642,14 @@ void setup() {
   RUN_TEST(test_bacnet_device_session_from_i_am_uses_default_port);
   RUN_TEST(test_bacnet_device_session_reports_send_failure);
   RUN_TEST(test_bacnet_device_session_caches_failed_read_status);
+  RUN_TEST(test_bacnet_property_exposes_cached_read_state);
   RUN_TEST(test_bacnet_device_session_creates_remote_object);
   RUN_TEST(test_bacnet_remote_object_creates_property_request);
   RUN_TEST(test_bacnet_remote_object_read_reports_send_failure);
   RUN_TEST(test_bacnet_property_read_reports_send_failure);
   RUN_TEST(test_bacnet_remote_object_property_list_reports_send_failure);
   RUN_TEST(test_bacnet_remote_object_read_all_attempts_each_property);
+  RUN_TEST(test_bacnet_remote_object_read_all_advertised_reports_property_list_failure);
   RUN_TEST(test_bacnet_object_scan_options_defaults);
   RUN_TEST(test_bacnet_object_scan_options_filter_object_types);
   RUN_TEST(test_bacnet_object_scan_options_accepts_analog_input_type_zero);

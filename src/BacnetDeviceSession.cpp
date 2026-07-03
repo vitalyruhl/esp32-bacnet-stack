@@ -745,6 +745,10 @@ BacnetPropertyReadAllResult BacnetDeviceSession::readAllProperties(
   if (results == nullptr) {
     resultCapacity = 0;
   }
+  if (properties == nullptr) {
+    summary.truncated = propertyCount > 0;
+    return summary;
+  }
   summary.truncated = propertyCount > resultCapacity;
 
   const size_t limit = propertyCount < resultCapacity ? propertyCount : resultCapacity;
@@ -786,6 +790,51 @@ BacnetPropertyReadAllResult BacnetDeviceSession::readAllProperties(
     BacnetObjectId{static_cast<uint16_t>(objectType), objectInstance},
     properties,
     propertyCount,
+    results,
+    resultCapacity,
+    timeoutMs);
+}
+
+BacnetPropertyReadAllResult BacnetDeviceSession::readAllAdvertisedProperties(
+  BacnetObjectId object,
+  BacnetPropertyId* properties,
+  size_t propertyCapacity,
+  BacnetPropertyReadResult* results,
+  size_t resultCapacity,
+  uint32_t timeoutMs) {
+  BacnetPropertyReadAllResult summary;
+  const BacnetPropertyListReadResult propertyList =
+    readPropertyList(object, properties, propertyCapacity, timeoutMs);
+  summary.propertyListStatus = propertyList.status;
+  summary.advertised = propertyList.advertised;
+  summary.collected = propertyList.stored;
+  summary.truncated = propertyList.truncated;
+
+  if (propertyList.status != BacnetPropertyReadStatus::Ack) {
+    return summary;
+  }
+
+  BacnetPropertyReadAllResult readSummary = readAllProperties(
+    object, properties, propertyList.stored, results, resultCapacity, timeoutMs);
+  readSummary.propertyListStatus = propertyList.status;
+  readSummary.advertised = propertyList.advertised;
+  readSummary.collected = propertyList.stored;
+  readSummary.truncated = readSummary.truncated || propertyList.truncated;
+  return readSummary;
+}
+
+BacnetPropertyReadAllResult BacnetDeviceSession::readAllAdvertisedProperties(
+  BacnetObjectType objectType,
+  uint32_t objectInstance,
+  BacnetPropertyId* properties,
+  size_t propertyCapacity,
+  BacnetPropertyReadResult* results,
+  size_t resultCapacity,
+  uint32_t timeoutMs) {
+  return readAllAdvertisedProperties(
+    BacnetObjectId{static_cast<uint16_t>(objectType), objectInstance},
+    properties,
+    propertyCapacity,
     results,
     resultCapacity,
     timeoutMs);

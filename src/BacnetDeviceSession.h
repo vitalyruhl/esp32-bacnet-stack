@@ -272,6 +272,9 @@ struct BacnetPropertyReadResult {
 };
 
 struct BacnetPropertyReadAllResult {
+  BacnetPropertyReadStatus propertyListStatus = BacnetPropertyReadStatus::Skipped;
+  uint32_t advertised = 0;
+  size_t collected = 0;
   size_t requested = 0;
   size_t attempted = 0;
   size_t stored = 0;
@@ -438,6 +441,21 @@ public:
     uint32_t objectInstance,
     const BacnetPropertyId* properties,
     size_t propertyCount,
+    BacnetPropertyReadResult* results,
+    size_t resultCapacity,
+    uint32_t timeoutMs = kDefaultReadTimeoutMs);
+  BacnetPropertyReadAllResult readAllAdvertisedProperties(
+    BacnetObjectId object,
+    BacnetPropertyId* properties,
+    size_t propertyCapacity,
+    BacnetPropertyReadResult* results,
+    size_t resultCapacity,
+    uint32_t timeoutMs = kDefaultReadTimeoutMs);
+  BacnetPropertyReadAllResult readAllAdvertisedProperties(
+    BacnetObjectType objectType,
+    uint32_t objectInstance,
+    BacnetPropertyId* properties,
+    size_t propertyCapacity,
     BacnetPropertyReadResult* results,
     size_t resultCapacity,
     uint32_t timeoutMs = kDefaultReadTimeoutMs);
