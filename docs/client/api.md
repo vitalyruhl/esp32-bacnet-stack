@@ -27,6 +27,8 @@ Current public responsibilities:
 - read compact object health through `readObjectStatus()`
 - collect a property's advertised property list through `readPropertyList()`
 - safely attempt all collected properties through `readAllProperties()`
+- inspect the latest collected/read property cache through `cachedProperty()`
+	and `cachedPropertyCount()`
 - create `BacnetRemoteObject` wrappers through `object()`
 - run blocking object-list scans through `scanObjectList()`
 - run non-blocking object-list scans through `beginObjectListScan()`, `pollObjectListScan()`, and `cancelObjectListScan()`
@@ -56,6 +58,8 @@ Current public responsibilities:
 - `BacnetDeviceSessionReadStatus`: session-level read result status
 - `BacnetPropertyReadStatus`: per-property result status for read-all flows
 - `BacnetObjectStatus` and `BacnetObjectHealthState`: compact object health view
+- `BacnetCachedProperty`: latest cached value, timestamp, status, and error
+	metadata for one session/object/property/array-index entry
 - `BacnetScannedObject`, `BacnetObjectScanOptions`, `BacnetObjectScanResult`, and `BacnetObjectListScanJob`: object-list scan support types
 - `BacnetPropertyReadResult`, `BacnetPropertyListReadResult`, and `BacnetPropertyReadAllResult`: property-list and safe read-all support types
 - `BacnetSubscribeOptions`, `BacnetPropertySubscription`, and `BacnetSubscriptionNotification`: fallback-poll subscription support

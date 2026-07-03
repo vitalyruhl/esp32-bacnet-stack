@@ -964,6 +964,37 @@ void test_bacnet_device_session_reports_send_failure() {
                           static_cast<uint8_t>(value.type));
 }
 
+void test_bacnet_device_session_caches_failed_read_status() {
+  BacnetClient client;
+  BacnetDeviceSession session(client, 1234, IPAddress(0, 0, 0, 0));
+  const BacnetObjectId objectId{
+    static_cast<uint16_t>(BacnetObjectType::Device), 1234};
+  BacnetCachedProperty cached;
+  BacnetValue value;
+
+  TEST_ASSERT_EQUAL_UINT32(0, session.cachedPropertyCount());
+  TEST_ASSERT_FALSE(session.cachedProperty(
+    objectId, BacnetPropertyId::ObjectName, cached));
+
+  const BacnetDeviceSessionReadStatus status = session.readProperty(
+    objectId, BacnetPropertyId::ObjectName, value, 0);
+
+  TEST_ASSERT_EQUAL_UINT8(
+    static_cast<uint8_t>(BacnetDeviceSessionReadStatus::SendFailed),
+    static_cast<uint8_t>(status));
+  TEST_ASSERT_TRUE(session.cachedProperty(
+    objectId, BacnetPropertyId::ObjectName, cached));
+  TEST_ASSERT_EQUAL_UINT32(1, session.cachedPropertyCount());
+  TEST_ASSERT_EQUAL_UINT16(objectId.type, cached.request.object.type);
+  TEST_ASSERT_EQUAL_UINT32(objectId.instance, cached.request.object.instance);
+  TEST_ASSERT_EQUAL_UINT32(static_cast<uint32_t>(BacnetPropertyId::ObjectName),
+                           static_cast<uint32_t>(cached.request.property));
+  TEST_ASSERT_EQUAL_UINT32(kBacnetNoArrayIndex, cached.request.arrayIndex);
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetPropertyReadStatus::SendFailed),
+                          static_cast<uint8_t>(cached.status));
+  TEST_ASSERT_FALSE(cached.hasValue);
+}
+
 void test_bacnet_device_session_creates_remote_object() {
   BacnetClient client;
   BacnetDeviceSession session(client, 1234, IPAddress(192, 168, 1, 50));
@@ -1549,6 +1580,7 @@ void setup() {
   RUN_TEST(test_bacnet_device_session_from_endpoint_keeps_metadata);
   RUN_TEST(test_bacnet_device_session_from_i_am_uses_default_port);
   RUN_TEST(test_bacnet_device_session_reports_send_failure);
+  RUN_TEST(test_bacnet_device_session_caches_failed_read_status);
   RUN_TEST(test_bacnet_device_session_creates_remote_object);
   RUN_TEST(test_bacnet_remote_object_creates_property_request);
   RUN_TEST(test_bacnet_remote_object_read_reports_send_failure);

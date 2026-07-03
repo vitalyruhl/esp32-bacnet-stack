@@ -48,6 +48,24 @@ bool enumValueFromBacnetValue(const BacnetValue& value, uint32_t& output) {
   return true;
 }
 
+BacnetDeviceSessionReadStatus deviceReadStatusFromPropertyStatus(
+  BacnetPropertyReadStatus status) {
+  switch (status) {
+    case BacnetPropertyReadStatus::Ack:
+    case BacnetPropertyReadStatus::EmptyValue:
+    case BacnetPropertyReadStatus::UnsupportedDatatype:
+      return BacnetDeviceSessionReadStatus::Ack;
+    case BacnetPropertyReadStatus::Timeout:
+      return BacnetDeviceSessionReadStatus::Timeout;
+    case BacnetPropertyReadStatus::SendFailed:
+      return BacnetDeviceSessionReadStatus::SendFailed;
+    case BacnetPropertyReadStatus::Busy:
+      return BacnetDeviceSessionReadStatus::Busy;
+    default:
+      return BacnetDeviceSessionReadStatus::Error;
+  }
+}
+
 bool booleanValueFromBacnetValue(const BacnetValue& value, bool& output) {
   if (value.type != BacnetValueType::Boolean) {
     return false;
@@ -461,20 +479,7 @@ BacnetDeviceSessionReadStatus BacnetDeviceSession::readProperty(
   const BacnetPropertyReadStatus status =
     readPropertyDetailed(request, value, timeoutMs, errorClass, errorCode);
 
-  switch (status) {
-    case BacnetPropertyReadStatus::Ack:
-    case BacnetPropertyReadStatus::EmptyValue:
-    case BacnetPropertyReadStatus::UnsupportedDatatype:
-      return BacnetDeviceSessionReadStatus::Ack;
-    case BacnetPropertyReadStatus::Timeout:
-      return BacnetDeviceSessionReadStatus::Timeout;
-    case BacnetPropertyReadStatus::SendFailed:
-      return BacnetDeviceSessionReadStatus::SendFailed;
-    case BacnetPropertyReadStatus::Busy:
-      return BacnetDeviceSessionReadStatus::Busy;
-    default:
-      return BacnetDeviceSessionReadStatus::Error;
-  }
+  return deviceReadStatusFromPropertyStatus(status);
 }
 
 BacnetDeviceSessionReadStatus BacnetDeviceSession::readProperty(
@@ -586,11 +591,19 @@ BacnetPropertyReadStatus BacnetDeviceSession::readPropertyDetailed(
       bacnetObjectTypeText(request.object.type),
       static_cast<unsigned long>(request.object.instance),
       static_cast<unsigned long>(request.property));
+    updatePropertyCache(request,
+                        BacnetPropertyReadStatus::Busy,
+                        nullptr,
+                        millis());
     return BacnetPropertyReadStatus::Busy;
   }
 
   const uint8_t invokeId = allocateInvokeId();
   if (!client_.sendReadProperty(address_, request, invokeId, port_)) {
+    updatePropertyCache(request,
+                        BacnetPropertyReadStatus::SendFailed,
+                        nullptr,
+                        millis());
     return BacnetPropertyReadStatus::SendFailed;
   }
 
@@ -599,14 +612,54 @@ BacnetPropertyReadStatus BacnetDeviceSession::readPropertyDetailed(
     const BacnetReadPropertyPollStatus pollStatus =
       client_.pollReadPropertyStatus(value, invokeId, request, &errorClass, &errorCode);
     if (pollStatus != BacnetReadPropertyPollStatus::None) {
-      return classifyDetailedReadStatus(pollStatus, value, errorClass, errorCode, request.arrayIndex);
+      const BacnetPropertyReadStatus status = classifyDetailedReadStatus(
+        pollStatus, value, errorClass, errorCode, request.arrayIndex);
+      updatePropertyCache(
+        request, status, &value, millis(), errorClass, errorCode);
+      return status;
     }
     if (millis() - startedAt >= timeoutMs) {
       client_.logReadPropertyTimeout(invokeId, request);
+      updatePropertyCache(request,
+                          BacnetPropertyReadStatus::Timeout,
+                          nullptr,
+                          millis());
       return BacnetPropertyReadStatus::Timeout;
     }
     yield();
   }
+}
+
+bool BacnetDeviceSession::cachedProperty(
+  BacnetObjectId object,
+  BacnetPropertyId property,
+  BacnetCachedProperty& cached,
+  uint32_t arrayIndex) const {
+  const BacnetCachedProperty* entry = findCachedProperty(
+    BacnetPropertyRequest{object, property, arrayIndex});
+  if (entry == nullptr) {
+    return false;
+  }
+
+  cached = *entry;
+  return true;
+}
+
+bool BacnetDeviceSession::cachedProperty(
+  BacnetObjectType objectType,
+  uint32_t objectInstance,
+  BacnetPropertyId property,
+  BacnetCachedProperty& cached,
+  uint32_t arrayIndex) const {
+  return cachedProperty(
+    BacnetObjectId{static_cast<uint16_t>(objectType), objectInstance},
+    property,
+    cached,
+    arrayIndex);
+}
+
+size_t BacnetDeviceSession::cachedPropertyCount() const {
+  return propertyCacheCount_;
 }
 
 BacnetPropertyListReadResult BacnetDeviceSession::readPropertyList(
@@ -830,6 +883,10 @@ bool BacnetDeviceSession::tryStartObjectListScanRead(
   job.inFlightRequest_ = request;
   job.inFlightValue_ = BacnetValue{};
   if (!client_.sendReadProperty(address_, request, invokeId, port_)) {
+    updatePropertyCache(request,
+                        BacnetPropertyReadStatus::SendFailed,
+                        nullptr,
+                        nowMs);
     finishObjectListScanRead(job, BacnetDeviceSessionReadStatus::SendFailed, nullptr, nowMs);
     return false;
   }
@@ -851,18 +908,33 @@ void BacnetDeviceSession::pollInFlightObjectListScan(uint32_t nowMs) {
   }
 
   BacnetValue value;
+  uint32_t errorClass = 0;
+  uint32_t errorCode = 0;
   const BacnetReadPropertyPollStatus status = client_.pollReadPropertyStatus(
-    value, job.inFlightInvokeId_, job.inFlightRequest_);
-  if (status == BacnetReadPropertyPollStatus::Ack) {
-    finishObjectListScanRead(job, BacnetDeviceSessionReadStatus::Ack, &value, nowMs);
-    return;
-  }
-  if (status == BacnetReadPropertyPollStatus::Error) {
-    finishObjectListScanRead(job, BacnetDeviceSessionReadStatus::Error, &value, nowMs);
+    value,
+    job.inFlightInvokeId_,
+    job.inFlightRequest_,
+    &errorClass,
+    &errorCode);
+  if (status != BacnetReadPropertyPollStatus::None) {
+    const BacnetPropertyReadStatus propertyStatus = classifyDetailedReadStatus(
+      status, value, errorClass, errorCode, job.inFlightRequest_.arrayIndex);
+    updatePropertyCache(job.inFlightRequest_,
+                        propertyStatus,
+                        &value,
+                        nowMs,
+                        errorClass,
+                        errorCode);
+    finishObjectListScanRead(
+      job, deviceReadStatusFromPropertyStatus(propertyStatus), &value, nowMs);
     return;
   }
   if (nowMs - job.inFlightStartedAtMs_ >= job.options_.readTimeoutMs) {
     client_.logReadPropertyTimeout(job.inFlightInvokeId_, job.inFlightRequest_);
+    updatePropertyCache(job.inFlightRequest_,
+                        BacnetPropertyReadStatus::Timeout,
+                        nullptr,
+                        nowMs);
     finishObjectListScanRead(job, BacnetDeviceSessionReadStatus::Timeout, nullptr, nowMs);
   }
 }
@@ -1180,6 +1252,75 @@ bool BacnetDeviceSession::bacnetValueEquals(const BacnetValue& left,
   }
 }
 
+bool BacnetDeviceSession::propertyRequestEquals(
+  const BacnetPropertyRequest& left,
+  const BacnetPropertyRequest& right) {
+  return left.object.type == right.object.type &&
+         left.object.instance == right.object.instance &&
+         left.property == right.property && left.arrayIndex == right.arrayIndex;
+}
+
+const BacnetCachedProperty* BacnetDeviceSession::findCachedProperty(
+  const BacnetPropertyRequest& request) const {
+  for (size_t i = 0; i < kMaxCachedProperties; ++i) {
+    if (propertyCacheUsed_[i] &&
+        propertyRequestEquals(propertyCache_[i].request, request)) {
+      return &propertyCache_[i];
+    }
+  }
+  return nullptr;
+}
+
+BacnetCachedProperty* BacnetDeviceSession::findOrCreateCachedProperty(
+  const BacnetPropertyRequest& request) {
+  for (size_t i = 0; i < kMaxCachedProperties; ++i) {
+    if (propertyCacheUsed_[i] &&
+        propertyRequestEquals(propertyCache_[i].request, request)) {
+      return &propertyCache_[i];
+    }
+  }
+
+  size_t slot = nextPropertyCacheSlot_;
+  if (propertyCacheCount_ < kMaxCachedProperties) {
+    for (size_t i = 0; i < kMaxCachedProperties; ++i) {
+      const size_t candidate = (nextPropertyCacheSlot_ + i) % kMaxCachedProperties;
+      if (!propertyCacheUsed_[candidate]) {
+        slot = candidate;
+        ++propertyCacheCount_;
+        break;
+      }
+    }
+  }
+
+  propertyCacheUsed_[slot] = true;
+  propertyCache_[slot] = BacnetCachedProperty{};
+  propertyCache_[slot].request = request;
+  nextPropertyCacheSlot_ = (slot + 1) % kMaxCachedProperties;
+  return &propertyCache_[slot];
+}
+
+void BacnetDeviceSession::updatePropertyCache(
+  const BacnetPropertyRequest& request,
+  BacnetPropertyReadStatus status,
+  const BacnetValue* value,
+  uint32_t updatedAtMs,
+  uint32_t errorClass,
+  uint32_t errorCode) {
+  BacnetCachedProperty* entry = findOrCreateCachedProperty(request);
+  if (entry == nullptr) {
+    return;
+  }
+
+  entry->status = status;
+  entry->updatedAtMs = updatedAtMs;
+  entry->errorClass = errorClass;
+  entry->errorCode = errorCode;
+  if (value != nullptr) {
+    entry->value = *value;
+    entry->hasValue = true;
+  }
+}
+
 void BacnetDeviceSession::pollInFlightSubscription(uint32_t nowMs) {
   if (inFlightSubscription_ == nullptr) {
     return;
@@ -1196,21 +1337,34 @@ void BacnetDeviceSession::pollInFlightSubscription(uint32_t nowMs) {
                                       subscription.propertyId_,
                                       subscription.arrayIndex_};
   BacnetValue value;
+  uint32_t errorClass = 0;
+  uint32_t errorCode = 0;
   const BacnetReadPropertyPollStatus status =
-    client_.pollReadPropertyStatus(value, subscription.inFlightInvokeId_, request);
-  if (status == BacnetReadPropertyPollStatus::Ack) {
-    finishSubscriptionPoll(subscription, BacnetDeviceSessionReadStatus::Ack, &value, nowMs);
-    return;
-  }
-
-  if (status == BacnetReadPropertyPollStatus::Error) {
-    finishSubscriptionPoll(subscription, BacnetDeviceSessionReadStatus::Error, &value, nowMs);
+    client_.pollReadPropertyStatus(value,
+                                   subscription.inFlightInvokeId_,
+                                   request,
+                                   &errorClass,
+                                   &errorCode);
+  if (status != BacnetReadPropertyPollStatus::None) {
+    const BacnetPropertyReadStatus propertyStatus = classifyDetailedReadStatus(
+      status, value, errorClass, errorCode, request.arrayIndex);
+    finishSubscriptionPoll(subscription,
+                           deviceReadStatusFromPropertyStatus(propertyStatus),
+                           &value,
+                           nowMs,
+                           propertyStatus,
+                           errorClass,
+                           errorCode);
     return;
   }
 
   if (nowMs - subscription.inFlightStartedAt_ >= subscription.options_.timeoutMs) {
     client_.logReadPropertyTimeout(subscription.inFlightInvokeId_, request);
-    finishSubscriptionPoll(subscription, BacnetDeviceSessionReadStatus::Timeout, nullptr, nowMs);
+    finishSubscriptionPoll(subscription,
+                           BacnetDeviceSessionReadStatus::Timeout,
+                           nullptr,
+                           nowMs,
+                           BacnetPropertyReadStatus::Timeout);
   }
 }
 
@@ -1240,7 +1394,8 @@ void BacnetDeviceSession::tryStartSubscriptionPoll(
     finishSubscriptionPoll(subscription,
                            BacnetDeviceSessionReadStatus::SendFailed,
                            nullptr,
-                           nowMs);
+                           nowMs,
+                           BacnetPropertyReadStatus::SendFailed);
     return;
   }
 
@@ -1256,7 +1411,15 @@ void BacnetDeviceSession::finishSubscriptionPoll(
   BacnetPropertySubscription& subscription,
   BacnetDeviceSessionReadStatus status,
   const BacnetValue* value,
-  uint32_t nowMs) {
+  uint32_t nowMs,
+  BacnetPropertyReadStatus propertyStatus,
+  uint32_t errorClass,
+  uint32_t errorCode) {
+  const BacnetPropertyRequest request{subscription.objectId_,
+                                      subscription.propertyId_,
+                                      subscription.arrayIndex_};
+  updatePropertyCache(request, propertyStatus, value, nowMs, errorClass, errorCode);
+
   const BacnetDeviceSessionReadStatus previousStatus = subscription.lastStatus_;
   const bool statusChanged = !subscription.hasTerminalStatus_ ||
                              previousStatus != status;

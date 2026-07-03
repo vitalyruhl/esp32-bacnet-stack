@@ -280,6 +280,20 @@ struct BacnetPropertyReadAllResult {
   bool truncated = false;
 };
 
+struct BacnetCachedProperty {
+  BacnetPropertyRequest request;
+  BacnetPropertyReadStatus status = BacnetPropertyReadStatus::Skipped;
+  BacnetValue value;
+  uint32_t updatedAtMs = 0;
+  uint32_t errorClass = 0;
+  uint32_t errorCode = 0;
+  bool hasValue = false;
+};
+
+#ifndef ESP_BACNET_PROPERTY_CACHE_SIZE
+#define ESP_BACNET_PROPERTY_CACHE_SIZE 8
+#endif
+
 using BacnetSubscriptionCallback =
   void (*)(const BacnetSubscriptionNotification& notification);
 
@@ -362,6 +376,7 @@ private:
 class BacnetDeviceSession {
 public:
   static constexpr uint32_t kDefaultReadTimeoutMs = kBacnetDefaultReadTimeoutMs;
+  static constexpr size_t kMaxCachedProperties = ESP_BACNET_PROPERTY_CACHE_SIZE;
 
   BacnetDeviceSession(BacnetClient& client, uint32_t deviceInstance, IPAddress address, uint16_t port = BacnetClient::kDefaultPort);
 
@@ -426,6 +441,18 @@ public:
     BacnetPropertyReadResult* results,
     size_t resultCapacity,
     uint32_t timeoutMs = kDefaultReadTimeoutMs);
+  bool cachedProperty(
+    BacnetObjectId object,
+    BacnetPropertyId property,
+    BacnetCachedProperty& cached,
+    uint32_t arrayIndex = kBacnetNoArrayIndex) const;
+  bool cachedProperty(
+    BacnetObjectType objectType,
+    uint32_t objectInstance,
+    BacnetPropertyId property,
+    BacnetCachedProperty& cached,
+    uint32_t arrayIndex = kBacnetNoArrayIndex) const;
+  size_t cachedPropertyCount() const;
   BacnetObjectScanResult scanObjectList(
     const BacnetObjectScanOptions& options,
     BacnetScannedObject* results,
@@ -452,6 +479,18 @@ private:
     BacnetPropertySubscription::PollTrigger trigger);
   static bool bacnetValueEquals(const BacnetValue& left,
                                 const BacnetValue& right);
+  static bool propertyRequestEquals(const BacnetPropertyRequest& left,
+                                    const BacnetPropertyRequest& right);
+  const BacnetCachedProperty* findCachedProperty(
+    const BacnetPropertyRequest& request) const;
+  BacnetCachedProperty* findOrCreateCachedProperty(
+    const BacnetPropertyRequest& request);
+  void updatePropertyCache(const BacnetPropertyRequest& request,
+                           BacnetPropertyReadStatus status,
+                           const BacnetValue* value,
+                           uint32_t updatedAtMs,
+                           uint32_t errorClass = 0,
+                           uint32_t errorCode = 0);
   BacnetPropertyReadStatus readPropertyDetailed(
     const BacnetPropertyRequest& request,
     BacnetValue& value,
@@ -478,7 +517,10 @@ private:
   void finishSubscriptionPoll(BacnetPropertySubscription& subscription,
                               BacnetDeviceSessionReadStatus status,
                               const BacnetValue* value,
-                              uint32_t nowMs);
+                              uint32_t nowMs,
+                              BacnetPropertyReadStatus propertyStatus,
+                              uint32_t errorClass = 0,
+                              uint32_t errorCode = 0);
   void releaseSubscription(BacnetPropertySubscription& subscription);
   uint8_t allocateInvokeId();
 
@@ -490,6 +532,10 @@ private:
   BacnetPropertySubscription* inFlightSubscription_ = nullptr;
   BacnetObjectListScanJob* inFlightObjectListScan_ = nullptr;
   size_t roundRobinSubscriptionIndex_ = 0;
+  BacnetCachedProperty propertyCache_[kMaxCachedProperties];
+  bool propertyCacheUsed_[kMaxCachedProperties] = {};
+  size_t propertyCacheCount_ = 0;
+  size_t nextPropertyCacheSlot_ = 0;
 };
 
 struct BacnetObjectScanOptions {
