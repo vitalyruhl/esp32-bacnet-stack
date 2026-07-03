@@ -2,6 +2,7 @@
 
 #include "BacnetDeviceSession.h"
 
+#include "BacnetDisplayText.h"
 #include "BacnetRemoteObject.h"
 
 #include <cstring>
@@ -141,60 +142,7 @@ bool bacnetEngineeringUnitId(const BacnetValue& value, uint32_t& unitId) {
 }
 
 const char* bacnetEngineeringUnitSymbol(uint32_t unitId) {
-  switch (unitId) {
-    case 2:
-      return "mA";
-    case 3:
-      return "A";
-    case 5:
-      return "V";
-    case 19:
-      return "kWh";
-    case 27:
-      return "Hz";
-    case 29:
-      return "%RH";
-    case 31:
-      return "m";
-    case 37:
-      return "lx";
-    case 47:
-      return "W";
-    case 48:
-      return "kW";
-    case 53:
-      return "Pa";
-    case 54:
-      return "kPa";
-    case 62:
-      return "degC";
-    case 63:
-      return "K";
-    case 64:
-      return "degF";
-    case 71:
-      return "h";
-    case 72:
-      return "min";
-    case 73:
-      return "s";
-    case 74:
-      return "m/s";
-    case 82:
-      return "l";
-    case 87:
-      return "l/s";
-    case 88:
-      return "l/min";
-    case 95:
-      return "";
-    case 96:
-      return "ppm";
-    case 98:
-      return "%";
-    default:
-      return nullptr;
-  }
+  return bacnetCommonEngineeringUnitSymbol(unitId);
 }
 
 const char* bacnetEventStateText(uint32_t eventState) {

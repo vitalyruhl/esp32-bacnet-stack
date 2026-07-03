@@ -367,11 +367,46 @@ void test_bacnet_engineering_unit_symbol_mapping_is_small_and_safe() {
   TEST_ASSERT_TRUE(bacnetEngineeringUnitId(value, unitId));
   TEST_ASSERT_EQUAL_UINT32(62, unitId);
   TEST_ASSERT_EQUAL_STRING("degC", bacnetEngineeringUnitSymbol(unitId));
+  TEST_ASSERT_EQUAL_STRING("degC", bacnetCommonEngineeringUnitSymbol(unitId));
+  TEST_ASSERT_EQUAL_STRING("\xC2\xB0", bacnetEngineeringUnitSymbol(90));
   TEST_ASSERT_EQUAL_STRING("%", bacnetEngineeringUnitSymbol(98));
+  TEST_ASSERT_EQUAL_STRING("", bacnetEngineeringUnitSymbol(95));
   TEST_ASSERT_NULL(bacnetEngineeringUnitSymbol(9999));
 
   value.type = BacnetValueType::Real;
   TEST_ASSERT_FALSE(bacnetEngineeringUnitId(value, unitId));
+
+  TEST_ASSERT_EQUAL_STRING("AV", bacnetObjectTypePrefix(BacnetObjectType::AnalogValue));
+  TEST_ASSERT_EQUAL_STRING("DEV", bacnetObjectTypePrefix(BacnetObjectType::Device));
+  TEST_ASSERT_EQUAL_STRING("OBJ", bacnetObjectTypePrefix(9999));
+  TEST_ASSERT_TRUE(bacnetIsAnalogProcessObject(
+    static_cast<uint16_t>(BacnetObjectType::AnalogInput)));
+  TEST_ASSERT_TRUE(bacnetIsBinaryProcessObject(
+    static_cast<uint16_t>(BacnetObjectType::BinaryValue)));
+  TEST_ASSERT_TRUE(bacnetIsMultiStateProcessObject(
+    static_cast<uint16_t>(BacnetObjectType::MultiStateValue)));
+  TEST_ASSERT_TRUE(bacnetIsProcessObject(
+    static_cast<uint16_t>(BacnetObjectType::AnalogValue)));
+  TEST_ASSERT_FALSE(bacnetIsProcessObject(
+    static_cast<uint16_t>(BacnetObjectType::Device)));
+  TEST_ASSERT_EQUAL_STRING(
+    "present-value",
+    bacnetPropertyDisplayName(BacnetPropertyId::PresentValue));
+  TEST_ASSERT_EQUAL_STRING(
+    "cov-increment",
+    bacnetPropertyDisplayName(BacnetPropertyId::CovIncrement));
+  TEST_ASSERT_EQUAL_STRING(
+    "property",
+    bacnetPropertyDisplayName(static_cast<BacnetPropertyId>(9999)));
+
+  BacnetSubscriptionNotification notification;
+  TEST_ASSERT_EQUAL_STRING("update", bacnetSubscriptionReasonText(notification));
+  notification.statusChanged = true;
+  TEST_ASSERT_EQUAL_STRING("status", bacnetSubscriptionReasonText(notification));
+  notification.valueChanged = true;
+  TEST_ASSERT_EQUAL_STRING("changed", bacnetSubscriptionReasonText(notification));
+  notification.firstValue = true;
+  TEST_ASSERT_EQUAL_STRING("first", bacnetSubscriptionReasonText(notification));
 }
 
 void test_bacnet_client_builds_mv_present_value_request() {

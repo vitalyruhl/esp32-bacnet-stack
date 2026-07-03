@@ -6,19 +6,28 @@ This changelog is a curated overview.
 
 - Added read-only BACnet process-object convenience helpers, Analog Value
   metadata helpers, and a watched Analog Value card in `examples/client-demo`,
-  and bumped the library/example versions to `0.24.0`.
+  extracted reusable BACnet display text helpers, and bumped the
+  library/example versions to `0.24.0`.
+
+## 0.23.0
 
 - Added `BacnetProperty::lastValue()`, `BacnetProperty::lastStatus()`, and
   `BacnetProperty::lastUpdateMs()` cache accessors,
   `readAllAdvertisedProperties()` helpers for property-list-driven reads, and
   bumped the library/example versions to `0.23.0`.
 
+## 0.22.0
+
 - Added client-side BACnet property cache storage for collected/read
   properties and bumped the library/example versions to `0.22.0`.
+
+## 0.21.0
 
 - Bumped the library version to `0.21.0` and aligned example `APP_VERSION`
   constants after introducing compile-time BACnet write feature-gate
   foundation and related PlatformIO build-matrix validation environments.
+
+## 0.20.0
 
 - Added `BacnetDeviceSession::fromIAm()` and
   `BacnetDeviceSession::fromEndpoint()` helpers for creating client sessions
@@ -38,7 +47,13 @@ This changelog is a curated overview.
 - Added an explicit `Scan / Rescan` action to `examples/client-demo` so BACnet
   process-object scans can be restarted from the web UI or ConfigManager
   runtime-action route without reset or re-upload.
+
+## 0.19.0
+
 - Bumped the library and example version constants to `0.19.0`.
+
+## 0.18.0
+
 - Added a release backcheck script and documentation to verify the published
   PlatformIO Registry package from an external consumer copy of the WAGO HIL
   acceptance example.
@@ -51,7 +66,10 @@ This changelog is a curated overview.
   read-only.
 - Added a minimal read-only BACnet object health/status view to
   `examples/client-demo`.
+
 - Bumped the library and example version constants to `0.18.0`.
+
+## 0.17.0
 
 - Added standard BACnet process object identifiers for AI/AO/AV, BI/BO/BV, and
   MI/MO/MV to the generic client-facing object model and text helpers.
@@ -61,14 +79,15 @@ This changelog is a curated overview.
 - Extended `examples/hil-wago-client-acceptance` `S02` with optional local
   AI/AO/BI/BO/BV/MI/MO/MV target coverage that skips unconfigured optional
   targets and does not perform BACnet writes.
-- Bumped the library and example version constants to `0.17.0`.
-
 - Added caller-buffered BACnet `property-list` discovery and safe read-all APIs
   for known objects with per-property status reporting and preserved typed
   `BacnetValue` results where decoding succeeds.
 - Extended `examples/hil-wago-client-acceptance` with optional local `S02`
   property-list discovery and safe read-all validation without BACnet writes.
-- Bumped the library and example version constants to `0.16.0`.
+
+- Bumped the library and example version constants to `0.17.0`.
+
+## 0.15.0
 
 - Added `BacnetObjectListScanJob` with `beginObjectListScan()` and
   `pollObjectListScan()` for loop-driven, caller-buffered Device `object-list`
@@ -79,12 +98,16 @@ This changelog is a curated overview.
   non-blocking scan API.
 - Bumped the library and example version constants to `0.15.0`.
 
+## 0.14.0
+
 - Refactored `examples/client-demo` into a thin ConfigurationManager/UI demo
   over reusable `BacnetDeviceSession`, object-list scan, property, subscription,
   and logging APIs.
 - Removed demo-owned BACnet object-list scan state, range probing, active
   ReadProperty invoke tracking, and manual present-value refresh loops from the
   client demo.
+
+## 0.13.0
 
 - Added `BacnetProperty::subscribe()` with a caller-owned
   `BacnetPropertySubscription` handle for callback-based property updates.
