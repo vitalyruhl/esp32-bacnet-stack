@@ -5,7 +5,7 @@
 // Copy this file to secrets.h and adjust local values there.
 // The real secrets.h file is ignored by Git and must not be committed.
 
-#define APP_NAME "BACnet Client Discovery Demo"
+#define APP_NAME "BACnet Client Demo"
 
 #define MY_WIFI_SSID "YOUR_WIFI_SSID"
 #define MY_WIFI_PASSWORD "YOUR_WIFI_PASSWORD"
@@ -35,3 +35,12 @@
 // 5=binary-value, 19=multi-state-value.
 // #define BACNET_STATUS_OBJECT_TYPE 2
 // #define BACNET_STATUS_OBJECT_INSTANCE 220
+
+// Optional read-only fallback objects for visual checks when a target does not
+// answer BACnet object-list reads. Set an instance to 0 to disable that group.
+#define BACNET_FALLBACK_ANALOG_OBJECT_TYPE 2
+#define BACNET_FALLBACK_ANALOG_OBJECT_INSTANCE 220
+#define BACNET_FALLBACK_BINARY_OBJECT_TYPE 5
+#define BACNET_FALLBACK_BINARY_OBJECT_INSTANCE 320
+#define BACNET_FALLBACK_MULTISTATE_OBJECT_TYPE 19
+#define BACNET_FALLBACK_MULTISTATE_OBJECT_INSTANCE 2020

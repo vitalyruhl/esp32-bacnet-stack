@@ -76,7 +76,7 @@ Additional status notes:
 
 ## screenshots
 
-![alt text](docs/screenshots/bnm-V0.8.2.jpg)
+![Screenshot V0.19.0](docs/screenshots/bnm-V0.19.0.jpg)
 
 
 ## Repository Layout
@@ -316,17 +316,28 @@ subscription, and prints compact Serial output. It does not use ConfigManager,
 web UI, server behavior, or BACnet writes.
 
 The `examples/client-demo` firmware also includes a lightweight BACnet/IP
-Discovery card for demo visibility. It selects the configured BACnet/IP device
-or the first discovered I-Am device, keeps the BME280 status card unchanged,
-and drives a `BacnetObjectListScanJob` from `loop()` for process object
-discovery. Up to 10 found Analog, Binary, and Multi-State process objects are
-displayed with `description` or `objectName` plus `presentValue` status/value.
-The demo also shows one read-only object health/status snapshot selected from
-local configuration or the first discovered process object. Present values
-refresh through `BacnetProperty::subscribe()` with fallback polling. BACnet scan
-and subscription activity is written through the
-BACnet logger and forwarded to the ConfigurationManager GUI log by the demo
-adapter.
+Client card for demo visibility. It selects the configured BACnet/IP device or
+the first discovered I-Am device, keeps the BME280 status card unchanged, and
+drives a `BacnetObjectListScanJob` from `loop()` for process object discovery.
+Up to 10 found Analog, Binary, and Multi-State process objects are displayed
+with `description` or `objectName` plus `presentValue` status/value. The demo
+also shows one read-only object health/status snapshot selected from local
+configuration or the first discovered process object. Present values refresh
+through `BacnetProperty::subscribe()` with fallback polling. BACnet scan and
+subscription activity is written through the BACnet logger and forwarded to the
+ConfigurationManager GUI log by the demo adapter.
+
+The same card exposes a `Scan / Rescan` button to restart the BACnet process
+object scan without reflashing or resetting the ESP32. The action uses the
+ConfigManager runtime-action route and is also available for local checks
+through:
+
+```sh
+curl -X POST "http://<esp-ip>/runtime_action/button?group=bacnet&key=device0_rescan"
+```
+
+The endpoint returns the framework action status, while accepted/rejected
+rescan details are shown in the BACnet GUI log and State field.
 
 ## BACnet Logging
 
