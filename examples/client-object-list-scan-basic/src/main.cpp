@@ -104,8 +104,7 @@ bool connectWifi() {
   return true;
 }
 
-void printValue(const char* label, BacnetDeviceSessionReadStatus status,
-                const BacnetValue& value) {
+void printValue(const char* label, BacnetDeviceSessionReadStatus status, const BacnetValue& value) {
   Serial.print("  ");
   Serial.print(label);
   Serial.print(": ");
@@ -128,32 +127,32 @@ void readDeviceObjectName(BacnetDeviceSession& session) {
 
   BacnetValue value;
   BacnetProperty objectName =
-      session.object(session.deviceObject())
-          .property(BacnetPropertyId::ObjectName);
+    session.object(session.deviceObject())
+      .property(BacnetPropertyId::ObjectName);
   const BacnetDeviceSessionReadStatus status =
-      objectName.read(value, kReadTimeoutMs);
+    objectName.read(value, kReadTimeoutMs);
 
   printValue("device object-name", status, value);
 }
 
 bool isPresentValueSubscriptionCandidate(BacnetObjectId objectId) {
   return objectId.type == static_cast<uint16_t>(BacnetObjectType::AnalogInput) ||
-     objectId.type ==
-       static_cast<uint16_t>(BacnetObjectType::AnalogOutput) ||
-     objectId.type ==
-       static_cast<uint16_t>(BacnetObjectType::AnalogValue) ||
-     objectId.type ==
-       static_cast<uint16_t>(BacnetObjectType::BinaryInput) ||
-     objectId.type ==
-       static_cast<uint16_t>(BacnetObjectType::BinaryOutput) ||
-     objectId.type ==
-       static_cast<uint16_t>(BacnetObjectType::BinaryValue) ||
-     objectId.type ==
-       static_cast<uint16_t>(BacnetObjectType::MultiStateInput) ||
-     objectId.type ==
-       static_cast<uint16_t>(BacnetObjectType::MultiStateOutput) ||
-     objectId.type ==
-       static_cast<uint16_t>(BacnetObjectType::MultiStateValue);
+         objectId.type ==
+           static_cast<uint16_t>(BacnetObjectType::AnalogOutput) ||
+         objectId.type ==
+           static_cast<uint16_t>(BacnetObjectType::AnalogValue) ||
+         objectId.type ==
+           static_cast<uint16_t>(BacnetObjectType::BinaryInput) ||
+         objectId.type ==
+           static_cast<uint16_t>(BacnetObjectType::BinaryOutput) ||
+         objectId.type ==
+           static_cast<uint16_t>(BacnetObjectType::BinaryValue) ||
+         objectId.type ==
+           static_cast<uint16_t>(BacnetObjectType::MultiStateInput) ||
+         objectId.type ==
+           static_cast<uint16_t>(BacnetObjectType::MultiStateOutput) ||
+         objectId.type ==
+           static_cast<uint16_t>(BacnetObjectType::MultiStateValue);
 }
 
 void printSubscriptionReason(const BacnetSubscriptionNotification& notification) {
@@ -176,7 +175,7 @@ void printSubscriptionReason(const BacnetSubscriptionNotification& notification)
 }
 
 void onSubscriptionUpdate(
-    const BacnetSubscriptionNotification& notification) {
+  const BacnetSubscriptionNotification& notification) {
   Serial.print("[I] subscription ");
   printObjectId(notification.objectId);
   Serial.print(" present-value status=");
@@ -239,8 +238,7 @@ void printScanResults(const BacnetObjectScanResult& scan) {
     Serial.println();
     printValue("object-name", object.objectNameStatus, object.objectName);
     printValue("description", object.descriptionStatus, object.description);
-    printValue("present-value", object.presentValueStatus,
-               object.presentValue);
+    printValue("present-value", object.presentValueStatus, object.presentValue);
   }
 }
 
@@ -258,9 +256,9 @@ bool startPresentValueSubscription(BacnetDeviceSession& session,
     options.notifyOnStatusChange = true;
 
     static BacnetPropertySubscription subscription =
-        session.object(objectId)
-            .property(BacnetPropertyId::PresentValue)
-            .subscribe(onSubscriptionUpdate, nullptr, options);
+      session.object(objectId)
+        .property(BacnetPropertyId::PresentValue)
+        .subscribe(onSubscriptionUpdate, nullptr, options);
 
     activeSession = &session;
     activeSubscription = &subscription;
@@ -292,8 +290,7 @@ void runScan() {
     return;
   }
   static BacnetDeviceSession session = BacnetDeviceSession::fromEndpoint(
-      bacnetClient, BACNET_TARGET_DEVICE_INSTANCE, targetAddress,
-      BACNET_TARGET_PORT);
+    bacnetClient, BACNET_TARGET_DEVICE_INSTANCE, targetAddress, BACNET_TARGET_PORT);
 
   Serial.print("[I] target BACnet IP ");
   Serial.println(targetAddress);
@@ -305,15 +302,15 @@ void runScan() {
   readDeviceObjectName(session);
 
   const BacnetObjectType valueObjectTypes[] = {
-      BacnetObjectType::AnalogInput,
-      BacnetObjectType::AnalogOutput,
-      BacnetObjectType::AnalogValue,
-      BacnetObjectType::BinaryInput,
-      BacnetObjectType::BinaryOutput,
-      BacnetObjectType::BinaryValue,
-      BacnetObjectType::MultiStateInput,
-      BacnetObjectType::MultiStateOutput,
-      BacnetObjectType::MultiStateValue,
+    BacnetObjectType::AnalogInput,
+    BacnetObjectType::AnalogOutput,
+    BacnetObjectType::AnalogValue,
+    BacnetObjectType::BinaryInput,
+    BacnetObjectType::BinaryOutput,
+    BacnetObjectType::BinaryValue,
+    BacnetObjectType::MultiStateInput,
+    BacnetObjectType::MultiStateOutput,
+    BacnetObjectType::MultiStateValue,
   };
 
   BacnetObjectScanOptions options;
@@ -324,7 +321,7 @@ void runScan() {
   Serial.println("[I] Starting BACnet object-list scan");
   printScanOptions(options, kMaxScanResults);
   const BacnetObjectScanResult scan =
-      session.scanObjectList(options, scanResults, kMaxScanResults);
+    session.scanObjectList(options, scanResults, kMaxScanResults);
   printScanResults(scan);
   if (scan.stored == 0) {
     Serial.println("[W] scan stored no objects; subscription validation skipped");
@@ -333,7 +330,7 @@ void runScan() {
   startPresentValueSubscription(session, scan);
 }
 
-}  // namespace
+} // namespace
 
 void setup() {
   Serial.begin(kSerialBaud);

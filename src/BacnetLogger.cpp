@@ -29,11 +29,11 @@ void copyText(char* target, size_t targetSize, const char* source) {
 
   const size_t sourceLength = std::strlen(source);
   const size_t copyLength =
-      sourceLength < (targetSize - 1) ? sourceLength : (targetSize - 1);
+    sourceLength < (targetSize - 1) ? sourceLength : (targetSize - 1);
   std::memcpy(target, source, copyLength);
   target[copyLength] = '\0';
 }
-}  // namespace
+} // namespace
 
 bool BacnetLogOutput::shouldLog(const BacnetLogRecord& record) {
   if (!isLevelAllowed(record.level, level_)) {
@@ -69,7 +69,7 @@ void BacnetLogger::addOutput(BacnetLogOutput& output) {
   outputs_[outputCount_++] = &output;
 }
 
-bool BacnetLogger::removeOutput(BacnetLogOutput& output) {
+bool BacnetLogger::removeOutput(const BacnetLogOutput& output) {
   for (size_t i = 0; i < outputCount_; ++i) {
     if (outputs_[i] == &output) {
       for (size_t j = i; j + 1 < outputCount_; ++j) {
@@ -149,8 +149,7 @@ void BacnetLogger::tick(uint32_t nowMs) {
 #endif
 }
 
-void BacnetLogger::logTag(BacnetLogLevel level, const char* tag,
-                          const char* format, ...) {
+void BacnetLogger::logTag(BacnetLogLevel level, const char* tag, const char* format, ...) {
   va_list args;
   va_start(args, format);
   logV(level, tag, format, args);
@@ -237,8 +236,7 @@ bool BacnetLogger::isEnabledFor(BacnetLogLevel level) {
 #endif
 }
 
-void BacnetLogger::logV(BacnetLogLevel level, const char* tag,
-                        const char* format, va_list args) {
+void BacnetLogger::logV(BacnetLogLevel level, const char* tag, const char* format, va_list args) {
 #if BACNET_ENABLE_LOGGING
   if (format == nullptr || !shouldEmit(level)) {
     return;
@@ -250,8 +248,7 @@ void BacnetLogger::logV(BacnetLogLevel level, const char* tag,
   char resolvedTag[kMaxTagLength] = {};
   buildTag(tag, resolvedTag, sizeof(resolvedTag));
 
-  const BacnetLogRecord record{level, resolvedTag, message, millis(), "BACnet",
-                               nullptr};
+  const BacnetLogRecord record{level, resolvedTag, message, millis(), "BACnet", nullptr};
   emit(record);
 #else
   (void)level;
@@ -268,8 +265,7 @@ bool BacnetLogger::shouldEmit(BacnetLogLevel level) const {
   return isLevelAllowed(level, globalLevel_);
 }
 
-void BacnetLogger::buildTag(const char* explicitTag, char* buffer,
-                            size_t bufferSize) const {
+void BacnetLogger::buildTag(const char* explicitTag, char* buffer, size_t bufferSize) const {
   if (buffer == nullptr || bufferSize == 0) {
     return;
   }

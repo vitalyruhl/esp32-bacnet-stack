@@ -58,11 +58,11 @@ bool booleanValueFromBacnetValue(const BacnetValue& value, bool& output) {
 }
 
 BacnetPropertyReadStatus classifyDetailedReadStatus(
-    BacnetReadPropertyPollStatus pollStatus,
-    const BacnetValue& value,
-    uint32_t errorClass,
-    uint32_t errorCode,
-    uint32_t requestArrayIndex) {
+  BacnetReadPropertyPollStatus pollStatus,
+  const BacnetValue& value,
+  uint32_t errorClass,
+  uint32_t errorCode,
+  uint32_t requestArrayIndex) {
   switch (pollStatus) {
     case BacnetReadPropertyPollStatus::Ack:
       if (value.type == BacnetValueType::Unsupported) {
@@ -97,7 +97,7 @@ BacnetPropertyReadStatus classifyDetailedReadStatus(
   return BacnetPropertyReadStatus::Error;
 }
 
-}  // namespace
+} // namespace
 
 bool bacnetDecodeStatusFlags(const BacnetValue& value,
                              BacnetStatusFlags& flags) {
@@ -170,8 +170,8 @@ const char* bacnetReliabilityText(uint32_t reliability) {
 }
 
 BacnetObjectHealthState bacnetDeriveObjectHealthState(
-    const BacnetObjectStatus& status,
-    bool presentValueRequired) {
+  const BacnetObjectStatus& status,
+  bool presentValueRequired) {
   if ((status.outOfServiceStatus == BacnetPropertyReadStatus::Ack &&
        status.outOfService) ||
       (status.statusFlagsStatus == BacnetPropertyReadStatus::Ack &&
@@ -209,13 +209,13 @@ BacnetObjectHealthState bacnetDeriveObjectHealthState(
 }
 
 BacnetPropertySubscription::BacnetPropertySubscription(
-    BacnetDeviceSession& session,
-    BacnetObjectId objectId,
-    BacnetPropertyId propertyId,
-    uint32_t arrayIndex,
-    BacnetSubscribeOptions options,
-    BacnetSubscriptionCallback callback,
-    void* userData)
+  BacnetDeviceSession& session,
+  BacnetObjectId objectId,
+  BacnetPropertyId propertyId,
+  uint32_t arrayIndex,
+  BacnetSubscribeOptions options,
+  BacnetSubscriptionCallback callback,
+  void* userData)
     : session_(&session),
       objectId_(objectId),
       propertyId_(propertyId),
@@ -233,12 +233,12 @@ BacnetPropertySubscription::BacnetPropertySubscription(
 }
 
 BacnetPropertySubscription::BacnetPropertySubscription(
-    BacnetPropertySubscription&& other) noexcept {
+  BacnetPropertySubscription&& other) noexcept {
   moveFrom(other);
 }
 
 BacnetPropertySubscription& BacnetPropertySubscription::operator=(
-    BacnetPropertySubscription&& other) noexcept {
+  BacnetPropertySubscription&& other) noexcept {
   if (this != &other) {
     if (session_ != nullptr) {
       session_->releaseSubscription(*this);
@@ -310,10 +310,7 @@ void BacnetPropertySubscription::stop() {
 
   if (session_ != nullptr) {
     session_->client().logger().info(
-        "BACnet/Subscription", "subscription stopped %s,%lu %u array=%lu",
-        bacnetObjectTypeText(objectId_.type),
-        static_cast<unsigned long>(objectId_.instance),
-        static_cast<unsigned>(propertyId_), static_cast<unsigned long>(arrayIndex_));
+      "BACnet/Subscription", "subscription stopped %s,%lu %u array=%lu", bacnetObjectTypeText(objectId_.type), static_cast<unsigned long>(objectId_.instance), static_cast<unsigned>(propertyId_), static_cast<unsigned long>(arrayIndex_));
     if (session_->inFlightSubscription_ == this) {
       session_->inFlightSubscription_ = nullptr;
     }
@@ -401,16 +398,17 @@ void BacnetPropertySubscription::moveFrom(BacnetPropertySubscription& other) {
 
 BacnetDeviceSession::BacnetDeviceSession(BacnetClient& client,
                                          uint32_t deviceInstance,
-                                         IPAddress address, uint16_t port)
+                                         IPAddress address,
+                                         uint16_t port)
     : client_(client),
       deviceInstance_(deviceInstance),
       address_(address),
       port_(port) {}
 
 BacnetDeviceSession BacnetDeviceSession::fromEndpoint(BacnetClient& client,
-                                                       uint32_t deviceInstance,
-                                                       IPAddress address,
-                                                       uint16_t port) {
+                                                      uint32_t deviceInstance,
+                                                      IPAddress address,
+                                                      uint16_t port) {
   return BacnetDeviceSession(client, deviceInstance, address, port);
 }
 
@@ -452,17 +450,16 @@ BacnetRemoteObject BacnetDeviceSession::object(BacnetObjectId objectId) {
 BacnetRemoteObject BacnetDeviceSession::object(BacnetObjectType objectType,
                                                uint32_t objectInstance) {
   return object(
-      BacnetObjectId{static_cast<uint16_t>(objectType), objectInstance});
+    BacnetObjectId{static_cast<uint16_t>(objectType), objectInstance});
 }
 
 BacnetDeviceSessionReadStatus BacnetDeviceSession::readProperty(
-    BacnetObjectId object, BacnetPropertyId property, BacnetValue& value,
-    uint32_t timeoutMs, uint32_t arrayIndex) {
-  const BacnetPropertyRequest request{object, property, arrayIndex};
+  BacnetObjectId objectId, BacnetPropertyId property, BacnetValue& value, uint32_t timeoutMs, uint32_t arrayIndex) {
+  const BacnetPropertyRequest request{objectId, property, arrayIndex};
   uint32_t errorClass = 0;
   uint32_t errorCode = 0;
   const BacnetPropertyReadStatus status =
-      readPropertyDetailed(request, value, timeoutMs, errorClass, errorCode);
+    readPropertyDetailed(request, value, timeoutMs, errorClass, errorCode);
 
   switch (status) {
     case BacnetPropertyReadStatus::Ack:
@@ -481,34 +478,39 @@ BacnetDeviceSessionReadStatus BacnetDeviceSession::readProperty(
 }
 
 BacnetDeviceSessionReadStatus BacnetDeviceSession::readProperty(
-    BacnetObjectType objectType, uint32_t objectInstance,
-    BacnetPropertyId property, BacnetValue& value, uint32_t timeoutMs,
-    uint32_t arrayIndex) {
+  BacnetObjectType objectType, uint32_t objectInstance, BacnetPropertyId property, BacnetValue& value, uint32_t timeoutMs, uint32_t arrayIndex) {
   return readProperty(
-      BacnetObjectId{static_cast<uint16_t>(objectType), objectInstance},
-      property, value, timeoutMs, arrayIndex);
+    BacnetObjectId{static_cast<uint16_t>(objectType), objectInstance},
+    property,
+    value,
+    timeoutMs,
+    arrayIndex);
 }
 
 BacnetObjectHealthState BacnetDeviceSession::readObjectStatus(
-    BacnetObjectId object,
-    BacnetObjectStatus& status,
-    uint32_t timeoutMs,
-    bool presentValueRequired) {
+  BacnetObjectId objectId,
+  BacnetObjectStatus& status,
+  uint32_t timeoutMs,
+  bool presentValueRequired) {
   status = BacnetObjectStatus{};
-  status.objectId = object;
+  status.objectId = objectId;
 
   uint32_t errorClass = 0;
   uint32_t errorCode = 0;
   status.presentValueStatus = readPropertyDetailed(
-      BacnetPropertyRequest{object, BacnetPropertyId::PresentValue,
-                            kBacnetNoArrayIndex},
-      status.presentValue, timeoutMs, errorClass, errorCode);
+    BacnetPropertyRequest{objectId, BacnetPropertyId::PresentValue, kBacnetNoArrayIndex},
+    status.presentValue,
+    timeoutMs,
+    errorClass,
+    errorCode);
 
   BacnetValue statusFlagsValue;
   status.statusFlagsStatus = readPropertyDetailed(
-      BacnetPropertyRequest{object, BacnetPropertyId::StatusFlags,
-                            kBacnetNoArrayIndex},
-      statusFlagsValue, timeoutMs, errorClass, errorCode);
+    BacnetPropertyRequest{objectId, BacnetPropertyId::StatusFlags, kBacnetNoArrayIndex},
+    statusFlagsValue,
+    timeoutMs,
+    errorClass,
+    errorCode);
   if (status.statusFlagsStatus == BacnetPropertyReadStatus::Ack &&
       !bacnetDecodeStatusFlags(statusFlagsValue, status.statusFlags)) {
     status.statusFlagsStatus = BacnetPropertyReadStatus::DecodeError;
@@ -516,9 +518,11 @@ BacnetObjectHealthState BacnetDeviceSession::readObjectStatus(
 
   BacnetValue eventStateValue;
   status.eventStateStatus = readPropertyDetailed(
-      BacnetPropertyRequest{object, BacnetPropertyId::EventState,
-                            kBacnetNoArrayIndex},
-      eventStateValue, timeoutMs, errorClass, errorCode);
+    BacnetPropertyRequest{objectId, BacnetPropertyId::EventState, kBacnetNoArrayIndex},
+    eventStateValue,
+    timeoutMs,
+    errorClass,
+    errorCode);
   if (status.eventStateStatus == BacnetPropertyReadStatus::Ack &&
       !enumValueFromBacnetValue(eventStateValue, status.eventState)) {
     status.eventStateStatus = BacnetPropertyReadStatus::DecodeError;
@@ -526,9 +530,11 @@ BacnetObjectHealthState BacnetDeviceSession::readObjectStatus(
 
   BacnetValue reliabilityValue;
   status.reliabilityStatus = readPropertyDetailed(
-      BacnetPropertyRequest{object, BacnetPropertyId::Reliability,
-                            kBacnetNoArrayIndex},
-      reliabilityValue, timeoutMs, errorClass, errorCode);
+    BacnetPropertyRequest{objectId, BacnetPropertyId::Reliability, kBacnetNoArrayIndex},
+    reliabilityValue,
+    timeoutMs,
+    errorClass,
+    errorCode);
   if (status.reliabilityStatus == BacnetPropertyReadStatus::Ack &&
       !enumValueFromBacnetValue(reliabilityValue, status.reliability)) {
     status.reliabilityStatus = BacnetPropertyReadStatus::DecodeError;
@@ -536,9 +542,11 @@ BacnetObjectHealthState BacnetDeviceSession::readObjectStatus(
 
   BacnetValue outOfServiceValue;
   status.outOfServiceStatus = readPropertyDetailed(
-      BacnetPropertyRequest{object, BacnetPropertyId::OutOfService,
-                            kBacnetNoArrayIndex},
-      outOfServiceValue, timeoutMs, errorClass, errorCode);
+    BacnetPropertyRequest{objectId, BacnetPropertyId::OutOfService, kBacnetNoArrayIndex},
+    outOfServiceValue,
+    timeoutMs,
+    errorClass,
+    errorCode);
   if (status.outOfServiceStatus == BacnetPropertyReadStatus::Ack &&
       !booleanValueFromBacnetValue(outOfServiceValue, status.outOfService)) {
     status.outOfServiceStatus = BacnetPropertyReadStatus::DecodeError;
@@ -549,33 +557,35 @@ BacnetObjectHealthState BacnetDeviceSession::readObjectStatus(
 }
 
 BacnetObjectHealthState BacnetDeviceSession::readObjectStatus(
-    BacnetObjectType objectType,
-    uint32_t objectInstance,
-    BacnetObjectStatus& status,
-    uint32_t timeoutMs,
-    bool presentValueRequired) {
+  BacnetObjectType objectType,
+  uint32_t objectInstance,
+  BacnetObjectStatus& status,
+  uint32_t timeoutMs,
+  bool presentValueRequired) {
   return readObjectStatus(
-      BacnetObjectId{static_cast<uint16_t>(objectType), objectInstance},
-      status, timeoutMs, presentValueRequired);
+    BacnetObjectId{static_cast<uint16_t>(objectType), objectInstance},
+    status,
+    timeoutMs,
+    presentValueRequired);
 }
 
 BacnetPropertyReadStatus BacnetDeviceSession::readPropertyDetailed(
-    const BacnetPropertyRequest& request,
-    BacnetValue& value,
-    uint32_t timeoutMs,
-    uint32_t& errorClass,
-    uint32_t& errorCode) {
+  const BacnetPropertyRequest& request,
+  BacnetValue& value,
+  uint32_t timeoutMs,
+  uint32_t& errorClass,
+  uint32_t& errorCode) {
   value = BacnetValue{};
   errorClass = 0;
   errorCode = 0;
 
   if (inFlightSubscription_ != nullptr || inFlightObjectListScan_ != nullptr) {
     client_.logger().warn(
-        "BACnet/ReadProperty",
-        "ReadProperty %s,%lu property=%lu skipped: session busy",
-        bacnetObjectTypeText(request.object.type),
-        static_cast<unsigned long>(request.object.instance),
-        static_cast<unsigned long>(request.property));
+      "BACnet/ReadProperty",
+      "ReadProperty %s,%lu property=%lu skipped: session busy",
+      bacnetObjectTypeText(request.object.type),
+      static_cast<unsigned long>(request.object.instance),
+      static_cast<unsigned long>(request.property));
     return BacnetPropertyReadStatus::Busy;
   }
 
@@ -587,11 +597,9 @@ BacnetPropertyReadStatus BacnetDeviceSession::readPropertyDetailed(
   const unsigned long startedAt = millis();
   while (true) {
     const BacnetReadPropertyPollStatus pollStatus =
-        client_.pollReadPropertyStatus(value, invokeId, request, &errorClass,
-                                       &errorCode);
+      client_.pollReadPropertyStatus(value, invokeId, request, &errorClass, &errorCode);
     if (pollStatus != BacnetReadPropertyPollStatus::None) {
-      return classifyDetailedReadStatus(pollStatus, value, errorClass,
-                                        errorCode, request.arrayIndex);
+      return classifyDetailedReadStatus(pollStatus, value, errorClass, errorCode, request.arrayIndex);
     }
     if (millis() - startedAt >= timeoutMs) {
       client_.logReadPropertyTimeout(invokeId, request);
@@ -602,18 +610,21 @@ BacnetPropertyReadStatus BacnetDeviceSession::readPropertyDetailed(
 }
 
 BacnetPropertyListReadResult BacnetDeviceSession::readPropertyList(
-    BacnetObjectId object,
-    BacnetPropertyId* properties,
-    size_t propertyCapacity,
-    uint32_t timeoutMs) {
+  BacnetObjectId object,
+  BacnetPropertyId* properties,
+  size_t propertyCapacity,
+  uint32_t timeoutMs) {
   BacnetPropertyListReadResult result;
   BacnetValue countValue;
   uint32_t errorClass = 0;
   uint32_t errorCode = 0;
 
   result.status = readPropertyDetailed(
-      BacnetPropertyRequest{object, BacnetPropertyId::PropertyList, 0},
-      countValue, timeoutMs, errorClass, errorCode);
+    BacnetPropertyRequest{object, BacnetPropertyId::PropertyList, 0},
+    countValue,
+    timeoutMs,
+    errorClass,
+    errorCode);
   if (result.status != BacnetPropertyReadStatus::Ack) {
     return result;
   }
@@ -625,15 +636,17 @@ BacnetPropertyListReadResult BacnetDeviceSession::readPropertyList(
   result.advertised = countValue.unsignedValue;
   result.truncated = result.advertised > propertyCapacity;
   const size_t limit = result.advertised < propertyCapacity
-                           ? static_cast<size_t>(result.advertised)
-                           : propertyCapacity;
+                         ? static_cast<size_t>(result.advertised)
+                         : propertyCapacity;
 
   for (size_t i = 0; i < limit; ++i) {
     BacnetValue propertyValue;
     const BacnetPropertyReadStatus status = readPropertyDetailed(
-        BacnetPropertyRequest{object, BacnetPropertyId::PropertyList,
-                              static_cast<uint32_t>(i + 1)},
-        propertyValue, timeoutMs, errorClass, errorCode);
+      BacnetPropertyRequest{object, BacnetPropertyId::PropertyList, static_cast<uint32_t>(i + 1)},
+      propertyValue,
+      timeoutMs,
+      errorClass,
+      errorCode);
     if (status != BacnetPropertyReadStatus::Ack) {
       result.status = status;
       return result;
@@ -655,23 +668,25 @@ BacnetPropertyListReadResult BacnetDeviceSession::readPropertyList(
 }
 
 BacnetPropertyListReadResult BacnetDeviceSession::readPropertyList(
-    BacnetObjectType objectType,
-    uint32_t objectInstance,
-    BacnetPropertyId* properties,
-    size_t propertyCapacity,
-    uint32_t timeoutMs) {
+  BacnetObjectType objectType,
+  uint32_t objectInstance,
+  BacnetPropertyId* properties,
+  size_t propertyCapacity,
+  uint32_t timeoutMs) {
   return readPropertyList(
-      BacnetObjectId{static_cast<uint16_t>(objectType), objectInstance},
-      properties, propertyCapacity, timeoutMs);
+    BacnetObjectId{static_cast<uint16_t>(objectType), objectInstance},
+    properties,
+    propertyCapacity,
+    timeoutMs);
 }
 
 BacnetPropertyReadAllResult BacnetDeviceSession::readAllProperties(
-    BacnetObjectId object,
-    const BacnetPropertyId* properties,
-    size_t propertyCount,
-    BacnetPropertyReadResult* results,
-    size_t resultCapacity,
-    uint32_t timeoutMs) {
+  BacnetObjectId object,
+  const BacnetPropertyId* properties,
+  size_t propertyCount,
+  BacnetPropertyReadResult* results,
+  size_t resultCapacity,
+  uint32_t timeoutMs) {
   BacnetPropertyReadAllResult summary;
   summary.requested = propertyCount;
   if (results == nullptr) {
@@ -688,8 +703,11 @@ BacnetPropertyReadAllResult BacnetDeviceSession::readAllProperties(
     uint32_t errorClass = 0;
     uint32_t errorCode = 0;
     entry.status = readPropertyDetailed(
-        BacnetPropertyRequest{object, properties[i], kBacnetNoArrayIndex},
-        entry.value, timeoutMs, errorClass, errorCode);
+      BacnetPropertyRequest{object, properties[i], kBacnetNoArrayIndex},
+      entry.value,
+      timeoutMs,
+      errorClass,
+      errorCode);
 
     ++summary.attempted;
     ++summary.stored;
@@ -704,22 +722,26 @@ BacnetPropertyReadAllResult BacnetDeviceSession::readAllProperties(
 }
 
 BacnetPropertyReadAllResult BacnetDeviceSession::readAllProperties(
-    BacnetObjectType objectType,
-    uint32_t objectInstance,
-    const BacnetPropertyId* properties,
-    size_t propertyCount,
-    BacnetPropertyReadResult* results,
-    size_t resultCapacity,
-    uint32_t timeoutMs) {
+  BacnetObjectType objectType,
+  uint32_t objectInstance,
+  const BacnetPropertyId* properties,
+  size_t propertyCount,
+  BacnetPropertyReadResult* results,
+  size_t resultCapacity,
+  uint32_t timeoutMs) {
   return readAllProperties(
-      BacnetObjectId{static_cast<uint16_t>(objectType), objectInstance},
-      properties, propertyCount, results, resultCapacity, timeoutMs);
+    BacnetObjectId{static_cast<uint16_t>(objectType), objectInstance},
+    properties,
+    propertyCount,
+    results,
+    resultCapacity,
+    timeoutMs);
 }
 
 BacnetObjectScanResult BacnetDeviceSession::scanObjectList(
-    const BacnetObjectScanOptions& options,
-    BacnetScannedObject* results,
-    size_t resultCapacity) {
+  const BacnetObjectScanOptions& options,
+  BacnetScannedObject* results,
+  size_t resultCapacity) {
   BacnetObjectListScanJob job;
   if (!beginObjectListScan(job, options, results, resultCapacity)) {
     return job.summary();
@@ -733,11 +755,11 @@ BacnetObjectScanResult BacnetDeviceSession::scanObjectList(
 }
 
 bool BacnetDeviceSession::beginObjectListScan(
-    BacnetObjectListScanJob& job,
-    const BacnetObjectScanOptions& options,
-    BacnetScannedObject* results,
-    size_t resultCapacity,
-    uint32_t nowMs) {
+  BacnetObjectListScanJob& job,
+  const BacnetObjectScanOptions& options,
+  BacnetScannedObject* results,
+  size_t resultCapacity,
+  uint32_t nowMs) {
   BacnetLogger& logger = client_.logger();
   if (inFlightObjectListScan_ != nullptr || inFlightSubscription_ != nullptr ||
       job.isActive()) {
@@ -755,25 +777,23 @@ bool BacnetDeviceSession::beginObjectListScan(
   inFlightObjectListScan_ = &job;
 
   logger.info(
-      "BACnet/Scan",
-      "scan start device %lu target %u.%u.%u.%u:%u max-entries %lu filter-count "
-      "%u",
-      static_cast<unsigned long>(deviceInstance_),
-      static_cast<unsigned>(address_[0]),
-      static_cast<unsigned>(address_[1]),
-      static_cast<unsigned>(address_[2]),
-      static_cast<unsigned>(address_[3]),
-      static_cast<unsigned>(port_),
-      static_cast<unsigned long>(options.maxObjectListEntries),
-      static_cast<unsigned>(options.objectTypeCount));
-  logger.debug("BACnet/Scan", "read device,%lu objectList[0] start",
-               static_cast<unsigned long>(deviceInstance_));
+    "BACnet/Scan",
+    "scan start device %lu target %u.%u.%u.%u:%u max-entries %lu filter-count "
+    "%u",
+    static_cast<unsigned long>(deviceInstance_),
+    static_cast<unsigned>(address_[0]),
+    static_cast<unsigned>(address_[1]),
+    static_cast<unsigned>(address_[2]),
+    static_cast<unsigned>(address_[3]),
+    static_cast<unsigned>(port_),
+    static_cast<unsigned long>(options.maxObjectListEntries),
+    static_cast<unsigned>(options.objectTypeCount));
+  logger.debug("BACnet/Scan", "read device,%lu objectList[0] start", static_cast<unsigned long>(deviceInstance_));
 
   const BacnetPropertyRequest countRequest{
-      deviceObject(), BacnetPropertyId::ObjectList, 0};
+    deviceObject(), BacnetPropertyId::ObjectList, 0};
   if (!tryStartObjectListScanRead(
-          job, countRequest, BacnetObjectListScanPhase::ReadObjectListCount,
-          nowMs)) {
+        job, countRequest, BacnetObjectListScanPhase::ReadObjectListCount, nowMs)) {
     return false;
   }
   return true;
@@ -794,25 +814,23 @@ void BacnetDeviceSession::cancelObjectListScan(BacnetObjectListScanJob& job) {
   if (job.session_ != this || job.isTerminal()) {
     return;
   }
-  client_.logger().warn("BACnet/Scan", "scan cancelled device %lu",
-                        static_cast<unsigned long>(deviceInstance_));
+  client_.logger().warn("BACnet/Scan", "scan cancelled device %lu", static_cast<unsigned long>(deviceInstance_));
   releaseObjectListScan(job);
   job.status_ = BacnetObjectListScanJobStatus::Cancelled;
   job.phase_ = BacnetObjectListScanPhase::Cancelled;
 }
 
 bool BacnetDeviceSession::tryStartObjectListScanRead(
-    BacnetObjectListScanJob& job,
-    const BacnetPropertyRequest& request,
-    BacnetObjectListScanPhase phase,
-    uint32_t nowMs) {
+  BacnetObjectListScanJob& job,
+  const BacnetPropertyRequest& request,
+  BacnetObjectListScanPhase phase,
+  uint32_t nowMs) {
   const uint8_t invokeId = allocateInvokeId();
   job.phase_ = phase;
   job.inFlightRequest_ = request;
   job.inFlightValue_ = BacnetValue{};
   if (!client_.sendReadProperty(address_, request, invokeId, port_)) {
-    finishObjectListScanRead(job, BacnetDeviceSessionReadStatus::SendFailed,
-                             nullptr, nowMs);
+    finishObjectListScanRead(job, BacnetDeviceSessionReadStatus::SendFailed, nullptr, nowMs);
     return false;
   }
 
@@ -834,29 +852,26 @@ void BacnetDeviceSession::pollInFlightObjectListScan(uint32_t nowMs) {
 
   BacnetValue value;
   const BacnetReadPropertyPollStatus status = client_.pollReadPropertyStatus(
-      value, job.inFlightInvokeId_, job.inFlightRequest_);
+    value, job.inFlightInvokeId_, job.inFlightRequest_);
   if (status == BacnetReadPropertyPollStatus::Ack) {
-    finishObjectListScanRead(job, BacnetDeviceSessionReadStatus::Ack, &value,
-                             nowMs);
+    finishObjectListScanRead(job, BacnetDeviceSessionReadStatus::Ack, &value, nowMs);
     return;
   }
   if (status == BacnetReadPropertyPollStatus::Error) {
-    finishObjectListScanRead(job, BacnetDeviceSessionReadStatus::Error, &value,
-                             nowMs);
+    finishObjectListScanRead(job, BacnetDeviceSessionReadStatus::Error, &value, nowMs);
     return;
   }
   if (nowMs - job.inFlightStartedAtMs_ >= job.options_.readTimeoutMs) {
     client_.logReadPropertyTimeout(job.inFlightInvokeId_, job.inFlightRequest_);
-    finishObjectListScanRead(job, BacnetDeviceSessionReadStatus::Timeout,
-                             nullptr, nowMs);
+    finishObjectListScanRead(job, BacnetDeviceSessionReadStatus::Timeout, nullptr, nowMs);
   }
 }
 
 void BacnetDeviceSession::finishObjectListScanRead(
-    BacnetObjectListScanJob& job,
-    BacnetDeviceSessionReadStatus status,
-    const BacnetValue* value,
-    uint32_t nowMs) {
+  BacnetObjectListScanJob& job,
+  BacnetDeviceSessionReadStatus status,
+  const BacnetValue* value,
+  uint32_t nowMs) {
   const BacnetObjectListScanPhase phase = job.phase_;
   job.clearInFlightState();
 
@@ -877,15 +892,13 @@ void BacnetDeviceSession::finishObjectListScanRead(
     }
     job.result_.objectListCount = value->unsignedValue;
     job.maxIndex_ = job.result_.objectListCount < job.options_.maxObjectListEntries
-                        ? job.result_.objectListCount
-                        : job.options_.maxObjectListEntries;
+                      ? job.result_.objectListCount
+                      : job.options_.maxObjectListEntries;
     if (job.result_.objectListCount > job.options_.maxObjectListEntries) {
       job.result_.truncated = true;
     }
     job.currentIndex_ = 1;
-    client_.logger().info("BACnet/Scan", "read device,%lu objectList[0]=%lu",
-                          static_cast<unsigned long>(deviceInstance_),
-                          static_cast<unsigned long>(job.result_.objectListCount));
+    client_.logger().info("BACnet/Scan", "read device,%lu objectList[0]=%lu", static_cast<unsigned long>(deviceInstance_), static_cast<unsigned long>(job.result_.objectListCount));
     advanceObjectListScan(job, nowMs);
     return;
   }
@@ -905,27 +918,20 @@ void BacnetDeviceSession::finishObjectListScanRead(
     BacnetObjectId objectId;
     if (value == nullptr || !objectIdFromObjectListValue(*value, objectId)) {
       client_.logger().trace(
-          "BACnet/Scan", "objectList[%lu] skipped malformed object identifier",
-          static_cast<unsigned long>(job.currentIndex_));
+        "BACnet/Scan", "objectList[%lu] skipped malformed object identifier", static_cast<unsigned long>(job.currentIndex_));
       ++job.currentIndex_;
       advanceObjectListScan(job, nowMs);
       return;
     }
 
     if (!job.options_.acceptsObjectType(objectId)) {
-      client_.logger().trace("BACnet/Scan", "objectList[%lu] skipped %s,%lu",
-                             static_cast<unsigned long>(job.currentIndex_),
-                             bacnetObjectTypeText(objectId.type),
-                             static_cast<unsigned long>(objectId.instance));
+      client_.logger().trace("BACnet/Scan", "objectList[%lu] skipped %s,%lu", static_cast<unsigned long>(job.currentIndex_), bacnetObjectTypeText(objectId.type), static_cast<unsigned long>(objectId.instance));
       ++job.currentIndex_;
       advanceObjectListScan(job, nowMs);
       return;
     }
 
-    client_.logger().debug("BACnet/Scan", "objectList[%lu] accepted %s,%lu",
-                           static_cast<unsigned long>(job.currentIndex_),
-                           bacnetObjectTypeText(objectId.type),
-                           static_cast<unsigned long>(objectId.instance));
+    client_.logger().debug("BACnet/Scan", "objectList[%lu] accepted %s,%lu", static_cast<unsigned long>(job.currentIndex_), bacnetObjectTypeText(objectId.type), static_cast<unsigned long>(objectId.instance));
 
     ++job.result_.found;
     job.currentObject_ = objectId;
@@ -946,8 +952,7 @@ void BacnetDeviceSession::finishObjectListScanRead(
       if (!job.truncationLogged_) {
         job.truncationLogged_ = true;
         client_.logger().warn(
-            "BACnet/Scan", "result buffer full at %u entries; scan will truncate",
-            static_cast<unsigned>(job.resultCapacity_));
+          "BACnet/Scan", "result buffer full at %u entries; scan will truncate", static_cast<unsigned>(job.resultCapacity_));
       }
       ++job.currentIndex_;
       advanceObjectListScan(job, nowMs);
@@ -986,13 +991,13 @@ void BacnetDeviceSession::finishObjectListScanRead(
       scanned.presentValue = *value;
     }
     client_.logger().debug(
-        "BACnet/Scan",
-        "scan read %s,%lu name=%s description=%s presentValue=%s",
-        bacnetObjectTypeText(scanned.objectId.type),
-        static_cast<unsigned long>(scanned.objectId.instance),
-        bacnetReadStatusText(scanned.objectNameStatus),
-        bacnetReadStatusText(scanned.descriptionStatus),
-        bacnetReadStatusText(scanned.presentValueStatus));
+      "BACnet/Scan",
+      "scan read %s,%lu name=%s description=%s presentValue=%s",
+      bacnetObjectTypeText(scanned.objectId.type),
+      static_cast<unsigned long>(scanned.objectId.instance),
+      bacnetReadStatusText(scanned.objectNameStatus),
+      bacnetReadStatusText(scanned.descriptionStatus),
+      bacnetReadStatusText(scanned.presentValueStatus));
   }
 
   advanceObjectListScan(job, nowMs);
@@ -1009,28 +1014,22 @@ void BacnetDeviceSession::advanceObjectListScan(BacnetObjectListScanJob& job,
     if (job.options_.readObjectName &&
         scanned.objectNameStatus == BacnetDeviceSessionReadStatus::Skipped) {
       const BacnetPropertyRequest request{
-          scanned.objectId, BacnetPropertyId::ObjectName, kBacnetNoArrayIndex};
-      tryStartObjectListScanRead(job, request,
-                                 BacnetObjectListScanPhase::ReadObjectName,
-                                 nowMs);
+        scanned.objectId, BacnetPropertyId::ObjectName, kBacnetNoArrayIndex};
+      tryStartObjectListScanRead(job, request, BacnetObjectListScanPhase::ReadObjectName, nowMs);
       return;
     }
     if (job.options_.readDescription &&
         scanned.descriptionStatus == BacnetDeviceSessionReadStatus::Skipped) {
       const BacnetPropertyRequest request{
-          scanned.objectId, BacnetPropertyId::Description, kBacnetNoArrayIndex};
-      tryStartObjectListScanRead(job, request,
-                                 BacnetObjectListScanPhase::ReadDescription,
-                                 nowMs);
+        scanned.objectId, BacnetPropertyId::Description, kBacnetNoArrayIndex};
+      tryStartObjectListScanRead(job, request, BacnetObjectListScanPhase::ReadDescription, nowMs);
       return;
     }
     if (job.options_.readPresentValue &&
         scanned.presentValueStatus == BacnetDeviceSessionReadStatus::Skipped) {
       const BacnetPropertyRequest request{
-          scanned.objectId, BacnetPropertyId::PresentValue, kBacnetNoArrayIndex};
-      tryStartObjectListScanRead(job, request,
-                                 BacnetObjectListScanPhase::ReadPresentValue,
-                                 nowMs);
+        scanned.objectId, BacnetPropertyId::PresentValue, kBacnetNoArrayIndex};
+      tryStartObjectListScanRead(job, request, BacnetObjectListScanPhase::ReadPresentValue, nowMs);
       return;
     }
     job.hasCurrentStoreIndex_ = false;
@@ -1042,14 +1041,10 @@ void BacnetDeviceSession::advanceObjectListScan(BacnetObjectListScanJob& job,
     return;
   }
 
-  client_.logger().trace("BACnet/Scan", "read device,%lu objectList[%lu] start",
-                         static_cast<unsigned long>(deviceInstance_),
-                         static_cast<unsigned long>(job.currentIndex_));
+  client_.logger().trace("BACnet/Scan", "read device,%lu objectList[%lu] start", static_cast<unsigned long>(deviceInstance_), static_cast<unsigned long>(job.currentIndex_));
   const BacnetPropertyRequest request{
-      deviceObject(), BacnetPropertyId::ObjectList, job.currentIndex_};
-  tryStartObjectListScanRead(job, request,
-                             BacnetObjectListScanPhase::ReadObjectListEntry,
-                             nowMs);
+    deviceObject(), BacnetPropertyId::ObjectList, job.currentIndex_};
+  tryStartObjectListScanRead(job, request, BacnetObjectListScanPhase::ReadObjectListEntry, nowMs);
 }
 
 void BacnetDeviceSession::completeObjectListScan(BacnetObjectListScanJob& job) {
@@ -1057,39 +1052,37 @@ void BacnetDeviceSession::completeObjectListScan(BacnetObjectListScanJob& job) {
   job.status_ = BacnetObjectListScanJobStatus::Complete;
   job.phase_ = BacnetObjectListScanPhase::Complete;
   client_.logger().info(
-      "BACnet/Scan",
-      "scan summary count-status=%s count=%lu inspected=%lu found=%u stored=%u "
-      "truncated=%s",
-      bacnetReadStatusText(job.result_.objectListCountStatus),
-      static_cast<unsigned long>(job.result_.objectListCount),
-      static_cast<unsigned long>(job.result_.inspected),
-      static_cast<unsigned>(job.result_.found),
-      static_cast<unsigned>(job.result_.stored),
-      job.result_.truncated ? "yes" : "no");
+    "BACnet/Scan",
+    "scan summary count-status=%s count=%lu inspected=%lu found=%u stored=%u "
+    "truncated=%s",
+    bacnetReadStatusText(job.result_.objectListCountStatus),
+    static_cast<unsigned long>(job.result_.objectListCount),
+    static_cast<unsigned long>(job.result_.inspected),
+    static_cast<unsigned>(job.result_.found),
+    static_cast<unsigned>(job.result_.stored),
+    job.result_.truncated ? "yes" : "no");
 }
 
 void BacnetDeviceSession::failObjectListScan(
-    BacnetObjectListScanJob& job,
-    BacnetDeviceSessionReadStatus status) {
+  BacnetObjectListScanJob& job,
+  BacnetDeviceSessionReadStatus status) {
   if (job.result_.objectListCountStatus == BacnetDeviceSessionReadStatus::Skipped) {
     job.result_.objectListCountStatus = status;
   }
-  client_.logger().warn("BACnet/Scan", "read device,%lu objectList[0] failed: %s",
-                        static_cast<unsigned long>(deviceInstance_),
-                        bacnetReadStatusText(status));
+  client_.logger().warn("BACnet/Scan", "read device,%lu objectList[0] failed: %s", static_cast<unsigned long>(deviceInstance_), bacnetReadStatusText(status));
   releaseObjectListScan(job);
   job.status_ = BacnetObjectListScanJobStatus::Failed;
   job.phase_ = BacnetObjectListScanPhase::Failed;
   client_.logger().info(
-      "BACnet/Scan",
-      "scan summary count-status=%s count=%lu inspected=%lu found=%u stored=%u "
-      "truncated=%s",
-      bacnetReadStatusText(job.result_.objectListCountStatus),
-      static_cast<unsigned long>(job.result_.objectListCount),
-      static_cast<unsigned long>(job.result_.inspected),
-      static_cast<unsigned>(job.result_.found),
-      static_cast<unsigned>(job.result_.stored),
-      job.result_.truncated ? "yes" : "no");
+    "BACnet/Scan",
+    "scan summary count-status=%s count=%lu inspected=%lu found=%u stored=%u "
+    "truncated=%s",
+    bacnetReadStatusText(job.result_.objectListCountStatus),
+    static_cast<unsigned long>(job.result_.objectListCount),
+    static_cast<unsigned long>(job.result_.inspected),
+    static_cast<unsigned>(job.result_.found),
+    static_cast<unsigned>(job.result_.stored),
+    job.result_.truncated ? "yes" : "no");
 }
 
 void BacnetDeviceSession::releaseObjectListScan(BacnetObjectListScanJob& job) {
@@ -1139,7 +1132,7 @@ void BacnetDeviceSession::poll(BacnetPropertySubscription* subscriptions,
 }
 
 const char* BacnetDeviceSession::subscriptionPollTriggerText(
-    BacnetPropertySubscription::PollTrigger trigger) {
+  BacnetPropertySubscription::PollTrigger trigger) {
   switch (trigger) {
     case BacnetPropertySubscription::PollTrigger::Initial:
       return "initial";
@@ -1204,36 +1197,32 @@ void BacnetDeviceSession::pollInFlightSubscription(uint32_t nowMs) {
                                       subscription.arrayIndex_};
   BacnetValue value;
   const BacnetReadPropertyPollStatus status =
-      client_.pollReadPropertyStatus(value, subscription.inFlightInvokeId_,
-                                     request);
+    client_.pollReadPropertyStatus(value, subscription.inFlightInvokeId_, request);
   if (status == BacnetReadPropertyPollStatus::Ack) {
-    finishSubscriptionPoll(subscription, BacnetDeviceSessionReadStatus::Ack,
-                           &value, nowMs);
+    finishSubscriptionPoll(subscription, BacnetDeviceSessionReadStatus::Ack, &value, nowMs);
     return;
   }
 
   if (status == BacnetReadPropertyPollStatus::Error) {
-    finishSubscriptionPoll(subscription, BacnetDeviceSessionReadStatus::Error,
-                           &value, nowMs);
+    finishSubscriptionPoll(subscription, BacnetDeviceSessionReadStatus::Error, &value, nowMs);
     return;
   }
 
   if (nowMs - subscription.inFlightStartedAt_ >= subscription.options_.timeoutMs) {
     client_.logReadPropertyTimeout(subscription.inFlightInvokeId_, request);
-    finishSubscriptionPoll(subscription, BacnetDeviceSessionReadStatus::Timeout,
-                           nullptr, nowMs);
+    finishSubscriptionPoll(subscription, BacnetDeviceSessionReadStatus::Timeout, nullptr, nowMs);
   }
 }
 
 void BacnetDeviceSession::tryStartSubscriptionPoll(
-    BacnetPropertySubscription& subscription,
-    uint32_t nowMs) {
+  BacnetPropertySubscription& subscription,
+  uint32_t nowMs) {
   if (!subscription.isDue(nowMs) || inFlightObjectListScan_ != nullptr) {
     return;
   }
 
   BacnetPropertySubscription::PollTrigger trigger =
-      BacnetPropertySubscription::PollTrigger::Fallback;
+    BacnetPropertySubscription::PollTrigger::Fallback;
   if (subscription.refreshRequested_) {
     trigger = BacnetPropertySubscription::PollTrigger::Refresh;
   } else if (subscription.initialReadPending_) {
@@ -1245,17 +1234,13 @@ void BacnetDeviceSession::tryStartSubscriptionPoll(
                                       subscription.arrayIndex_};
   const uint8_t invokeId = allocateInvokeId();
   client_.logger().debug(
-      "BACnet/Subscription", "%s read start %s,%lu %u array=%lu",
-      subscriptionPollTriggerText(trigger),
-      bacnetObjectTypeText(subscription.objectId_.type),
-      static_cast<unsigned long>(subscription.objectId_.instance),
-      static_cast<unsigned>(subscription.propertyId_),
-      static_cast<unsigned long>(subscription.arrayIndex_));
+    "BACnet/Subscription", "%s read start %s,%lu %u array=%lu", subscriptionPollTriggerText(trigger), bacnetObjectTypeText(subscription.objectId_.type), static_cast<unsigned long>(subscription.objectId_.instance), static_cast<unsigned>(subscription.propertyId_), static_cast<unsigned long>(subscription.arrayIndex_));
 
   if (!client_.sendReadProperty(address_, request, invokeId, port_)) {
     finishSubscriptionPoll(subscription,
                            BacnetDeviceSessionReadStatus::SendFailed,
-                           nullptr, nowMs);
+                           nullptr,
+                           nowMs);
     return;
   }
 
@@ -1268,10 +1253,10 @@ void BacnetDeviceSession::tryStartSubscriptionPoll(
 }
 
 void BacnetDeviceSession::finishSubscriptionPoll(
-    BacnetPropertySubscription& subscription,
-    BacnetDeviceSessionReadStatus status,
-    const BacnetValue* value,
-    uint32_t nowMs) {
+  BacnetPropertySubscription& subscription,
+  BacnetDeviceSessionReadStatus status,
+  const BacnetValue* value,
+  uint32_t nowMs) {
   const BacnetDeviceSessionReadStatus previousStatus = subscription.lastStatus_;
   const bool statusChanged = !subscription.hasTerminalStatus_ ||
                              previousStatus != status;
@@ -1296,12 +1281,7 @@ void BacnetDeviceSession::finishSubscriptionPoll(
       status == BacnetDeviceSessionReadStatus::Timeout ||
       status == BacnetDeviceSessionReadStatus::SendFailed) {
     client_.logger().warn(
-      "BACnet/Subscription", "terminal status %s for %s,%lu %u array=%lu",
-      bacnetReadStatusText(status),
-      bacnetObjectTypeText(subscription.objectId_.type),
-      static_cast<unsigned long>(subscription.objectId_.instance),
-      static_cast<unsigned>(subscription.propertyId_),
-      static_cast<unsigned long>(subscription.arrayIndex_));
+      "BACnet/Subscription", "terminal status %s for %s,%lu %u array=%lu", bacnetReadStatusText(status), bacnetObjectTypeText(subscription.objectId_.type), static_cast<unsigned long>(subscription.objectId_.instance), static_cast<unsigned>(subscription.propertyId_), static_cast<unsigned long>(subscription.arrayIndex_));
   }
 
   if (subscription.inFlightTrigger_ == BacnetPropertySubscription::PollTrigger::Initial) {
@@ -1315,46 +1295,50 @@ void BacnetDeviceSession::finishSubscriptionPoll(
       static_cast<unsigned long>(subscription.arrayIndex_));
   }
 
-  BacnetSubscriptionNotificationReason reasons =
-      BacnetSubscriptionNotificationReason::None;
+  uint8_t reasonBits = 0;
   if (firstValue) {
-    reasons = reasons | BacnetSubscriptionNotificationReason::FirstValue;
+    reasonBits |= static_cast<uint8_t>(BacnetSubscriptionNotificationReason::FirstValue);
   }
   if (valueChanged) {
-    reasons = reasons | BacnetSubscriptionNotificationReason::ValueChanged;
+    reasonBits |= static_cast<uint8_t>(BacnetSubscriptionNotificationReason::ValueChanged);
     client_.logger().debug(
-      "BACnet/Subscription", "value changed %s,%lu %u array=%lu",
+      "BACnet/Subscription",
+      "value changed %s,%lu %u array=%lu",
       bacnetObjectTypeText(subscription.objectId_.type),
       static_cast<unsigned long>(subscription.objectId_.instance),
       static_cast<unsigned>(subscription.propertyId_),
       static_cast<unsigned long>(subscription.arrayIndex_));
   }
   if (statusChanged && subscription.options_.notifyOnStatusChange) {
-    reasons = reasons | BacnetSubscriptionNotificationReason::StatusChanged;
+    reasonBits |= static_cast<uint8_t>(BacnetSubscriptionNotificationReason::StatusChanged);
     client_.logger().debug(
-        "BACnet/Subscription", "status changed %s->%s %s,%lu %u array=%lu",
-        bacnetReadStatusText(previousStatus), bacnetReadStatusText(status),
-        bacnetObjectTypeText(subscription.objectId_.type),
-        static_cast<unsigned long>(subscription.objectId_.instance),
-        static_cast<unsigned>(subscription.propertyId_),
-        static_cast<unsigned long>(subscription.arrayIndex_));
+      "BACnet/Subscription",
+      "status changed %s->%s %s,%lu %u array=%lu",
+      bacnetReadStatusText(previousStatus),
+      bacnetReadStatusText(status),
+      bacnetObjectTypeText(subscription.objectId_.type),
+      static_cast<unsigned long>(subscription.objectId_.instance),
+      static_cast<unsigned>(subscription.propertyId_),
+      static_cast<unsigned long>(subscription.arrayIndex_));
   }
 
+  const BacnetSubscriptionNotificationReason reasons =
+    static_cast<BacnetSubscriptionNotificationReason>(reasonBits);
   subscription.lastNotificationReason_ = reasons;
   if (subscription.callback_ != nullptr &&
       reasons != BacnetSubscriptionNotificationReason::None) {
     const BacnetSubscriptionNotification notification{
-        subscription.objectId_,
-        subscription.propertyId_,
-        subscription.arrayIndex_,
-        status,
-        subscription.hasValue_ ? &subscription.lastValue_ : nullptr,
-        subscription.hasValue_,
-        firstValue,
-        valueChanged,
-        statusChanged,
-        reasons,
-        subscription.userData_};
+      subscription.objectId_,
+      subscription.propertyId_,
+      subscription.arrayIndex_,
+      status,
+      subscription.hasValue_ ? &subscription.lastValue_ : nullptr,
+      subscription.hasValue_,
+      firstValue,
+      valueChanged,
+      statusChanged,
+      reasons,
+      subscription.userData_};
     subscription.callback_(notification);
   }
 
@@ -1367,7 +1351,7 @@ void BacnetDeviceSession::finishSubscriptionPoll(
 }
 
 void BacnetDeviceSession::releaseSubscription(
-    BacnetPropertySubscription& subscription) {
+  BacnetPropertySubscription& subscription) {
   if (inFlightSubscription_ == &subscription) {
     inFlightSubscription_ = nullptr;
   }
@@ -1384,12 +1368,12 @@ uint8_t BacnetDeviceSession::allocateInvokeId() {
 }
 
 bool BacnetObjectScanOptions::acceptsObjectType(
-    BacnetObjectId objectId) const {
+  BacnetObjectId objectTypeId) const {
   if (objectTypes == nullptr || objectTypeCount == 0) {
     return true;
   }
   for (size_t i = 0; i < objectTypeCount; ++i) {
-    if (static_cast<uint16_t>(objectTypes[i]) == objectId.type) {
+    if (static_cast<uint16_t>(objectTypes[i]) == objectTypeId.type) {
       return true;
     }
   }
@@ -1397,9 +1381,9 @@ bool BacnetObjectScanOptions::acceptsObjectType(
 }
 
 bool BacnetObjectScanOptions::acceptsObjectType(
-    BacnetObjectType objectType) const {
+  BacnetObjectType objectType) const {
   return acceptsObjectType(
-      BacnetObjectId{static_cast<uint16_t>(objectType), 0});
+    BacnetObjectId{static_cast<uint16_t>(objectType), 0});
 }
 
 BacnetObjectListScanJobStatus BacnetObjectListScanJob::status() const {
@@ -1448,7 +1432,7 @@ const BacnetObjectScanResult& BacnetObjectListScanJob::summary() const {
 
 BacnetObjectListScanProgress BacnetObjectListScanJob::progress() const {
   return BacnetObjectListScanProgress{
-      status_, phase_, currentIndex_, requestInFlight_, result_};
+    status_, phase_, currentIndex_, requestInFlight_, result_};
 }
 
 void BacnetObjectListScanJob::clear() {

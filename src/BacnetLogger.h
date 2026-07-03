@@ -55,7 +55,7 @@ using BacnetLogFilter = bool (*)(const BacnetLogRecord& record,
                                  const void* userData);
 
 class BacnetLogOutput {
- public:
+public:
   virtual ~BacnetLogOutput() = default;
 
   virtual void log(const BacnetLogRecord& record) = 0;
@@ -91,7 +91,7 @@ class BacnetLogOutput {
 
   bool shouldLog(const BacnetLogRecord& record);
 
- private:
+private:
   BacnetLogLevel level_ = BacnetLogLevel::Info;
   BacnetLogTimestampMode timestampMode_ = BacnetLogTimestampMode::None;
   uint32_t minIntervalMs_ = 0;
@@ -104,7 +104,7 @@ class BacnetLogOutput {
 class BacnetScopedLogTag;
 
 class BacnetLogger {
- public:
+public:
   static constexpr size_t kMaxMessageLength = 192;
   static constexpr size_t kMaxTagLength = 96;
   static constexpr size_t kMaxOutputs = BACNET_LOG_MAX_OUTPUTS;
@@ -113,7 +113,7 @@ class BacnetLogger {
   BacnetLogger() = default;
 
   void addOutput(BacnetLogOutput& output);
-  bool removeOutput(BacnetLogOutput& output);
+  bool removeOutput(const BacnetLogOutput& output);
   void clearOutputs();
   size_t outputCount() const;
 
@@ -145,14 +145,13 @@ class BacnetLogger {
   static const char* levelName(BacnetLogLevel level);
   static bool isEnabledFor(BacnetLogLevel level);
 
- private:
-  void logV(BacnetLogLevel level, const char* tag, const char* format,
-            va_list args);
+private:
+  void logV(BacnetLogLevel level, const char* tag, const char* format, va_list args);
   bool shouldEmit(BacnetLogLevel level) const;
   void buildTag(const char* explicitTag, char* buffer, size_t bufferSize) const;
 
   BacnetLogOutput*
-      outputs_[(kMaxOutputs > 0) ? kMaxOutputs : 1] = {};
+    outputs_[(kMaxOutputs > 0) ? kMaxOutputs : 1] = {};
   size_t outputCount_ = 0;
   BacnetLogLevel globalLevel_ = BacnetLogLevel::Info;
   char baseTag_[kMaxTagLength] = {};
@@ -161,7 +160,7 @@ class BacnetLogger {
 };
 
 class BacnetScopedLogTag {
- public:
+public:
   BacnetScopedLogTag(BacnetLogger* logger, const char* tag) : logger_(logger) {
     if (logger_ != nullptr) {
       logger_->pushTag(tag);
@@ -191,6 +190,6 @@ class BacnetScopedLogTag {
     return *this;
   }
 
- private:
+private:
   BacnetLogger* logger_ = nullptr;
 };

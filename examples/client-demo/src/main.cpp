@@ -132,7 +132,7 @@ static String bacnetScanStatus = "Scan not started";
 static String bacnetRescanSource = "";
 static size_t bacnetScanStoredObjects = 0;
 static BacnetObjectListScanPhase lastLoggedScanPhase =
-    BacnetObjectListScanPhase::Idle;
+  BacnetObjectListScanPhase::Idle;
 static uint32_t lastLoggedScanIndex = 0;
 static unsigned long lastWhoIsAt = 0;
 
@@ -173,11 +173,11 @@ struct BacnetObjectStatusPreview {
 };
 
 static constexpr BacnetPropertySpec
-    kBacnetPreviewProperties[kBacnetPreviewPropertyCount] = {
-        {"objectName", BacnetPropertyId::ObjectName},
-        {"vendorName", BacnetPropertyId::VendorName},
-        {"modelName", BacnetPropertyId::ModelName},
-        {"firmwareRevision", BacnetPropertyId::FirmwareRevision},
+  kBacnetPreviewProperties[kBacnetPreviewPropertyCount] = {
+    {"objectName", BacnetPropertyId::ObjectName},
+    {"vendorName", BacnetPropertyId::VendorName},
+    {"modelName", BacnetPropertyId::ModelName},
+    {"firmwareRevision", BacnetPropertyId::FirmwareRevision},
 };
 
 static BacnetPropertyPreview bacnetDeviceProperties[kBacnetPreviewPropertyCount];
@@ -191,13 +191,13 @@ static std::unique_ptr<BacnetDeviceSession> activeBacnetSession;
 static const BacnetObjectType kValueObjectScanFilter[] = {
   BacnetObjectType::AnalogInput,
   BacnetObjectType::AnalogOutput,
-    BacnetObjectType::AnalogValue,
+  BacnetObjectType::AnalogValue,
   BacnetObjectType::BinaryInput,
   BacnetObjectType::BinaryOutput,
   BacnetObjectType::BinaryValue,
   BacnetObjectType::MultiStateInput,
   BacnetObjectType::MultiStateOutput,
-    BacnetObjectType::MultiStateValue,
+  BacnetObjectType::MultiStateValue,
 };
 
 static const char GLOBAL_THEME_OVERRIDE[] PROGMEM = R"CSS(
@@ -289,7 +289,7 @@ static const char* bacnetLogLevelPrefix(BacnetLogLevel level) {
 }
 
 class ClientDemoBacnetLogOutput : public BacnetLogOutput {
- public:
+public:
   void log(const BacnetLogRecord& record) override {
     Serial.print(bacnetLogLevelPrefix(record.level));
     Serial.print(" ");
@@ -297,8 +297,7 @@ class ClientDemoBacnetLogOutput : public BacnetLogOutput {
     Serial.print(" ");
     Serial.println(record.message != nullptr ? record.message : "");
     cm::LoggingManager::instance().logTag(
-        toCmLogLevel(record.level), record.tag != nullptr ? record.tag : "BACnet",
-        "%s", record.message != nullptr ? record.message : "");
+      toCmLogLevel(record.level), record.tag != nullptr ? record.tag : "BACnet", "%s", record.message != nullptr ? record.message : "");
   }
 };
 
@@ -307,7 +306,7 @@ static ClientDemoBacnetLogOutput bacnetLogOutput;
 static void setupGuiLogging() {
 #if !CM_DISABLE_GUI_LOGGING
   auto guiOut =
-      std::make_unique<cm::LoggingManager::GuiOutput>(ConfigManager, 80);
+    std::make_unique<cm::LoggingManager::GuiOutput>(ConfigManager, 80);
   guiOut->setLevel(LogLevel::Info);
   guiOut->setMaxQueue(120);
   guiOut->setMaxPerTick(8);
@@ -329,25 +328,25 @@ struct TempSettings {
 
   void create() {
     tempCorrection = &ConfigManager.addSettingFloat("TCO")
-                          .name("Temperature Correction")
-                          .category("Temp")
-                          .defaultValue(0.0f)
-                          .build();
+                        .name("Temperature Correction")
+                        .category("Temp")
+                        .defaultValue(0.0f)
+                        .build();
     humidityCorrection = &ConfigManager.addSettingFloat("HYO")
-                             .name("Humidity Correction")
-                             .category("Temp")
-                             .defaultValue(0.0f)
-                             .build();
-    seaLevelPressure = &ConfigManager.addSettingInt("SLP")
-                            .name("Sea Level Pressure")
+                            .name("Humidity Correction")
                             .category("Temp")
-                            .defaultValue(1013)
+                            .defaultValue(0.0f)
                             .build();
+    seaLevelPressure = &ConfigManager.addSettingInt("SLP")
+                          .name("Sea Level Pressure")
+                          .category("Temp")
+                          .defaultValue(1013)
+                          .build();
     readIntervalSec = &ConfigManager.addSettingInt("ReadTemp")
-                           .name("Read Temp/Humidity every (s)")
-                           .category("Temp")
-                           .defaultValue(30)
-                           .build();
+                         .name("Read Temp/Humidity every (s)")
+                         .category("Temp")
+                         .defaultValue(30)
+                         .build();
   }
 
   void placeInUi() const {
@@ -358,14 +357,10 @@ struct TempSettings {
 
     ConfigManager.addSettingsPage("Temp", 40);
     ConfigManager.addSettingsGroup("Temp", "Temp", "Temperature", 40);
-    ConfigManager.addToSettingsGroup(tempCorrection->getKey(), "Temp", "Temp",
-                                     "Temperature", 10);
-    ConfigManager.addToSettingsGroup(humidityCorrection->getKey(), "Temp",
-                                     "Temp", "Temperature", 20);
-    ConfigManager.addToSettingsGroup(seaLevelPressure->getKey(), "Temp", "Temp",
-                                     "Temperature", 30);
-    ConfigManager.addToSettingsGroup(readIntervalSec->getKey(), "Temp", "Temp",
-                                     "Temperature", 40);
+    ConfigManager.addToSettingsGroup(tempCorrection->getKey(), "Temp", "Temp", "Temperature", 10);
+    ConfigManager.addToSettingsGroup(humidityCorrection->getKey(), "Temp", "Temp", "Temperature", 20);
+    ConfigManager.addToSettingsGroup(seaLevelPressure->getKey(), "Temp", "Temp", "Temperature", 30);
+    ConfigManager.addToSettingsGroup(readIntervalSec->getKey(), "Temp", "Temp", "Temperature", 40);
   }
 };
 
@@ -382,17 +377,14 @@ static bool parseBacnetAddress(const char* label,
   Serial.print(label);
   Serial.print(" IP: ");
   Serial.println(addressText != nullptr ? addressText : "<null>");
-  bacnetGuiLog(LogLevel::Error, "invalid BACnet %s IP: %s", label,
-               addressText != nullptr ? addressText : "<null>");
+  bacnetGuiLog(LogLevel::Error, "invalid BACnet %s IP: %s", label, addressText != nullptr ? addressText : "<null>");
   return false;
 }
 
 static bool configureBacnetAddresses() {
   bacnetAddressConfigValid =
-      parseBacnetAddress("Who-Is destination", BACNET_WHOIS_DESTINATION,
-                         whoIsDestination) &&
-      parseBacnetAddress("target address", BACNET_TARGET_ADDRESS,
-                         configuredBacnetTargetAddress);
+    parseBacnetAddress("Who-Is destination", BACNET_WHOIS_DESTINATION, whoIsDestination) &&
+    parseBacnetAddress("target address", BACNET_TARGET_ADDRESS, configuredBacnetTargetAddress);
 
   if (bacnetAddressConfigValid) {
     bacnetAddressConfigErrorLogged = false;
@@ -474,23 +466,23 @@ static bool isBinaryProcessObject(uint16_t objectType) {
 
 static bool isMultiStateProcessObject(uint16_t objectType) {
   return objectType ==
-             static_cast<uint16_t>(BacnetObjectType::MultiStateInput) ||
+           static_cast<uint16_t>(BacnetObjectType::MultiStateInput) ||
          objectType ==
-             static_cast<uint16_t>(BacnetObjectType::MultiStateOutput) ||
+           static_cast<uint16_t>(BacnetObjectType::MultiStateOutput) ||
          objectType ==
-             static_cast<uint16_t>(BacnetObjectType::MultiStateValue);
+           static_cast<uint16_t>(BacnetObjectType::MultiStateValue);
 }
 
 static String objectLabel(const BacnetScannedObject& scanned) {
   const String objectName =
-      valueTextIfAck(scanned.objectNameStatus, scanned.objectName);
+    valueTextIfAck(scanned.objectNameStatus, scanned.objectName);
   if (scanned.objectNameStatus == BacnetDeviceSessionReadStatus::Ack &&
       objectName.length() > 0) {
     return objectName;
   }
 
   const String description =
-      valueTextIfAck(scanned.descriptionStatus, scanned.description);
+    valueTextIfAck(scanned.descriptionStatus, scanned.description);
   if (scanned.descriptionStatus == BacnetDeviceSessionReadStatus::Ack &&
       description.length() > 0) {
     return description;
@@ -632,16 +624,13 @@ static bool selectedStatusObject(BacnetObjectId& object, String& label) {
     return true;
   }
 
-  if (firstDiscoveredObject(analogValues, kBacnetMaxFoundObjectsToDisplay,
-                            object, label)) {
+  if (firstDiscoveredObject(analogValues, kBacnetMaxFoundObjectsToDisplay, object, label)) {
     return true;
   }
-  if (firstDiscoveredObject(multiStateValues, kBacnetMaxFoundObjectsToDisplay,
-                            object, label)) {
+  if (firstDiscoveredObject(multiStateValues, kBacnetMaxFoundObjectsToDisplay, object, label)) {
     return true;
   }
-  return firstDiscoveredObject(binaryValues, kBacnetMaxFoundObjectsToDisplay,
-                               object, label);
+  return firstDiscoveredObject(binaryValues, kBacnetMaxFoundObjectsToDisplay, object, label);
 }
 
 static String statusFlagsSummary(const BacnetObjectStatus& status) {
@@ -705,7 +694,7 @@ static String bacnetScanTerminalStatus(const BacnetObjectScanResult& scan) {
 }
 
 static const char* bacnetSubscriptionReasonText(
-    const BacnetSubscriptionNotification& notification) {
+  const BacnetSubscriptionNotification& notification) {
   if (notification.firstValue) {
     return "first";
   }
@@ -726,9 +715,9 @@ static void logScanProgressIfChanged() {
   const BacnetObjectListScanProgress progress = scanJob.progress();
   const bool phaseChanged = progress.phase != lastLoggedScanPhase;
   const bool indexedMilestone =
-      progress.phase == BacnetObjectListScanPhase::ReadObjectListEntry &&
-      progress.currentIndex != lastLoggedScanIndex &&
-      (progress.currentIndex == 1 || progress.currentIndex % 25 == 0);
+    progress.phase == BacnetObjectListScanPhase::ReadObjectListEntry &&
+    progress.currentIndex != lastLoggedScanIndex &&
+    (progress.currentIndex == 1 || progress.currentIndex % 25 == 0);
 
   if (!phaseChanged && !indexedMilestone) {
     return;
@@ -737,13 +726,13 @@ static void logScanProgressIfChanged() {
   lastLoggedScanPhase = progress.phase;
   lastLoggedScanIndex = progress.currentIndex;
   bacnetGuiLog(
-      LogLevel::Info,
-      "scan progress phase=%s index=%lu count=%lu found=%u stored=%u",
-      bacnetObjectListScanPhaseText(progress.phase),
-      static_cast<unsigned long>(progress.currentIndex),
-      static_cast<unsigned long>(progress.summary.objectListCount),
-      static_cast<unsigned>(progress.summary.found),
-      static_cast<unsigned>(progress.summary.stored));
+    LogLevel::Info,
+    "scan progress phase=%s index=%lu count=%lu found=%u stored=%u",
+    bacnetObjectListScanPhaseText(progress.phase),
+    static_cast<unsigned long>(progress.currentIndex),
+    static_cast<unsigned long>(progress.summary.objectListCount),
+    static_cast<unsigned>(progress.summary.found),
+    static_cast<unsigned>(progress.summary.stored));
 }
 
 static void readBacnetObjectStatusPreview(BacnetDeviceSession& session) {
@@ -752,7 +741,7 @@ static void readBacnetObjectStatusPreview(BacnetDeviceSession& session) {
   if (!selectedStatusObject(object, label)) {
     bacnetStatusPreview = BacnetObjectStatusPreview{};
     bacnetStatusPreview.label =
-        bacnetScanStatus.length() ? bacnetScanStatus : "No process object found";
+      bacnetScanStatus.length() ? bacnetScanStatus : "No process object found";
     return;
   }
 
@@ -762,21 +751,21 @@ static void readBacnetObjectStatusPreview(BacnetDeviceSession& session) {
   bacnetStatusPreview.available = true;
   bacnetStatusPreview.object = object;
   bacnetStatusPreview.label =
-      label.length() ? label : objectTypePrefix(object.type) + String(object.instance);
+    label.length() ? label : objectTypePrefix(object.type) + String(object.instance);
   bacnetStatusPreview.presentValue =
-      propertyValueTextIfAck(status.presentValueStatus, status.presentValue);
+    propertyValueTextIfAck(status.presentValueStatus, status.presentValue);
   bacnetStatusPreview.presentValueStatus =
-      bacnetPropertyReadStatusText(status.presentValueStatus);
+    bacnetPropertyReadStatusText(status.presentValueStatus);
   bacnetStatusPreview.state = bacnetObjectHealthStateText(status.state);
   bacnetStatusPreview.flags = statusFlagsSummary(status);
   bacnetStatusPreview.eventState =
-      enumPropertySummary(status.eventStateStatus,
-                          bacnetEventStateText(status.eventState));
+    enumPropertySummary(status.eventStateStatus,
+                        bacnetEventStateText(status.eventState));
   bacnetStatusPreview.reliability =
-      enumPropertySummary(status.reliabilityStatus,
-                          bacnetReliabilityText(status.reliability));
+    enumPropertySummary(status.reliabilityStatus,
+                        bacnetReliabilityText(status.reliability));
   bacnetStatusPreview.outOfService =
-      boolPropertySummary(status.outOfServiceStatus, status.outOfService);
+    boolPropertySummary(status.outOfServiceStatus, status.outOfService);
 }
 
 static String bacnetObjectStatusSummary() {
@@ -809,19 +798,18 @@ static String bacnetObjectStatusSummary() {
 }
 
 static String bacnetAnalogValuesSummary() {
-  return bacnetValueObjectsSummary(analogValues, kBacnetMaxFoundObjectsToDisplay,
-                                   bacnetScanFinished, "analog");
+  return bacnetValueObjectsSummary(analogValues, kBacnetMaxFoundObjectsToDisplay, bacnetScanFinished, "analog");
 }
 
 static String bacnetBinaryValuesSummary() {
-  return bacnetValueObjectsSummary(binaryValues, kBacnetMaxFoundObjectsToDisplay,
-                                   bacnetScanFinished, "binary");
+  return bacnetValueObjectsSummary(binaryValues, kBacnetMaxFoundObjectsToDisplay, bacnetScanFinished, "binary");
 }
 
 static String bacnetMultiStateValuesSummary() {
   return bacnetValueObjectsSummary(multiStateValues,
                                    kBacnetMaxFoundObjectsToDisplay,
-                                   bacnetScanFinished, "multi-state");
+                                   bacnetScanFinished,
+                                   "multi-state");
 }
 
 static void clearBacnetProcessObjectPreview(const char* status) {
@@ -870,7 +858,7 @@ static void processPendingBacnetRescan() {
   }
 
   const String source = bacnetRescanSource.length() ? bacnetRescanSource
-                                                   : String("unknown");
+                                                    : String("unknown");
   bacnetRescanPending = false;
   bacnetRescanSource = "";
 
@@ -894,109 +882,105 @@ static void processPendingBacnetRescan() {
   bacnetScanStatus = "Rescanning";
   bacnetScanRequested = true;
   bacnetScanFinished = false;
-  bacnetGuiLog(LogLevel::Info, "rescan accepted source=%s scan queued",
-               source.c_str());
+  bacnetGuiLog(LogLevel::Info, "rescan accepted source=%s scan queued", source.c_str());
 }
 
 static void setupRuntimeUI() {
   auto live = ConfigManager.liveGroup("sensors")
-                  .page("Sensors", 10)
-                  .card("BME280 - Temperature Sensor");
+                .page("Sensors", 10)
+                .card("BME280 - Temperature Sensor");
 
   live.value("temp", []() { return temperature; })
-      .label("Temperature")
-      .unit("C")
-      .precision(1)
-      .addCSSClass("myCSSTempClass")
-      .order(10);
+    .label("Temperature")
+    .unit("C")
+    .precision(1)
+    .addCSSClass("myCSSTempClass")
+    .order(10);
 
   live.value("hum", []() { return humidity; })
-      .label("Humidity")
-      .unit("%")
-      .precision(1)
-      .order(11);
+    .label("Humidity")
+    .unit("%")
+    .precision(1)
+    .order(11);
 
   live.value("pressure", []() { return pressure; })
-      .label("Pressure")
-      .unit("hPa")
-      .precision(1)
-      .order(12);
+    .label("Pressure")
+    .unit("hPa")
+    .precision(1)
+    .order(12);
 
   auto dewpointGroup = ConfigManager.liveGroup("sensors")
-                           .page("Sensors", 10)
-                           .card("BME280 - Temperature Sensor")
-                           .group("Dewpoint", 20);
+                         .page("Sensors", 10)
+                         .card("BME280 - Temperature Sensor")
+                         .group("Dewpoint", 20);
 
   dewpointGroup.value("dew", []() { return dewPoint; })
-      .label("Dewpoint")
-      .unit("C")
-      .precision(1)
-      .order(20);
+    .label("Dewpoint")
+    .unit("C")
+    .precision(1)
+    .order(20);
 
   alarmManager.addDigitalWarning({
-      .id = "dewRisk",
-      .name = "Condensation Risk",
-      .kind = cm::AlarmKind::DigitalActive,
-      .severity = cm::AlarmSeverity::Warning,
-      .enabled = true,
-      .getter = []() { return temperature < dewPoint; },
+    .id = "dewRisk",
+    .name = "Condensation Risk",
+    .kind = cm::AlarmKind::DigitalActive,
+    .severity = cm::AlarmSeverity::Warning,
+    .enabled = true,
+    .getter = []() { return temperature < dewPoint; },
   });
 
-  alarmManager.addWarningToLive("dewRisk", 30, "Sensors",
-                                "BME280 - Temperature Sensor", "Dewpoint",
-                                "Condensation Risk");
+  alarmManager.addWarningToLive("dewRisk", 30, "Sensors", "BME280 - Temperature Sensor", "Dewpoint", "Condensation Risk");
 
   auto bacnetDeviceGroup = ConfigManager.liveGroup("bacnet")
-                                .page("Sensors", 10)
-                                .card("BACnet/IP Client", 20)
-                                .group("Selected Device", 1);
+                             .page("Sensors", 10)
+                             .card("BACnet/IP Client", 20)
+                             .group("Selected Device", 1);
 
   bacnetDeviceGroup.value("device0", []() { return bacnetDeviceSummary(); })
-      .label("Device")
-      .order(10);
+    .label("Device")
+    .order(10);
 
-  bacnetDeviceGroup.button("device0_rescan", "Scan / Rescan",
-                           []() { requestBacnetRescan("ui"); })
-      .order(15);
+  bacnetDeviceGroup.button("device0_rescan", "Scan / Rescan", []() { requestBacnetRescan("ui"); })
+    .order(15);
 
   for (size_t propertyIndex = 0; propertyIndex < kBacnetPreviewPropertyCount;
        ++propertyIndex) {
     const String propertyKey =
-        String("device0_") + kBacnetPreviewProperties[propertyIndex].name;
+      String("device0_") + kBacnetPreviewProperties[propertyIndex].name;
     bacnetDeviceGroup
-        .value(propertyKey.c_str(),
-               [propertyIndex]() { return bacnetPropertySummary(propertyIndex); })
-        .label(kBacnetPreviewProperties[propertyIndex].name)
-        .order(20 + propertyIndex);
+      .value(propertyKey.c_str(),
+             [propertyIndex]() { return bacnetPropertySummary(propertyIndex); })
+      .label(kBacnetPreviewProperties[propertyIndex].name)
+      .order(20 + propertyIndex);
   }
 
   bacnetDeviceGroup.divider("Analog Objects", 39);
   bacnetDeviceGroup.value("device0_analogValues",
                           []() { return bacnetAnalogValuesSummary(); })
-      .label("Analog")
-      .addCSSClass("bacnetObjectListValue")
-      .order(40);
+    .label("Analog")
+    .addCSSClass("bacnetObjectListValue")
+    .order(40);
 
   bacnetDeviceGroup.divider("Binary Objects", 49);
   bacnetDeviceGroup.value("device0_binaryValues",
                           []() { return bacnetBinaryValuesSummary(); })
-      .label("Binary")
-      .addCSSClass("bacnetObjectListValue")
-      .order(50);
+    .label("Binary")
+    .addCSSClass("bacnetObjectListValue")
+    .order(50);
 
   bacnetDeviceGroup.divider("Multi-State Objects", 59);
   bacnetDeviceGroup.value("device0_multiStateValues",
                           []() { return bacnetMultiStateValuesSummary(); })
-      .label("Multi-State")
-      .addCSSClass("bacnetObjectListValue")
-      .order(60);
+    .label("Multi-State")
+    .addCSSClass("bacnetObjectListValue")
+    .order(60);
 
   bacnetDeviceGroup.divider("Object Health", 69);
   bacnetDeviceGroup.value("device0_objectHealth",
                           []() { return bacnetObjectStatusSummary(); })
-      .label("State")
-      .addCSSClass("bacnetObjectListValue")
-      .order(70);
+    .label("State")
+    .addCSSClass("bacnetObjectListValue")
+    .order(70);
 }
 
 static void readBme280() {
@@ -1015,10 +999,7 @@ static void setupTemperatureMeasuring() {
   bme280.setAddress(BME280_ADDRESS, I2C_SDA, I2C_SCL);
 
   const bool ok = bme280.begin(
-      bme280.BME280_STANDBY_0_5, bme280.BME280_FILTER_OFF,
-      bme280.BME280_SPI3_DISABLE, bme280.BME280_OVERSAMPLING_1,
-      bme280.BME280_OVERSAMPLING_1, bme280.BME280_OVERSAMPLING_1,
-      bme280.BME280_MODE_NORMAL);
+    bme280.BME280_STANDBY_0_5, bme280.BME280_FILTER_OFF, bme280.BME280_SPI3_DISABLE, bme280.BME280_OVERSAMPLING_1, bme280.BME280_OVERSAMPLING_1, bme280.BME280_OVERSAMPLING_1, bme280.BME280_MODE_NORMAL);
 
   if (!ok) {
     Serial.println("[W] BME280 not initialized, continuing without sensor");
@@ -1053,16 +1034,16 @@ static void readDeviceProperties(BacnetDeviceSession& session) {
     BacnetValue value;
     BacnetPropertyPreview& property = bacnetDeviceProperties[i];
     property.status =
-        session.object(session.deviceObject())
-            .readProperty(property.id, value, kBacnetScanReadTimeoutMs);
+      session.object(session.deviceObject())
+        .readProperty(property.id, value, kBacnetScanReadTimeoutMs);
     property.value = valueTextIfAck(property.status, value);
   }
 }
 
 static void onPresentValueUpdate(
-    const BacnetSubscriptionNotification& notification) {
+  const BacnetSubscriptionNotification& notification) {
   auto* preview =
-      static_cast<BacnetValueObjectPreview*>(notification.userData);
+    static_cast<BacnetValueObjectPreview*>(notification.userData);
   if (preview == nullptr) {
     return;
   }
@@ -1072,11 +1053,7 @@ static void onPresentValueUpdate(
       notification.hasValue && notification.value != nullptr) {
     preview->presentValue = notification.value->displayText();
   }
-  bacnetGuiLog(LogLevel::Info, "subscription update %s present-value %s=%s",
-               bacnetObjectDisplayName(notification.objectId).c_str(),
-               bacnetSubscriptionReasonText(notification),
-               preview->presentValue.length() ? preview->presentValue.c_str()
-                                              : preview->presentValueStatus.c_str());
+  bacnetGuiLog(LogLevel::Info, "subscription update %s present-value %s=%s", bacnetObjectDisplayName(notification.objectId).c_str(), bacnetSubscriptionReasonText(notification), preview->presentValue.length() ? preview->presentValue.c_str() : preview->presentValueStatus.c_str());
 }
 
 static bool subscribePresentValue(BacnetDeviceSession& session,
@@ -1092,15 +1069,15 @@ static bool subscribePresentValue(BacnetDeviceSession& session,
   options.notifyOnStatusChange = true;
 
   preview.subscription.reset(new BacnetPropertySubscription(
-      session.object(preview.object)
-          .property(BacnetPropertyId::PresentValue)
-          .subscribe(onPresentValueUpdate, &preview, options)));
+    session.object(preview.object)
+      .property(BacnetPropertyId::PresentValue)
+      .subscribe(onPresentValueUpdate, &preview, options)));
   bacnetGuiLog(LogLevel::Info,
                "subscription created %s present-value fallbackMs=%lu active=%s",
                bacnetObjectDisplayName(preview.object).c_str(),
                static_cast<unsigned long>(options.fallbackPollMs),
                preview.subscription && preview.subscription->active() ? "yes"
-                                                                       : "no");
+                                                                      : "no");
   return preview.subscription && preview.subscription->active();
 }
 
@@ -1115,16 +1092,16 @@ static bool copyScannedObjectToPreview(const BacnetScannedObject& scanned,
     destination[i].discovered = true;
     destination[i].object = scanned.objectId;
     destination[i].objectName =
-        valueTextIfAck(scanned.objectNameStatus, scanned.objectName);
+      valueTextIfAck(scanned.objectNameStatus, scanned.objectName);
     destination[i].description =
-        valueTextIfAck(scanned.descriptionStatus, scanned.description);
+      valueTextIfAck(scanned.descriptionStatus, scanned.description);
     destination[i].label = objectLabel(scanned);
     destination[i].presentValue =
-        scanned.presentValueStatus == BacnetDeviceSessionReadStatus::Ack
-            ? scanned.presentValue.displayText()
-            : "";
+      scanned.presentValueStatus == BacnetDeviceSessionReadStatus::Ack
+        ? scanned.presentValue.displayText()
+        : "";
     destination[i].presentValueStatus =
-        bacnetReadStatusText(scanned.presentValueStatus);
+      bacnetReadStatusText(scanned.presentValueStatus);
     return true;
   }
   return false;
@@ -1140,18 +1117,15 @@ static void copyScanResultsToPreviews(const BacnetObjectScanResult& scan,
 
   for (size_t i = 0; i < scan.stored; ++i) {
     if (isAnalogProcessObject(scanBuffer[i].objectId.type)) {
-      if (copyScannedObjectToPreview(scanBuffer[i], analogValues,
-                                     kBacnetMaxFoundObjectsToDisplay)) {
+      if (copyScannedObjectToPreview(scanBuffer[i], analogValues, kBacnetMaxFoundObjectsToDisplay)) {
         ++analogStored;
       }
     } else if (isBinaryProcessObject(scanBuffer[i].objectId.type)) {
-      if (copyScannedObjectToPreview(scanBuffer[i], binaryValues,
-                                     kBacnetMaxFoundObjectsToDisplay)) {
+      if (copyScannedObjectToPreview(scanBuffer[i], binaryValues, kBacnetMaxFoundObjectsToDisplay)) {
         ++binaryStored;
       }
     } else if (isMultiStateProcessObject(scanBuffer[i].objectId.type)) {
-      if (copyScannedObjectToPreview(scanBuffer[i], multiStateValues,
-                                     kBacnetMaxFoundObjectsToDisplay)) {
+      if (copyScannedObjectToPreview(scanBuffer[i], multiStateValues, kBacnetMaxFoundObjectsToDisplay)) {
         ++multiStateStored;
       }
     }
@@ -1169,17 +1143,17 @@ static bool readConfiguredFallbackObject(BacnetDeviceSession& session,
   BacnetScannedObject scanned;
   scanned.objectId = object;
   scanned.objectNameStatus =
-      session.object(object).readProperty(BacnetPropertyId::ObjectName,
-                                          scanned.objectName,
-                                          kBacnetScanReadTimeoutMs);
+    session.object(object).readProperty(BacnetPropertyId::ObjectName,
+                                        scanned.objectName,
+                                        kBacnetScanReadTimeoutMs);
   scanned.descriptionStatus =
-      session.object(object).readProperty(BacnetPropertyId::Description,
-                                          scanned.description,
-                                          kBacnetScanReadTimeoutMs);
+    session.object(object).readProperty(BacnetPropertyId::Description,
+                                        scanned.description,
+                                        kBacnetScanReadTimeoutMs);
   scanned.presentValueStatus =
-      session.object(object).readProperty(BacnetPropertyId::PresentValue,
-                                          scanned.presentValue,
-                                          kBacnetScanReadTimeoutMs);
+    session.object(object).readProperty(BacnetPropertyId::PresentValue,
+                                        scanned.presentValue,
+                                        kBacnetScanReadTimeoutMs);
 
   bacnetGuiLog(LogLevel::Info,
                "fallback probe %s objectName=%s description=%s present-value=%s",
@@ -1191,14 +1165,12 @@ static bool readConfiguredFallbackObject(BacnetDeviceSession& session,
   if (scanned.objectNameStatus != BacnetDeviceSessionReadStatus::Ack &&
       scanned.descriptionStatus != BacnetDeviceSessionReadStatus::Ack &&
       scanned.presentValueStatus != BacnetDeviceSessionReadStatus::Ack) {
-    bacnetGuiLog(LogLevel::Warn, "fallback object %s unavailable",
-                 bacnetObjectDisplayName(object).c_str());
+    bacnetGuiLog(LogLevel::Warn, "fallback object %s unavailable", bacnetObjectDisplayName(object).c_str());
     return false;
   }
 
   if (!copyScannedObjectToPreview(scanned, destination, destinationCount)) {
-    bacnetGuiLog(LogLevel::Warn, "fallback object %s not stored: display full",
-                 bacnetObjectDisplayName(object).c_str());
+    bacnetGuiLog(LogLevel::Warn, "fallback object %s not stored: display full", bacnetObjectDisplayName(object).c_str());
     return false;
   }
   return true;
@@ -1212,32 +1184,34 @@ static size_t appendConfiguredFallbackObjects(BacnetDeviceSession& session,
   bacnetGuiLog(LogLevel::Info, "configured fallback probe started");
 
   if (readConfiguredFallbackObject(
-          session,
-          BacnetObjectId{BACNET_FALLBACK_ANALOG_OBJECT_TYPE,
-                         BACNET_FALLBACK_ANALOG_OBJECT_INSTANCE},
-          analogValues, kBacnetMaxFoundObjectsToDisplay)) {
+        session,
+        BacnetObjectId{BACNET_FALLBACK_ANALOG_OBJECT_TYPE,
+                       BACNET_FALLBACK_ANALOG_OBJECT_INSTANCE},
+        analogValues,
+        kBacnetMaxFoundObjectsToDisplay)) {
     ++analogStored;
     ++loaded;
   }
   if (readConfiguredFallbackObject(
-          session,
-          BacnetObjectId{BACNET_FALLBACK_BINARY_OBJECT_TYPE,
-                         BACNET_FALLBACK_BINARY_OBJECT_INSTANCE},
-          binaryValues, kBacnetMaxFoundObjectsToDisplay)) {
+        session,
+        BacnetObjectId{BACNET_FALLBACK_BINARY_OBJECT_TYPE,
+                       BACNET_FALLBACK_BINARY_OBJECT_INSTANCE},
+        binaryValues,
+        kBacnetMaxFoundObjectsToDisplay)) {
     ++binaryStored;
     ++loaded;
   }
   if (readConfiguredFallbackObject(
-          session,
-          BacnetObjectId{BACNET_FALLBACK_MULTISTATE_OBJECT_TYPE,
-                         BACNET_FALLBACK_MULTISTATE_OBJECT_INSTANCE},
-          multiStateValues, kBacnetMaxFoundObjectsToDisplay)) {
+        session,
+        BacnetObjectId{BACNET_FALLBACK_MULTISTATE_OBJECT_TYPE,
+                       BACNET_FALLBACK_MULTISTATE_OBJECT_INSTANCE},
+        multiStateValues,
+        kBacnetMaxFoundObjectsToDisplay)) {
     ++multiStateStored;
     ++loaded;
   }
 
-  bacnetGuiLog(LogLevel::Info, "configured fallback probe complete loaded=%u",
-               static_cast<unsigned>(loaded));
+  bacnetGuiLog(LogLevel::Info, "configured fallback probe complete loaded=%u", static_cast<unsigned>(loaded));
   return loaded;
 }
 
@@ -1267,8 +1241,7 @@ static bool beginValueObjectScan(BacnetDeviceSession& session) {
                static_cast<unsigned>(kBacnetScanResultCapacity),
                static_cast<unsigned>(sizeof(kValueObjectScanFilter) /
                                      sizeof(kValueObjectScanFilter[0])));
-  if (!session.beginObjectListScan(scanJob, options, scanBuffer,
-                                   kBacnetScanResultCapacity)) {
+  if (!session.beginObjectListScan(scanJob, options, scanBuffer, kBacnetScanResultCapacity)) {
     bacnetScanStatus = "Scan start failed: ";
     bacnetScanStatus += bacnetObjectListScanJobStatusText(scanJob.status());
     bacnetGuiLog(LogLevel::Warn,
@@ -1291,12 +1264,12 @@ static void finishValueObjectScan(BacnetDeviceSession& session,
   copyScanResultsToPreviews(scan, analogStored, binaryStored, multiStateStored);
 
   const bool needsConfiguredFallback =
-      scan.objectListCountStatus != BacnetDeviceSessionReadStatus::Ack ||
-      scan.stored == 0;
+    scan.objectListCountStatus != BacnetDeviceSessionReadStatus::Ack ||
+    scan.stored == 0;
   size_t fallbackStored = 0;
   if (needsConfiguredFallback) {
     fallbackStored = appendConfiguredFallbackObjects(
-        session, analogStored, binaryStored, multiStateStored);
+      session, analogStored, binaryStored, multiStateStored);
   }
 
   bacnetScanStoredObjects = analogStored + binaryStored + multiStateStored;
@@ -1343,11 +1316,9 @@ static void finishValueObjectScan(BacnetDeviceSession& session,
                  static_cast<unsigned>(bacnetScanStoredObjects));
   } else if (scan.stored == 0 ||
              scan.objectListCountStatus != BacnetDeviceSessionReadStatus::Ack) {
-    bacnetGuiLog(LogLevel::Warn, "scan result: %s",
-                 bacnetScanStatus.c_str());
+    bacnetGuiLog(LogLevel::Warn, "scan result: %s", bacnetScanStatus.c_str());
   }
-  bacnetGuiLog(LogLevel::Info, "subscriptions recreated count=%u",
-               static_cast<unsigned>(subscriptionsCreated));
+  bacnetGuiLog(LogLevel::Info, "subscriptions recreated count=%u", static_cast<unsigned>(subscriptionsCreated));
 }
 
 static void scanSelectedBacnetDevice() {
@@ -1360,8 +1331,7 @@ static void scanSelectedBacnetDevice() {
     bacnetScanRunning = true;
     bacnetScanStatus = "Reading Device properties";
     bacnetGuiLog(
-        LogLevel::Info, "scanning selected device %lu",
-        static_cast<unsigned long>(activeBacnetSession->deviceInstance()));
+      LogLevel::Info, "scanning selected device %lu", static_cast<unsigned long>(activeBacnetSession->deviceInstance()));
     bacnetGuiLog(LogLevel::Info, "device metadata read started");
 
     readDeviceProperties(*activeBacnetSession);
@@ -1396,8 +1366,7 @@ static void selectBacnetDevice(uint32_t deviceInstance,
   resetBacnetPreviews();
   activeBacnetVendorId = vendorId;
   activeBacnetSession.reset(new BacnetDeviceSession(
-      BacnetDeviceSession::fromEndpoint(bacnetClient, deviceInstance, address,
-                                        port)));
+    BacnetDeviceSession::fromEndpoint(bacnetClient, deviceInstance, address, port)));
   bacnetDeviceSelected = true;
   bacnetScanStatus = "Scan queued for selected device";
 
@@ -1407,13 +1376,10 @@ static void selectBacnetDevice(uint32_t deviceInstance,
   Serial.print(address);
   Serial.print(":");
   Serial.println(port);
-  bacnetGuiLog(LogLevel::Info, "selected device %lu at %s:%u",
-               static_cast<unsigned long>(deviceInstance),
-               address.toString().c_str(), static_cast<unsigned>(port));
+  bacnetGuiLog(LogLevel::Info, "selected device %lu at %s:%u", static_cast<unsigned long>(deviceInstance), address.toString().c_str(), static_cast<unsigned>(port));
 
   bacnetScanRequested = true;
-  bacnetGuiLog(LogLevel::Info, "scan queued for selected device %lu",
-               static_cast<unsigned long>(deviceInstance));
+  bacnetGuiLog(LogLevel::Info, "scan queued for selected device %lu", static_cast<unsigned long>(deviceInstance));
 }
 
 static void selectBacnetDevice(const BacnetIAmDevice& device) {
@@ -1424,7 +1390,7 @@ static void selectBacnetDevice(const BacnetIAmDevice& device) {
   resetBacnetPreviews();
   activeBacnetVendorId = device.vendorId;
   activeBacnetSession.reset(new BacnetDeviceSession(
-      BacnetDeviceSession::fromIAm(bacnetClient, device)));
+    BacnetDeviceSession::fromIAm(bacnetClient, device)));
   bacnetDeviceSelected = true;
   bacnetScanStatus = "Scan queued for selected device";
 
@@ -1434,14 +1400,10 @@ static void selectBacnetDevice(const BacnetIAmDevice& device) {
   Serial.print(device.address);
   Serial.print(":");
   Serial.println(BacnetClient::kDefaultPort);
-  bacnetGuiLog(LogLevel::Info, "selected device %lu at %s:%u",
-               static_cast<unsigned long>(device.deviceInstance),
-               device.address.toString().c_str(),
-               static_cast<unsigned>(BacnetClient::kDefaultPort));
+  bacnetGuiLog(LogLevel::Info, "selected device %lu at %s:%u", static_cast<unsigned long>(device.deviceInstance), device.address.toString().c_str(), static_cast<unsigned>(BacnetClient::kDefaultPort));
 
   bacnetScanRequested = true;
-  bacnetGuiLog(LogLevel::Info, "scan queued for selected device %lu",
-               static_cast<unsigned long>(device.deviceInstance));
+  bacnetGuiLog(LogLevel::Info, "scan queued for selected device %lu", static_cast<unsigned long>(device.deviceInstance));
 }
 
 static void clearBacnetRuntime() {
@@ -1491,7 +1453,9 @@ static void startBacnetClient() {
 
   sendWhoIs();
   selectBacnetDevice(BACNET_TARGET_DEVICE_INSTANCE,
-                     configuredBacnetTargetAddress, BACNET_TARGET_PORT, 0);
+                     configuredBacnetTargetAddress,
+                     BACNET_TARGET_PORT,
+                     0);
 }
 
 static void pollBacnetDiscovery() {

@@ -139,7 +139,7 @@ enum class BacnetReadPropertyPollStatus {
 };
 
 class BacnetClient {
- public:
+public:
   static constexpr uint16_t kDefaultPort = 47808;
   static constexpr size_t kWhoIsRequestSize = 8;
   static constexpr size_t kMaxReadPropertyRequestSize = 25;
@@ -158,65 +158,31 @@ class BacnetClient {
   bool sendWhoIs(IPAddress address = IPAddress(255, 255, 255, 255),
                  uint16_t port = kDefaultPort);
   bool pollIAm(BacnetIAmDevice& device);
-  bool sendReadProperty(IPAddress address, const BacnetPropertyRequest& request,
-                        uint8_t invokeId = 1,
-                        uint16_t port = kDefaultPort);
-  bool sendReadProperty(IPAddress address, BacnetObjectId object,
-                        BacnetPropertyId property, uint8_t invokeId = 1,
-                        uint16_t port = kDefaultPort,
-                        uint32_t arrayIndex = kNoArrayIndex);
-  bool pollReadProperty(BacnetValue& value, uint8_t expectedInvokeId,
-                        const BacnetPropertyRequest& expectedRequest);
-  bool pollReadProperty(BacnetValue& value, uint8_t expectedInvokeId,
-                        BacnetPropertyId expectedProperty);
+  bool sendReadProperty(IPAddress address, const BacnetPropertyRequest& request, uint8_t invokeId = 1, uint16_t port = kDefaultPort);
+  bool sendReadProperty(IPAddress address, BacnetObjectId object, BacnetPropertyId property, uint8_t invokeId = 1, uint16_t port = kDefaultPort, uint32_t arrayIndex = kNoArrayIndex);
+  bool pollReadProperty(BacnetValue& value, uint8_t expectedInvokeId, const BacnetPropertyRequest& expectedRequest);
+  bool pollReadProperty(BacnetValue& value, uint8_t expectedInvokeId, BacnetPropertyId expectedProperty);
   void logReadPropertyTimeout(uint8_t invokeId,
                               const BacnetPropertyRequest& request);
   BacnetReadPropertyPollStatus pollReadPropertyStatus(
-      BacnetValue& value, uint8_t expectedInvokeId,
-      const BacnetPropertyRequest& expectedRequest);
-    BacnetReadPropertyPollStatus pollReadPropertyStatus(
-      BacnetValue& value, uint8_t expectedInvokeId,
-      const BacnetPropertyRequest& expectedRequest,
-      uint32_t* errorClass,
-      uint32_t* errorCode);
+    BacnetValue& value, uint8_t expectedInvokeId, const BacnetPropertyRequest& expectedRequest);
   BacnetReadPropertyPollStatus pollReadPropertyStatus(
-      BacnetValue& value, uint8_t expectedInvokeId,
-      BacnetPropertyId expectedProperty);
-    BacnetReadPropertyPollStatus pollReadPropertyStatus(
-      BacnetValue& value, uint8_t expectedInvokeId,
-      BacnetPropertyId expectedProperty,
-      uint32_t* errorClass,
-      uint32_t* errorCode);
+    BacnetValue& value, uint8_t expectedInvokeId, const BacnetPropertyRequest& expectedRequest, uint32_t* errorClass, uint32_t* errorCode);
+  BacnetReadPropertyPollStatus pollReadPropertyStatus(
+    BacnetValue& value, uint8_t expectedInvokeId, BacnetPropertyId expectedProperty);
+  BacnetReadPropertyPollStatus pollReadPropertyStatus(
+    BacnetValue& value, uint8_t expectedInvokeId, BacnetPropertyId expectedProperty, uint32_t* errorClass, uint32_t* errorCode);
 
   static size_t buildWhoIsRequest(uint8_t* buffer, size_t bufferSize);
-  static bool parseIAmResponse(const uint8_t* buffer, size_t length,
-                               BacnetIAmDevice& device);
-  static size_t buildReadPropertyRequest(uint8_t* buffer, size_t bufferSize,
-                                         const BacnetPropertyRequest& request,
-                                         uint8_t invokeId = 1);
-  static size_t buildReadPropertyRequest(uint8_t* buffer, size_t bufferSize,
-                                         BacnetObjectId object,
-                                         BacnetPropertyId property,
-                                         uint8_t invokeId = 1,
-                                         uint32_t arrayIndex = kNoArrayIndex);
-  static bool parseReadPropertyAck(const uint8_t* buffer, size_t length,
-                                   uint8_t expectedInvokeId,
-                                   const BacnetPropertyRequest& expectedRequest,
-                                   BacnetValue& value);
-  static bool parseReadPropertyAck(const uint8_t* buffer, size_t length,
-                                   uint8_t expectedInvokeId,
-                                   BacnetPropertyId expectedProperty,
-                                   BacnetValue& value);
-  static bool parseReadPropertyError(const uint8_t* buffer, size_t length,
-                                     uint8_t expectedInvokeId,
-                                     BacnetValue& value);
-  static bool parseReadPropertyError(const uint8_t* buffer, size_t length,
-                                     uint8_t expectedInvokeId,
-                                     BacnetValue& value,
-                                     uint32_t* errorClass,
-                                     uint32_t* errorCode);
+  static bool parseIAmResponse(const uint8_t* buffer, size_t length, BacnetIAmDevice& device);
+  static size_t buildReadPropertyRequest(uint8_t* buffer, size_t bufferSize, const BacnetPropertyRequest& request, uint8_t invokeId = 1);
+  static size_t buildReadPropertyRequest(uint8_t* buffer, size_t bufferSize, BacnetObjectId object, BacnetPropertyId property, uint8_t invokeId = 1, uint32_t arrayIndex = kNoArrayIndex);
+  static bool parseReadPropertyAck(const uint8_t* buffer, size_t length, uint8_t expectedInvokeId, const BacnetPropertyRequest& expectedRequest, BacnetValue& value);
+  static bool parseReadPropertyAck(const uint8_t* buffer, size_t length, uint8_t expectedInvokeId, BacnetPropertyId expectedProperty, BacnetValue& value);
+  static bool parseReadPropertyError(const uint8_t* buffer, size_t length, uint8_t expectedInvokeId, BacnetValue& value);
+  static bool parseReadPropertyError(const uint8_t* buffer, size_t length, uint8_t expectedInvokeId, BacnetValue& value, uint32_t* errorClass, uint32_t* errorCode);
 
- private:
+private:
   static constexpr size_t kMaxDiscoveryPacketSize = 512;
 
   WiFiUDP udp_;
