@@ -10,8 +10,13 @@ The sketch demonstrates:
 - BACnet/IP client startup
 - known-target `BacnetDeviceSession::fromEndpoint()` creation
 - one simple Device `object-name` read through `BacnetProperty`
-- object-list scan through `BacnetDeviceSession::scanObjectList()`
-- one fallback-polled `present-value` subscription
+- object-list scan through `BacnetDeviceSession::scanObjectList()` limited to
+  common AI/AO/AV, BI/BO/BV, and MI/MO/MV process objects
+- one fallback-polled `present-value` subscription chosen from scanned process
+  objects
+
+The example remains intentionally read-only. It demonstrates the reusable
+client/session/object APIs without ConfigManager, web UI, or BACnet writes.
 
 ## Local Configuration
 
