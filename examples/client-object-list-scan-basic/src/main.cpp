@@ -14,11 +14,11 @@
 #endif
 
 #ifndef APP_NAME
-#define APP_NAME "BACnet Object List Scan Basic"
+#define APP_NAME "BACnet Basic Client"
 #endif
 
 #ifndef APP_VERSION
-#define APP_VERSION "0.18.0"
+#define APP_VERSION "0.19.0"
 #endif
 
 #ifndef MY_USE_DHCP
@@ -121,6 +121,19 @@ void printObjectId(BacnetObjectId objectId) {
   Serial.print(bacnetObjectTypeText(objectId.type));
   Serial.print(",");
   Serial.print(objectId.instance);
+}
+
+void readDeviceObjectName(BacnetDeviceSession& session) {
+  Serial.println("[I] Reading Device object-name");
+
+  BacnetValue value;
+  BacnetProperty objectName =
+      session.object(session.deviceObject())
+          .property(BacnetPropertyId::ObjectName);
+  const BacnetDeviceSessionReadStatus status =
+      objectName.read(value, kReadTimeoutMs);
+
+  printValue("device object-name", status, value);
 }
 
 bool isPresentValueSubscriptionCandidate(BacnetObjectId objectId) {
@@ -287,6 +300,8 @@ void runScan() {
   Serial.println(static_cast<uint32_t>(BACNET_TARGET_DEVICE_INSTANCE));
   Serial.print("[I] target BACnet port ");
   Serial.println(static_cast<uint16_t>(BACNET_TARGET_PORT));
+
+  readDeviceObjectName(session);
 
   const BacnetObjectType valueObjectTypes[] = {
       BacnetObjectType::AnalogInput,

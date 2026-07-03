@@ -15,7 +15,8 @@
 #define MY_DNS_IP "192.0.2.1"
 #define MY_USE_DHCP false
 
-// BACnet validation target. Keep real local values in secrets.h.
+// Known BACnet/IP target for the beginner-safe default path.
+// Keep real local values in secrets.h.
 // The example prints these target values for diagnostics.
 #define BACNET_TARGET_DEVICE_INSTANCE 1234
 #define BACNET_TARGET_ADDRESS "192.0.2.101"

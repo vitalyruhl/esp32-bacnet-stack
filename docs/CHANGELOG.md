@@ -4,6 +4,11 @@ This changelog is a curated overview.
 
 ## Unreleased
 
+- Updated `examples/client-object-list-scan-basic` as the canonical serial-only
+  BACnet/IP client example, covering known-target startup, a simple Device
+  property read, object-list scan, and fallback-polled `present-value`
+  subscription.
+- Bumped the library and example version constants to `0.19.0`.
 - Added a release backcheck script and documentation to verify the published
   PlatformIO Registry package from an external consumer copy of the WAGO HIL
   acceptance example.
