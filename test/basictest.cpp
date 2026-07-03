@@ -23,13 +23,13 @@ struct SubscriptionCallbackCapture {
   bool valueChanged = false;
   bool statusChanged = false;
   BacnetSubscriptionNotificationReason reason =
-      BacnetSubscriptionNotificationReason::None;
+    BacnetSubscriptionNotificationReason::None;
 };
 
 static void captureSubscriptionNotification(
-    const BacnetSubscriptionNotification& notification) {
+  const BacnetSubscriptionNotification& notification) {
   auto* capture =
-      static_cast<SubscriptionCallbackCapture*>(notification.userData);
+    static_cast<SubscriptionCallbackCapture*>(notification.userData);
   if (capture == nullptr) {
     return;
   }
@@ -47,15 +47,13 @@ static void captureSubscriptionNotification(
 }
 
 class CapturingBacnetLogOutput : public BacnetLogOutput {
- public:
+public:
   void log(const BacnetLogRecord& record) override {
     ++count;
     lastLevel = record.level;
     lastTimestampMs = record.timestampMs;
-    snprintf(lastTag, sizeof(lastTag), "%s",
-             record.tag != nullptr ? record.tag : "");
-    snprintf(lastMessage, sizeof(lastMessage), "%s",
-             record.message != nullptr ? record.message : "");
+    snprintf(lastTag, sizeof(lastTag), "%s", record.tag != nullptr ? record.tag : "");
+    snprintf(lastMessage, sizeof(lastMessage), "%s", record.message != nullptr ? record.message : "");
   }
 
   size_t count = 0;
@@ -121,16 +119,12 @@ void test_bacnet_logger_filters_tags_and_rate_limits() {
   output.setMinIntervalMs(100);
   logger.addOutput(output);
 
-  logger.emit(BacnetLogRecord{BacnetLogLevel::Info, "BACnet/ReadProperty",
-                              "filtered", 100, "BACnet", nullptr});
+  logger.emit(BacnetLogRecord{BacnetLogLevel::Info, "BACnet/ReadProperty", "filtered", 100, "BACnet", nullptr});
   TEST_ASSERT_EQUAL_UINT32(0, output.count);
 
-  logger.emit(BacnetLogRecord{BacnetLogLevel::Info, "BACnet/Discovery",
-                              "first", 100, "BACnet", nullptr});
-  logger.emit(BacnetLogRecord{BacnetLogLevel::Info, "BACnet/Discovery",
-                              "rate limited", 150, "BACnet", nullptr});
-  logger.emit(BacnetLogRecord{BacnetLogLevel::Info, "BACnet/Discovery",
-                              "second", 220, "BACnet", nullptr});
+  logger.emit(BacnetLogRecord{BacnetLogLevel::Info, "BACnet/Discovery", "first", 100, "BACnet", nullptr});
+  logger.emit(BacnetLogRecord{BacnetLogLevel::Info, "BACnet/Discovery", "rate limited", 150, "BACnet", nullptr});
+  logger.emit(BacnetLogRecord{BacnetLogLevel::Info, "BACnet/Discovery", "second", 220, "BACnet", nullptr});
 
   TEST_ASSERT_EQUAL_UINT32(2, output.count);
   TEST_ASSERT_EQUAL_STRING("second", output.lastMessage);
@@ -169,8 +163,8 @@ void test_bacnet_logger_uses_bounded_output_storage() {
   if (BacnetLogger::kMaxOutputs > 0) {
     TEST_ASSERT_TRUE(logger.removeOutput(outputs[0]));
     TEST_ASSERT_EQUAL_UINT32(
-        static_cast<uint32_t>(BacnetLogger::kMaxOutputs - 1),
-        static_cast<uint32_t>(logger.outputCount()));
+      static_cast<uint32_t>(BacnetLogger::kMaxOutputs - 1),
+      static_cast<uint32_t>(logger.outputCount()));
 
     logger.addOutput(outputs[BacnetLogger::kMaxOutputs]);
     TEST_ASSERT_EQUAL_UINT32(static_cast<uint32_t>(BacnetLogger::kMaxOutputs),
@@ -218,8 +212,7 @@ void test_bacnet_logger_verbose_compile_gate() {
 
 void test_bacnet_client_builds_who_is_request() {
   uint8_t request[BacnetClient::kWhoIsRequestSize] = {};
-  const uint8_t expected[] = {0x81, 0x0B, 0x00, 0x08,
-                              0x01, 0x00, 0x10, 0x08};
+  const uint8_t expected[] = {0x81, 0x0B, 0x00, 0x08, 0x01, 0x00, 0x10, 0x08};
 
   TEST_ASSERT_EQUAL_UINT32(sizeof(expected),
                            BacnetClient::buildWhoIsRequest(request,
@@ -230,13 +223,30 @@ void test_bacnet_client_builds_who_is_request() {
 
 void test_bacnet_client_parses_i_am_response() {
   const uint8_t response[] = {
-      0x81, 0x0A, 0x00, 0x14, 0x01, 0x00, 0x10, 0x00, 0xC4, 0x02,
-      0x00, 0x04, 0xD2, 0x22, 0x05, 0xC4, 0x91, 0x00, 0x21, 0xDE,
+    0x81,
+    0x0A,
+    0x00,
+    0x14,
+    0x01,
+    0x00,
+    0x10,
+    0x00,
+    0xC4,
+    0x02,
+    0x00,
+    0x04,
+    0xD2,
+    0x22,
+    0x05,
+    0xC4,
+    0x91,
+    0x00,
+    0x21,
+    0xDE,
   };
   BacnetIAmDevice device;
 
-  TEST_ASSERT_TRUE(BacnetClient::parseIAmResponse(response, sizeof(response),
-                                                  device));
+  TEST_ASSERT_TRUE(BacnetClient::parseIAmResponse(response, sizeof(response), device));
   TEST_ASSERT_EQUAL_STRING("0.0.0.0", device.address.toString().c_str());
   TEST_ASSERT_EQUAL_UINT32(1234, device.deviceInstance);
   TEST_ASSERT_EQUAL_UINT32(1476, device.maxApduLengthAccepted);
@@ -245,43 +255,67 @@ void test_bacnet_client_parses_i_am_response() {
 }
 
 void test_bacnet_client_rejects_non_i_am_response() {
-  const uint8_t response[] = {0x81, 0x0B, 0x00, 0x08,
-                              0x01, 0x00, 0x10, 0x08};
+  const uint8_t response[] = {0x81, 0x0B, 0x00, 0x08, 0x01, 0x00, 0x10, 0x08};
   BacnetIAmDevice device;
 
-  TEST_ASSERT_FALSE(BacnetClient::parseIAmResponse(response, sizeof(response),
-                                                   device));
+  TEST_ASSERT_FALSE(BacnetClient::parseIAmResponse(response, sizeof(response), device));
 }
 
 void test_bacnet_client_builds_read_property_request() {
   uint8_t request[BacnetClient::kMaxReadPropertyRequestSize] = {};
   const uint8_t expected[] = {
-      0x81, 0x0A, 0x00, 0x11, 0x01, 0x04, 0x00, 0x05, 0x01,
-      0x0C, 0x0C, 0x02, 0x00, 0x04, 0xD2, 0x19, 0x4D,
+    0x81,
+    0x0A,
+    0x00,
+    0x11,
+    0x01,
+    0x04,
+    0x00,
+    0x05,
+    0x01,
+    0x0C,
+    0x0C,
+    0x02,
+    0x00,
+    0x04,
+    0xD2,
+    0x19,
+    0x4D,
   };
 
   TEST_ASSERT_EQUAL_UINT32(
-      sizeof(expected),
-      BacnetClient::buildReadPropertyRequest(
-          request, sizeof(request), BacnetObjectId{8, 1234},
-          BacnetPropertyId::ObjectName, 1));
+    sizeof(expected),
+    BacnetClient::buildReadPropertyRequest(
+      request, sizeof(request), BacnetObjectId{8, 1234}, BacnetPropertyId::ObjectName, 1));
   TEST_ASSERT_EQUAL_UINT8_ARRAY(expected, request, sizeof(expected));
 }
 
 void test_bacnet_client_builds_ai_present_value_request_with_type_zero() {
   uint8_t request[BacnetClient::kMaxReadPropertyRequestSize] = {};
   const uint8_t expected[] = {
-      0x81, 0x0A, 0x00, 0x11, 0x01, 0x04, 0x00, 0x05, 0x09,
-      0x0C, 0x0C, 0x00, 0x00, 0x00, 0x64, 0x19, 0x55,
+    0x81,
+    0x0A,
+    0x00,
+    0x11,
+    0x01,
+    0x04,
+    0x00,
+    0x05,
+    0x09,
+    0x0C,
+    0x0C,
+    0x00,
+    0x00,
+    0x00,
+    0x64,
+    0x19,
+    0x55,
   };
 
   TEST_ASSERT_EQUAL_UINT32(
-      sizeof(expected),
-      BacnetClient::buildReadPropertyRequest(
-          request, sizeof(request),
-          BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::AnalogInput),
-                         100},
-          BacnetPropertyId::PresentValue, 9));
+    sizeof(expected),
+    BacnetClient::buildReadPropertyRequest(
+      request, sizeof(request), BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::AnalogInput), 100}, BacnetPropertyId::PresentValue, 9));
   TEST_ASSERT_EQUAL_UINT8_ARRAY(expected, request, sizeof(expected));
 }
 
@@ -291,7 +325,7 @@ void test_bacnet_property_ids_cover_generic_access_slice() {
   TEST_ASSERT_EQUAL_UINT32(36,
                            static_cast<uint32_t>(BacnetPropertyId::EventState));
   TEST_ASSERT_EQUAL_UINT32(
-      74, static_cast<uint32_t>(BacnetPropertyId::NumberOfStates));
+    74, static_cast<uint32_t>(BacnetPropertyId::NumberOfStates));
   TEST_ASSERT_EQUAL_UINT32(76,
                            static_cast<uint32_t>(BacnetPropertyId::ObjectList));
   TEST_ASSERT_EQUAL_UINT32(77,
@@ -305,7 +339,7 @@ void test_bacnet_property_ids_cover_generic_access_slice() {
   TEST_ASSERT_EQUAL_UINT32(103,
                            static_cast<uint32_t>(BacnetPropertyId::Reliability));
   TEST_ASSERT_EQUAL_UINT32(
-      104, static_cast<uint32_t>(BacnetPropertyId::RelinquishDefault));
+    104, static_cast<uint32_t>(BacnetPropertyId::RelinquishDefault));
   TEST_ASSERT_EQUAL_UINT32(110,
                            static_cast<uint32_t>(BacnetPropertyId::StateText));
   TEST_ASSERT_EQUAL_UINT32(111,
@@ -317,61 +351,131 @@ void test_bacnet_property_ids_cover_generic_access_slice() {
 void test_bacnet_client_builds_mv_present_value_request() {
   uint8_t request[BacnetClient::kMaxReadPropertyRequestSize] = {};
   const uint8_t expected[] = {
-      0x81, 0x0A, 0x00, 0x11, 0x01, 0x04, 0x00, 0x05, 0x02,
-      0x0C, 0x0C, 0x04, 0xC0, 0x00, 0x03, 0x19, 0x55,
+    0x81,
+    0x0A,
+    0x00,
+    0x11,
+    0x01,
+    0x04,
+    0x00,
+    0x05,
+    0x02,
+    0x0C,
+    0x0C,
+    0x04,
+    0xC0,
+    0x00,
+    0x03,
+    0x19,
+    0x55,
   };
 
   TEST_ASSERT_EQUAL_UINT32(
-      sizeof(expected),
-      BacnetClient::buildReadPropertyRequest(
-          request, sizeof(request), BacnetObjectId{19, 3},
-          BacnetPropertyId::PresentValue, 2));
+    sizeof(expected),
+    BacnetClient::buildReadPropertyRequest(
+      request, sizeof(request), BacnetObjectId{19, 3}, BacnetPropertyId::PresentValue, 2));
   TEST_ASSERT_EQUAL_UINT8_ARRAY(expected, request, sizeof(expected));
 }
 
 void test_bacnet_client_builds_generic_property_request() {
   uint8_t request[BacnetClient::kMaxReadPropertyRequestSize] = {};
   const uint8_t expected[] = {
-      0x81, 0x0A, 0x00, 0x13, 0x01, 0x04, 0x00, 0x05, 0x06, 0x0C,
-      0x0C, 0x04, 0xC0, 0x07, 0xD0, 0x19, 0x6E, 0x29, 0x01,
+    0x81,
+    0x0A,
+    0x00,
+    0x13,
+    0x01,
+    0x04,
+    0x00,
+    0x05,
+    0x06,
+    0x0C,
+    0x0C,
+    0x04,
+    0xC0,
+    0x07,
+    0xD0,
+    0x19,
+    0x6E,
+    0x29,
+    0x01,
   };
   const BacnetPropertyRequest propertyRequest{
-      BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::MultiStateValue),
-                     2000},
-      BacnetPropertyId::StateText, 1};
+    BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::MultiStateValue),
+                   2000},
+    BacnetPropertyId::StateText,
+    1};
 
   TEST_ASSERT_EQUAL_UINT32(
-      sizeof(expected),
-      BacnetClient::buildReadPropertyRequest(
-          request, sizeof(request), propertyRequest, 6));
+    sizeof(expected),
+    BacnetClient::buildReadPropertyRequest(
+      request, sizeof(request), propertyRequest, 6));
   TEST_ASSERT_EQUAL_UINT8_ARRAY(expected, request, sizeof(expected));
 }
 
 void test_bacnet_client_builds_object_list_array_request() {
   uint8_t request[BacnetClient::kMaxReadPropertyRequestSize] = {};
   const uint8_t expected[] = {
-      0x81, 0x0A, 0x00, 0x13, 0x01, 0x04, 0x00, 0x05, 0x03, 0x0C,
-      0x0C, 0x02, 0x00, 0x04, 0xD2, 0x19, 0x4C, 0x29, 0x02,
+    0x81,
+    0x0A,
+    0x00,
+    0x13,
+    0x01,
+    0x04,
+    0x00,
+    0x05,
+    0x03,
+    0x0C,
+    0x0C,
+    0x02,
+    0x00,
+    0x04,
+    0xD2,
+    0x19,
+    0x4C,
+    0x29,
+    0x02,
   };
 
   TEST_ASSERT_EQUAL_UINT32(
-      sizeof(expected),
-      BacnetClient::buildReadPropertyRequest(
-          request, sizeof(request), BacnetObjectId{8, 1234},
-          BacnetPropertyId::ObjectList, 3, 2));
+    sizeof(expected),
+    BacnetClient::buildReadPropertyRequest(
+      request, sizeof(request), BacnetObjectId{8, 1234}, BacnetPropertyId::ObjectList, 3, 2));
   TEST_ASSERT_EQUAL_UINT8_ARRAY(expected, request, sizeof(expected));
 }
 
 void test_bacnet_client_parses_read_property_ack() {
   const uint8_t response[] = {
-      0x81, 0x0A, 0x00, 0x19, 0x01, 0x00, 0x30, 0x01, 0x0C,
-      0x0C, 0x02, 0x00, 0x04, 0xD2, 0x19, 0x4D, 0x3E, 0x75,
-      0x05, 0x00, 0x57, 0x41, 0x47, 0x4F, 0x3F,
+    0x81,
+    0x0A,
+    0x00,
+    0x19,
+    0x01,
+    0x00,
+    0x30,
+    0x01,
+    0x0C,
+    0x0C,
+    0x02,
+    0x00,
+    0x04,
+    0xD2,
+    0x19,
+    0x4D,
+    0x3E,
+    0x75,
+    0x05,
+    0x00,
+    0x57,
+    0x41,
+    0x47,
+    0x4F,
+    0x3F,
   };
   BacnetValue value;
 
   TEST_ASSERT_TRUE(BacnetClient::parseReadPropertyAck(
-      response, sizeof(response), 1, BacnetPropertyId::ObjectName, value));
+    response, sizeof(response), 1, BacnetPropertyId::ObjectName, value));
   TEST_ASSERT_EQUAL_STRING("WAGO", value.text);
   TEST_ASSERT_EQUAL_UINT32(4, value.textLength);
   TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetValueType::CharacterString),
@@ -380,13 +484,31 @@ void test_bacnet_client_parses_read_property_ack() {
 
 void test_bacnet_client_parses_mv_present_value_ack() {
   const uint8_t response[] = {
-      0x81, 0x0A, 0x00, 0x14, 0x01, 0x00, 0x30, 0x02, 0x0C, 0x0C,
-      0x04, 0xC0, 0x00, 0x03, 0x19, 0x55, 0x3E, 0x21, 0x03, 0x3F,
+    0x81,
+    0x0A,
+    0x00,
+    0x14,
+    0x01,
+    0x00,
+    0x30,
+    0x02,
+    0x0C,
+    0x0C,
+    0x04,
+    0xC0,
+    0x00,
+    0x03,
+    0x19,
+    0x55,
+    0x3E,
+    0x21,
+    0x03,
+    0x3F,
   };
   BacnetValue value;
 
   TEST_ASSERT_TRUE(BacnetClient::parseReadPropertyAck(
-      response, sizeof(response), 2, BacnetPropertyId::PresentValue, value));
+    response, sizeof(response), 2, BacnetPropertyId::PresentValue, value));
   TEST_ASSERT_EQUAL_STRING("3", value.text);
   TEST_ASSERT_EQUAL_UINT32(1, value.textLength);
   TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetValueType::Enumerated),
@@ -396,18 +518,38 @@ void test_bacnet_client_parses_mv_present_value_ack() {
 
 void test_bacnet_client_parses_av_present_value_real_ack() {
   const uint8_t response[] = {
-      0x81, 0x0A, 0x00, 0x17, 0x01, 0x00, 0x30, 0x07, 0x0C, 0x0C,
-      0x00, 0x80, 0x00, 0xC8, 0x19, 0x55, 0x3E, 0x44, 0x41, 0x48,
-      0x00, 0x00, 0x3F,
+    0x81,
+    0x0A,
+    0x00,
+    0x17,
+    0x01,
+    0x00,
+    0x30,
+    0x07,
+    0x0C,
+    0x0C,
+    0x00,
+    0x80,
+    0x00,
+    0xC8,
+    0x19,
+    0x55,
+    0x3E,
+    0x44,
+    0x41,
+    0x48,
+    0x00,
+    0x00,
+    0x3F,
   };
   const BacnetPropertyRequest propertyRequest{
-      BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::AnalogValue),
-                     200},
-      BacnetPropertyId::PresentValue};
+    BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::AnalogValue),
+                   200},
+    BacnetPropertyId::PresentValue};
   BacnetValue value;
 
   TEST_ASSERT_TRUE(BacnetClient::parseReadPropertyAck(
-      response, sizeof(response), 7, propertyRequest, value));
+    response, sizeof(response), 7, propertyRequest, value));
   TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetValueType::Real),
                           static_cast<uint8_t>(value.type));
   TEST_ASSERT_FLOAT_WITHIN(0.001f, 12.5f, value.realValue);
@@ -416,18 +558,38 @@ void test_bacnet_client_parses_av_present_value_real_ack() {
 
 void test_bacnet_client_parses_ai_present_value_ack_with_type_zero() {
   const uint8_t response[] = {
-      0x81, 0x0A, 0x00, 0x17, 0x01, 0x00, 0x30, 0x09, 0x0C, 0x0C,
-      0x00, 0x00, 0x00, 0x64, 0x19, 0x55, 0x3E, 0x44, 0x41, 0x20,
-      0x00, 0x00, 0x3F,
+    0x81,
+    0x0A,
+    0x00,
+    0x17,
+    0x01,
+    0x00,
+    0x30,
+    0x09,
+    0x0C,
+    0x0C,
+    0x00,
+    0x00,
+    0x00,
+    0x64,
+    0x19,
+    0x55,
+    0x3E,
+    0x44,
+    0x41,
+    0x20,
+    0x00,
+    0x00,
+    0x3F,
   };
   const BacnetPropertyRequest propertyRequest{
-      BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::AnalogInput),
-                     100},
-      BacnetPropertyId::PresentValue};
+    BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::AnalogInput),
+                   100},
+    BacnetPropertyId::PresentValue};
   BacnetValue value;
 
   TEST_ASSERT_TRUE(BacnetClient::parseReadPropertyAck(
-      response, sizeof(response), 9, propertyRequest, value));
+    response, sizeof(response), 9, propertyRequest, value));
   TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetValueType::Real),
                           static_cast<uint8_t>(value.type));
   TEST_ASSERT_FLOAT_WITHIN(0.001f, 10.0f, value.realValue);
@@ -436,18 +598,36 @@ void test_bacnet_client_parses_ai_present_value_ack_with_type_zero() {
 
 void test_bacnet_client_parses_status_flags_bit_string_ack() {
   const uint8_t response[] = {
-      0x81, 0x0A, 0x00, 0x15, 0x01, 0x00, 0x30, 0x08, 0x0C, 0x0C,
-      0x00, 0x80, 0x00, 0xC8, 0x19, 0x6F, 0x3E, 0x82, 0x04, 0x50,
-      0x3F,
+    0x81,
+    0x0A,
+    0x00,
+    0x15,
+    0x01,
+    0x00,
+    0x30,
+    0x08,
+    0x0C,
+    0x0C,
+    0x00,
+    0x80,
+    0x00,
+    0xC8,
+    0x19,
+    0x6F,
+    0x3E,
+    0x82,
+    0x04,
+    0x50,
+    0x3F,
   };
   const BacnetPropertyRequest propertyRequest{
-      BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::AnalogValue),
-                     200},
-      BacnetPropertyId::StatusFlags};
+    BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::AnalogValue),
+                   200},
+    BacnetPropertyId::StatusFlags};
   BacnetValue value;
 
   TEST_ASSERT_TRUE(BacnetClient::parseReadPropertyAck(
-      response, sizeof(response), 8, propertyRequest, value));
+    response, sizeof(response), 8, propertyRequest, value));
   TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetValueType::BitString),
                           static_cast<uint8_t>(value.type));
   TEST_ASSERT_EQUAL_UINT8(4, value.bitStringBitCount);
@@ -466,27 +646,27 @@ void test_bacnet_object_health_state_derivation() {
   status.presentValueStatus = BacnetPropertyReadStatus::Ack;
   status.statusFlagsStatus = BacnetPropertyReadStatus::Ack;
   TEST_ASSERT_EQUAL_UINT8(
-      static_cast<uint8_t>(BacnetObjectHealthState::Normal),
-      static_cast<uint8_t>(bacnetDeriveObjectHealthState(status)));
+    static_cast<uint8_t>(BacnetObjectHealthState::Normal),
+    static_cast<uint8_t>(bacnetDeriveObjectHealthState(status)));
 
   status.statusFlags.inAlarm = true;
   TEST_ASSERT_EQUAL_UINT8(
-      static_cast<uint8_t>(BacnetObjectHealthState::Warning),
-      static_cast<uint8_t>(bacnetDeriveObjectHealthState(status)));
+    static_cast<uint8_t>(BacnetObjectHealthState::Warning),
+    static_cast<uint8_t>(bacnetDeriveObjectHealthState(status)));
 
   status.statusFlags.inAlarm = false;
   status.reliabilityStatus = BacnetPropertyReadStatus::Ack;
   status.reliability = 7;
   TEST_ASSERT_EQUAL_UINT8(
-      static_cast<uint8_t>(BacnetObjectHealthState::Error),
-      static_cast<uint8_t>(bacnetDeriveObjectHealthState(status)));
+    static_cast<uint8_t>(BacnetObjectHealthState::Error),
+    static_cast<uint8_t>(bacnetDeriveObjectHealthState(status)));
 
   status.reliability = 0;
   status.outOfServiceStatus = BacnetPropertyReadStatus::Ack;
   status.outOfService = true;
   TEST_ASSERT_EQUAL_UINT8(
-      static_cast<uint8_t>(BacnetObjectHealthState::OutOfService),
-      static_cast<uint8_t>(bacnetDeriveObjectHealthState(status)));
+    static_cast<uint8_t>(BacnetObjectHealthState::OutOfService),
+    static_cast<uint8_t>(bacnetDeriveObjectHealthState(status)));
 
   BacnetObjectStatus unknown;
   unknown.presentValueStatus = BacnetPropertyReadStatus::Ack;
@@ -495,26 +675,48 @@ void test_bacnet_object_health_state_derivation() {
   unknown.reliabilityStatus = BacnetPropertyReadStatus::UnsupportedProperty;
   unknown.outOfServiceStatus = BacnetPropertyReadStatus::UnsupportedProperty;
   TEST_ASSERT_EQUAL_UINT8(
-      static_cast<uint8_t>(BacnetObjectHealthState::Unknown),
-      static_cast<uint8_t>(bacnetDeriveObjectHealthState(unknown)));
+    static_cast<uint8_t>(BacnetObjectHealthState::Unknown),
+    static_cast<uint8_t>(bacnetDeriveObjectHealthState(unknown)));
 
   BacnetObjectStatus failedPresentValue;
   failedPresentValue.presentValueStatus = BacnetPropertyReadStatus::Timeout;
   TEST_ASSERT_EQUAL_UINT8(
-      static_cast<uint8_t>(BacnetObjectHealthState::Error),
-      static_cast<uint8_t>(bacnetDeriveObjectHealthState(failedPresentValue)));
+    static_cast<uint8_t>(BacnetObjectHealthState::Error),
+    static_cast<uint8_t>(bacnetDeriveObjectHealthState(failedPresentValue)));
 }
 
 void test_bacnet_client_parses_object_list_entry_ack() {
   const uint8_t response[] = {
-      0x81, 0x0A, 0x00, 0x19, 0x01, 0x00, 0x30, 0x03, 0x0C,
-      0x0C, 0x02, 0x00, 0x04, 0xD2, 0x19, 0x4C, 0x29, 0x02,
-      0x3E, 0xC4, 0x04, 0xC0, 0x00, 0x0B, 0x3F,
+    0x81,
+    0x0A,
+    0x00,
+    0x19,
+    0x01,
+    0x00,
+    0x30,
+    0x03,
+    0x0C,
+    0x0C,
+    0x02,
+    0x00,
+    0x04,
+    0xD2,
+    0x19,
+    0x4C,
+    0x29,
+    0x02,
+    0x3E,
+    0xC4,
+    0x04,
+    0xC0,
+    0x00,
+    0x0B,
+    0x3F,
   };
   BacnetValue value;
 
   TEST_ASSERT_TRUE(BacnetClient::parseReadPropertyAck(
-      response, sizeof(response), 3, BacnetPropertyId::ObjectList, value));
+    response, sizeof(response), 3, BacnetPropertyId::ObjectList, value));
   TEST_ASSERT_EQUAL_STRING("19,11", value.text);
   TEST_ASSERT_EQUAL_UINT32(5, value.textLength);
   TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetValueType::ObjectIdentifier),
@@ -526,87 +728,183 @@ void test_bacnet_client_parses_object_list_entry_ack() {
 
 void test_bacnet_client_parses_object_list_ack() {
   const uint8_t response[] = {
-      0x81, 0x0A, 0x00, 0x21, 0x01, 0x00, 0x30, 0x05, 0x0C,
-      0x0C, 0x02, 0x00, 0x04, 0xD2, 0x19, 0x4C, 0x3E,
-      0xC4, 0x02, 0x00, 0x04, 0xD2, 0xC4, 0x04, 0xC0, 0x00,
-      0x0B, 0xC4, 0x04, 0xC0, 0x00, 0x0C, 0x3F,
+    0x81,
+    0x0A,
+    0x00,
+    0x21,
+    0x01,
+    0x00,
+    0x30,
+    0x05,
+    0x0C,
+    0x0C,
+    0x02,
+    0x00,
+    0x04,
+    0xD2,
+    0x19,
+    0x4C,
+    0x3E,
+    0xC4,
+    0x02,
+    0x00,
+    0x04,
+    0xD2,
+    0xC4,
+    0x04,
+    0xC0,
+    0x00,
+    0x0B,
+    0xC4,
+    0x04,
+    0xC0,
+    0x00,
+    0x0C,
+    0x3F,
   };
   BacnetValue value;
 
   TEST_ASSERT_TRUE(BacnetClient::parseReadPropertyAck(
-      response, sizeof(response), 5, BacnetPropertyId::ObjectList, value));
+    response, sizeof(response), 5, BacnetPropertyId::ObjectList, value));
   TEST_ASSERT_EQUAL_STRING("8,1234;19,11;19,12", value.text);
   TEST_ASSERT_EQUAL_UINT8(
-      static_cast<uint8_t>(BacnetValueType::ObjectIdentifierList),
-      static_cast<uint8_t>(value.type));
+    static_cast<uint8_t>(BacnetValueType::ObjectIdentifierList),
+    static_cast<uint8_t>(value.type));
 }
 
 void test_bacnet_client_parses_read_property_error() {
   const uint8_t response[] = {
-      0x81, 0x0A, 0x00, 0x0D, 0x01, 0x00, 0x50,
-      0x04, 0x0C, 0x91, 0x02, 0x91, 0x20,
+    0x81,
+    0x0A,
+    0x00,
+    0x0D,
+    0x01,
+    0x00,
+    0x50,
+    0x04,
+    0x0C,
+    0x91,
+    0x02,
+    0x91,
+    0x20,
   };
   BacnetValue value;
 
   TEST_ASSERT_TRUE(BacnetClient::parseReadPropertyError(response,
-                                                        sizeof(response), 4,
+                                                        sizeof(response),
+                                                        4,
                                                         value));
   TEST_ASSERT_EQUAL_STRING("error class 2 code 32", value.text);
   TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetValueType::Error),
                           static_cast<uint8_t>(value.type));
 }
 
-  void test_bacnet_client_parses_read_property_error_codes() {
-    const uint8_t response[] = {
-      0x81, 0x0A, 0x00, 0x0D, 0x01, 0x00, 0x50,
-      0x04, 0x0C, 0x91, 0x02, 0x91, 0x20,
-    };
-    BacnetValue value;
-    uint32_t errorClass = 0;
-    uint32_t errorCode = 0;
+void test_bacnet_client_parses_read_property_error_codes() {
+  const uint8_t response[] = {
+    0x81,
+    0x0A,
+    0x00,
+    0x0D,
+    0x01,
+    0x00,
+    0x50,
+    0x04,
+    0x0C,
+    0x91,
+    0x02,
+    0x91,
+    0x20,
+  };
+  BacnetValue value;
+  uint32_t errorClass = 0;
+  uint32_t errorCode = 0;
 
-    TEST_ASSERT_TRUE(BacnetClient::parseReadPropertyError(response,
-                              sizeof(response), 4,
-                              value, &errorClass,
-                              &errorCode));
-    TEST_ASSERT_EQUAL_UINT32(2, errorClass);
-    TEST_ASSERT_EQUAL_UINT32(32, errorCode);
-  }
+  TEST_ASSERT_TRUE(BacnetClient::parseReadPropertyError(response,
+                                                        sizeof(response),
+                                                        4,
+                                                        value,
+                                                        &errorClass,
+                                                        &errorCode));
+  TEST_ASSERT_EQUAL_UINT32(2, errorClass);
+  TEST_ASSERT_EQUAL_UINT32(32, errorCode);
+}
 
-  void test_bacnet_client_parses_property_list_count_ack() {
-    const uint8_t response[] = {
-      0x81, 0x0A, 0x00, 0x17, 0x01, 0x00, 0x30, 0x09, 0x0C, 0x02, 0x00, 0x04,
-      0xD2, 0x1A, 0x01, 0x73, 0x29, 0x00, 0x3E, 0x21, 0x03, 0x3F,
-    };
-    const BacnetPropertyRequest request{
-      BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::Device), 1234},
-      BacnetPropertyId::PropertyList, 0};
-    BacnetValue value;
+void test_bacnet_client_parses_property_list_count_ack() {
+  const uint8_t response[] = {
+    0x81,
+    0x0A,
+    0x00,
+    0x17,
+    0x01,
+    0x00,
+    0x30,
+    0x09,
+    0x0C,
+    0x02,
+    0x00,
+    0x04,
+    0xD2,
+    0x1A,
+    0x01,
+    0x73,
+    0x29,
+    0x00,
+    0x3E,
+    0x21,
+    0x03,
+    0x3F,
+  };
+  const BacnetPropertyRequest request{
+    BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::Device), 1234},
+    BacnetPropertyId::PropertyList,
+    0};
+  BacnetValue value;
 
-    TEST_ASSERT_TRUE(BacnetClient::parseReadPropertyAck(
-      response, sizeof(response), 9, request, value));
-    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetValueType::Unsigned),
-                static_cast<uint8_t>(value.type));
-    TEST_ASSERT_EQUAL_UINT32(3, value.unsignedValue);
-  }
+  TEST_ASSERT_TRUE(BacnetClient::parseReadPropertyAck(
+    response, sizeof(response), 9, request, value));
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetValueType::Unsigned),
+                          static_cast<uint8_t>(value.type));
+  TEST_ASSERT_EQUAL_UINT32(3, value.unsignedValue);
+}
 
-  void test_bacnet_client_parses_property_list_entry_ack() {
-    const uint8_t response[] = {
-      0x81, 0x0A, 0x00, 0x17, 0x01, 0x00, 0x30, 0x0A, 0x0C, 0x02, 0x00, 0x04,
-      0xD2, 0x1A, 0x01, 0x73, 0x29, 0x01, 0x3E, 0x91, 0x4D, 0x3F,
-    };
-    const BacnetPropertyRequest request{
-      BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::Device), 1234},
-      BacnetPropertyId::PropertyList, 1};
-    BacnetValue value;
+void test_bacnet_client_parses_property_list_entry_ack() {
+  const uint8_t response[] = {
+    0x81,
+    0x0A,
+    0x00,
+    0x17,
+    0x01,
+    0x00,
+    0x30,
+    0x0A,
+    0x0C,
+    0x02,
+    0x00,
+    0x04,
+    0xD2,
+    0x1A,
+    0x01,
+    0x73,
+    0x29,
+    0x01,
+    0x3E,
+    0x91,
+    0x4D,
+    0x3F,
+  };
+  const BacnetPropertyRequest request{
+    BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::Device), 1234},
+    BacnetPropertyId::PropertyList,
+    1};
+  BacnetValue value;
 
-    TEST_ASSERT_TRUE(BacnetClient::parseReadPropertyAck(
-      response, sizeof(response), 10, request, value));
-    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetValueType::Enumerated),
-                static_cast<uint8_t>(value.type));
-    TEST_ASSERT_EQUAL_UINT32(
-      static_cast<uint32_t>(BacnetPropertyId::ObjectName), value.unsignedValue);
-  }
+  TEST_ASSERT_TRUE(BacnetClient::parseReadPropertyAck(
+    response, sizeof(response), 10, request, value));
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetValueType::Enumerated),
+                          static_cast<uint8_t>(value.type));
+  TEST_ASSERT_EQUAL_UINT32(
+    static_cast<uint32_t>(BacnetPropertyId::ObjectName), value.unsignedValue);
+}
 
 void test_bacnet_device_session_keeps_remote_device_metadata() {
   BacnetClient client;
@@ -628,7 +926,7 @@ void test_bacnet_device_session_from_endpoint_keeps_metadata() {
   BacnetClient client;
   IPAddress address(192, 168, 1, 51);
   BacnetDeviceSession session =
-      BacnetDeviceSession::fromEndpoint(client, 5678, address, 47810);
+    BacnetDeviceSession::fromEndpoint(client, 5678, address, 47810);
 
   TEST_ASSERT_EQUAL_UINT32(5678, session.deviceInstance());
   TEST_ASSERT_EQUAL_STRING("192.168.1.51", session.address().toString().c_str());
@@ -657,11 +955,11 @@ void test_bacnet_device_session_reports_send_failure() {
   BacnetValue value;
 
   const BacnetDeviceSessionReadStatus status = session.readProperty(
-      BacnetObjectType::Device, 1234, BacnetPropertyId::ObjectName, value, 0);
+    BacnetObjectType::Device, 1234, BacnetPropertyId::ObjectName, value, 0);
 
   TEST_ASSERT_EQUAL_UINT8(
-      static_cast<uint8_t>(BacnetDeviceSessionReadStatus::SendFailed),
-      static_cast<uint8_t>(status));
+    static_cast<uint8_t>(BacnetDeviceSessionReadStatus::SendFailed),
+    static_cast<uint8_t>(status));
   TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetValueType::Empty),
                           static_cast<uint8_t>(value.type));
 }
@@ -671,7 +969,7 @@ void test_bacnet_device_session_creates_remote_object() {
   BacnetDeviceSession session(client, 1234, IPAddress(192, 168, 1, 50));
 
   const BacnetRemoteObject object =
-      session.object(BacnetObjectType::MultiStateValue, 2000);
+    session.object(BacnetObjectType::MultiStateValue, 2000);
   const BacnetObjectId objectId = object.objectId();
 
   TEST_ASSERT_EQUAL_UINT16(static_cast<uint16_t>(BacnetObjectType::MultiStateValue),
@@ -683,11 +981,11 @@ void test_bacnet_remote_object_creates_property_request() {
   BacnetClient client;
   BacnetDeviceSession session(client, 1234, IPAddress(192, 168, 1, 50));
   const BacnetRemoteObject object =
-      session.object(BacnetObjectId{
-          static_cast<uint16_t>(BacnetObjectType::MultiStateValue), 2000});
+    session.object(BacnetObjectId{
+      static_cast<uint16_t>(BacnetObjectType::MultiStateValue), 2000});
 
   const BacnetProperty property =
-      object.property(BacnetPropertyId::StateText, 2);
+    object.property(BacnetPropertyId::StateText, 2);
   const BacnetPropertyRequest request = property.request();
 
   TEST_ASSERT_EQUAL_UINT16(static_cast<uint16_t>(BacnetObjectType::MultiStateValue),
@@ -708,15 +1006,15 @@ void test_bacnet_remote_object_read_reports_send_failure() {
   BacnetClient client;
   BacnetDeviceSession session(client, 1234, IPAddress(0, 0, 0, 0));
   const BacnetRemoteObject object =
-      session.object(BacnetObjectType::AnalogValue, 200);
+    session.object(BacnetObjectType::AnalogValue, 200);
   BacnetValue value;
 
   const BacnetDeviceSessionReadStatus status =
-      object.readPresentValue(value, 0);
+    object.readPresentValue(value, 0);
 
   TEST_ASSERT_EQUAL_UINT8(
-      static_cast<uint8_t>(BacnetDeviceSessionReadStatus::SendFailed),
-      static_cast<uint8_t>(status));
+    static_cast<uint8_t>(BacnetDeviceSessionReadStatus::SendFailed),
+    static_cast<uint8_t>(status));
   TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetValueType::Empty),
                           static_cast<uint8_t>(value.type));
 }
@@ -725,63 +1023,63 @@ void test_bacnet_property_read_reports_send_failure() {
   BacnetClient client;
   BacnetDeviceSession session(client, 1234, IPAddress(0, 0, 0, 0));
   const BacnetProperty property =
-      session.object(BacnetObjectType::Device, 1234)
-          .property(BacnetPropertyId::ObjectName);
+    session.object(BacnetObjectType::Device, 1234)
+      .property(BacnetPropertyId::ObjectName);
   BacnetValue value;
 
   const BacnetDeviceSessionReadStatus status = property.read(value, 0);
 
   TEST_ASSERT_EQUAL_UINT8(
-      static_cast<uint8_t>(BacnetDeviceSessionReadStatus::SendFailed),
-      static_cast<uint8_t>(status));
+    static_cast<uint8_t>(BacnetDeviceSessionReadStatus::SendFailed),
+    static_cast<uint8_t>(status));
   TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetValueType::Empty),
                           static_cast<uint8_t>(value.type));
 }
 
-  void test_bacnet_remote_object_property_list_reports_send_failure() {
-    BacnetClient client;
-    BacnetDeviceSession session(client, 1234, IPAddress(0, 0, 0, 0));
-    const BacnetRemoteObject object =
-      session.object(BacnetObjectType::AnalogValue, 200);
-    BacnetPropertyId properties[4] = {};
+void test_bacnet_remote_object_property_list_reports_send_failure() {
+  BacnetClient client;
+  BacnetDeviceSession session(client, 1234, IPAddress(0, 0, 0, 0));
+  const BacnetRemoteObject object =
+    session.object(BacnetObjectType::AnalogValue, 200);
+  BacnetPropertyId properties[4] = {};
 
-    const BacnetPropertyListReadResult result =
-      object.readPropertyList(properties, 4, 0);
+  const BacnetPropertyListReadResult result =
+    object.readPropertyList(properties, 4, 0);
 
-    TEST_ASSERT_EQUAL_UINT8(
-      static_cast<uint8_t>(BacnetPropertyReadStatus::SendFailed),
-      static_cast<uint8_t>(result.status));
-    TEST_ASSERT_EQUAL_UINT32(0, static_cast<uint32_t>(result.advertised));
-    TEST_ASSERT_EQUAL_UINT32(0, static_cast<uint32_t>(result.stored));
-  }
+  TEST_ASSERT_EQUAL_UINT8(
+    static_cast<uint8_t>(BacnetPropertyReadStatus::SendFailed),
+    static_cast<uint8_t>(result.status));
+  TEST_ASSERT_EQUAL_UINT32(0, static_cast<uint32_t>(result.advertised));
+  TEST_ASSERT_EQUAL_UINT32(0, static_cast<uint32_t>(result.stored));
+}
 
-  void test_bacnet_remote_object_read_all_attempts_each_property() {
-    BacnetClient client;
-    BacnetDeviceSession session(client, 1234, IPAddress(0, 0, 0, 0));
-    const BacnetRemoteObject object =
-      session.object(BacnetObjectType::AnalogValue, 200);
-    const BacnetPropertyId properties[] = {
-      BacnetPropertyId::ObjectName,
-      BacnetPropertyId::PresentValue,
-    };
-    BacnetPropertyReadResult results[2] = {};
+void test_bacnet_remote_object_read_all_attempts_each_property() {
+  BacnetClient client;
+  BacnetDeviceSession session(client, 1234, IPAddress(0, 0, 0, 0));
+  const BacnetRemoteObject object =
+    session.object(BacnetObjectType::AnalogValue, 200);
+  const BacnetPropertyId properties[] = {
+    BacnetPropertyId::ObjectName,
+    BacnetPropertyId::PresentValue,
+  };
+  BacnetPropertyReadResult results[2] = {};
 
-    const BacnetPropertyReadAllResult summary = object.readAllProperties(
-      properties, 2, results, 2, 0);
+  const BacnetPropertyReadAllResult summary = object.readAllProperties(
+    properties, 2, results, 2, 0);
 
-    TEST_ASSERT_EQUAL_UINT32(2, static_cast<uint32_t>(summary.requested));
-    TEST_ASSERT_EQUAL_UINT32(2, static_cast<uint32_t>(summary.attempted));
-    TEST_ASSERT_EQUAL_UINT32(2, static_cast<uint32_t>(summary.stored));
-    TEST_ASSERT_EQUAL_UINT32(0, static_cast<uint32_t>(summary.acked));
-    TEST_ASSERT_EQUAL_UINT32(2, static_cast<uint32_t>(summary.failed));
-    TEST_ASSERT_FALSE(summary.truncated);
-    TEST_ASSERT_EQUAL_UINT8(
-      static_cast<uint8_t>(BacnetPropertyReadStatus::SendFailed),
-      static_cast<uint8_t>(results[0].status));
-    TEST_ASSERT_EQUAL_UINT8(
-      static_cast<uint8_t>(BacnetPropertyReadStatus::SendFailed),
-      static_cast<uint8_t>(results[1].status));
-  }
+  TEST_ASSERT_EQUAL_UINT32(2, static_cast<uint32_t>(summary.requested));
+  TEST_ASSERT_EQUAL_UINT32(2, static_cast<uint32_t>(summary.attempted));
+  TEST_ASSERT_EQUAL_UINT32(2, static_cast<uint32_t>(summary.stored));
+  TEST_ASSERT_EQUAL_UINT32(0, static_cast<uint32_t>(summary.acked));
+  TEST_ASSERT_EQUAL_UINT32(2, static_cast<uint32_t>(summary.failed));
+  TEST_ASSERT_FALSE(summary.truncated);
+  TEST_ASSERT_EQUAL_UINT8(
+    static_cast<uint8_t>(BacnetPropertyReadStatus::SendFailed),
+    static_cast<uint8_t>(results[0].status));
+  TEST_ASSERT_EQUAL_UINT8(
+    static_cast<uint8_t>(BacnetPropertyReadStatus::SendFailed),
+    static_cast<uint8_t>(results[1].status));
+}
 
 void test_bacnet_object_scan_options_defaults() {
   BacnetObjectScanOptions options;
@@ -796,8 +1094,8 @@ void test_bacnet_object_scan_options_defaults() {
   TEST_ASSERT_TRUE(options.readPresentValue);
   TEST_ASSERT_TRUE(options.acceptsObjectType(BacnetObjectType::Device));
   TEST_ASSERT_TRUE(options.acceptsObjectType(
-      BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::AnalogValue),
-                     200}));
+    BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::AnalogValue),
+                   200}));
 }
 
 void test_bacnet_object_scan_options_filter_object_types() {
@@ -809,8 +1107,8 @@ void test_bacnet_object_scan_options_filter_object_types() {
 
   TEST_ASSERT_TRUE(options.acceptsObjectType(BacnetObjectType::AnalogValue));
   TEST_ASSERT_TRUE(options.acceptsObjectType(
-      BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::MultiStateValue),
-                     2000}));
+    BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::MultiStateValue),
+                   2000}));
   TEST_ASSERT_FALSE(options.acceptsObjectType(BacnetObjectType::Device));
 }
 
@@ -821,8 +1119,8 @@ void test_bacnet_object_scan_options_accepts_analog_input_type_zero() {
 
   TEST_ASSERT_TRUE(options.acceptsObjectType(BacnetObjectType::AnalogInput));
   TEST_ASSERT_TRUE(options.acceptsObjectType(
-      BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::AnalogInput),
-                     100}));
+    BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::AnalogInput),
+                   100}));
   TEST_ASSERT_FALSE(options.acceptsObjectType(BacnetObjectType::AnalogOutput));
 }
 
@@ -831,19 +1129,19 @@ void test_bacnet_scanned_object_defaults_are_skipped() {
   BacnetObjectScanResult result;
 
   TEST_ASSERT_EQUAL_UINT8(
-      static_cast<uint8_t>(BacnetDeviceSessionReadStatus::Skipped),
-      static_cast<uint8_t>(scanned.objectNameStatus));
+    static_cast<uint8_t>(BacnetDeviceSessionReadStatus::Skipped),
+    static_cast<uint8_t>(scanned.objectNameStatus));
   TEST_ASSERT_EQUAL_UINT8(
-      static_cast<uint8_t>(BacnetDeviceSessionReadStatus::Skipped),
-      static_cast<uint8_t>(scanned.descriptionStatus));
+    static_cast<uint8_t>(BacnetDeviceSessionReadStatus::Skipped),
+    static_cast<uint8_t>(scanned.descriptionStatus));
   TEST_ASSERT_EQUAL_UINT8(
-      static_cast<uint8_t>(BacnetDeviceSessionReadStatus::Skipped),
-      static_cast<uint8_t>(scanned.presentValueStatus));
+    static_cast<uint8_t>(BacnetDeviceSessionReadStatus::Skipped),
+    static_cast<uint8_t>(scanned.presentValueStatus));
   TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetValueType::Empty),
                           static_cast<uint8_t>(scanned.objectName.type));
   TEST_ASSERT_EQUAL_UINT8(
-      static_cast<uint8_t>(BacnetDeviceSessionReadStatus::Skipped),
-      static_cast<uint8_t>(result.objectListCountStatus));
+    static_cast<uint8_t>(BacnetDeviceSessionReadStatus::Skipped),
+    static_cast<uint8_t>(result.objectListCountStatus));
   TEST_ASSERT_EQUAL_UINT32(0, result.objectListCount);
   TEST_ASSERT_EQUAL_UINT32(0, result.inspected);
   TEST_ASSERT_EQUAL_UINT32(0, result.found);
@@ -858,14 +1156,14 @@ void test_bacnet_device_session_scan_object_list_invalid_target() {
   options.readTimeoutMs = 0;
   BacnetScannedObject results[1];
   results[0].objectId = BacnetObjectId{
-      static_cast<uint16_t>(BacnetObjectType::AnalogValue), 42};
+    static_cast<uint16_t>(BacnetObjectType::AnalogValue), 42};
 
   const BacnetObjectScanResult result =
-      session.scanObjectList(options, results, 1);
+    session.scanObjectList(options, results, 1);
 
   TEST_ASSERT_EQUAL_UINT8(
-      static_cast<uint8_t>(BacnetDeviceSessionReadStatus::SendFailed),
-      static_cast<uint8_t>(result.objectListCountStatus));
+    static_cast<uint8_t>(BacnetDeviceSessionReadStatus::SendFailed),
+    static_cast<uint8_t>(result.objectListCountStatus));
   TEST_ASSERT_EQUAL_UINT32(0, result.objectListCount);
   TEST_ASSERT_EQUAL_UINT32(0, result.inspected);
   TEST_ASSERT_EQUAL_UINT32(0, result.found);
@@ -876,10 +1174,10 @@ void test_bacnet_device_session_scan_object_list_invalid_target() {
   TEST_ASSERT_EQUAL_UINT32(42, results[0].objectId.instance);
 
   const BacnetObjectScanResult zeroCapacityResult =
-      session.scanObjectList(options, nullptr, 0);
+    session.scanObjectList(options, nullptr, 0);
   TEST_ASSERT_EQUAL_UINT8(
-      static_cast<uint8_t>(BacnetDeviceSessionReadStatus::SendFailed),
-      static_cast<uint8_t>(zeroCapacityResult.objectListCountStatus));
+    static_cast<uint8_t>(BacnetDeviceSessionReadStatus::SendFailed),
+    static_cast<uint8_t>(zeroCapacityResult.objectListCountStatus));
   TEST_ASSERT_EQUAL_UINT32(0, zeroCapacityResult.stored);
 }
 
@@ -894,11 +1192,11 @@ void test_bacnet_object_list_scan_job_initial_state() {
   TEST_ASSERT_FALSE(job.isTerminal());
   TEST_ASSERT_FALSE(job.requestInFlight());
   TEST_ASSERT_EQUAL_UINT8(
-      static_cast<uint8_t>(BacnetObjectListScanJobStatus::Idle),
-      static_cast<uint8_t>(job.status()));
+    static_cast<uint8_t>(BacnetObjectListScanJobStatus::Idle),
+    static_cast<uint8_t>(job.status()));
   TEST_ASSERT_EQUAL_UINT8(
-      static_cast<uint8_t>(BacnetObjectListScanPhase::Idle),
-      static_cast<uint8_t>(job.phase()));
+    static_cast<uint8_t>(BacnetObjectListScanPhase::Idle),
+    static_cast<uint8_t>(job.phase()));
   TEST_ASSERT_EQUAL_STRING("idle",
                            bacnetObjectListScanJobStatusText(job.status()));
   TEST_ASSERT_EQUAL_STRING("idle", bacnetObjectListScanPhaseText(job.phase()));
@@ -907,11 +1205,11 @@ void test_bacnet_object_list_scan_job_initial_state() {
 
   const BacnetObjectListScanProgress progress = job.progress();
   TEST_ASSERT_EQUAL_UINT8(
-      static_cast<uint8_t>(BacnetObjectListScanJobStatus::Idle),
-      static_cast<uint8_t>(progress.status));
+    static_cast<uint8_t>(BacnetObjectListScanJobStatus::Idle),
+    static_cast<uint8_t>(progress.status));
   TEST_ASSERT_EQUAL_UINT8(
-      static_cast<uint8_t>(BacnetObjectListScanPhase::Idle),
-      static_cast<uint8_t>(progress.phase));
+    static_cast<uint8_t>(BacnetObjectListScanPhase::Idle),
+    static_cast<uint8_t>(progress.phase));
   TEST_ASSERT_FALSE(progress.requestInFlight);
   TEST_ASSERT_EQUAL_UINT32(0, progress.currentIndex);
 }
@@ -925,18 +1223,18 @@ void test_bacnet_object_list_scan_job_reports_send_failure() {
   BacnetScannedObject results[1];
 
   const bool started =
-      session.beginObjectListScan(job, options, results, 1, 1000);
+    session.beginObjectListScan(job, options, results, 1, 1000);
 
   TEST_ASSERT_FALSE(started);
   TEST_ASSERT_TRUE(job.isFailed());
   TEST_ASSERT_TRUE(job.isTerminal());
   TEST_ASSERT_FALSE(job.requestInFlight());
   TEST_ASSERT_EQUAL_UINT8(
-      static_cast<uint8_t>(BacnetObjectListScanPhase::Failed),
-      static_cast<uint8_t>(job.phase()));
+    static_cast<uint8_t>(BacnetObjectListScanPhase::Failed),
+    static_cast<uint8_t>(job.phase()));
   TEST_ASSERT_EQUAL_UINT8(
-      static_cast<uint8_t>(BacnetDeviceSessionReadStatus::SendFailed),
-      static_cast<uint8_t>(job.summary().objectListCountStatus));
+    static_cast<uint8_t>(BacnetDeviceSessionReadStatus::SendFailed),
+    static_cast<uint8_t>(job.summary().objectListCountStatus));
   TEST_ASSERT_EQUAL_UINT32(0, job.summary().stored);
 }
 
@@ -950,19 +1248,18 @@ void test_bacnet_object_list_scan_job_busy_protects_blocking_read() {
   BacnetScannedObject results[1];
 
   const bool started =
-      session.beginObjectListScan(job, options, results, 1, 1000);
+    session.beginObjectListScan(job, options, results, 1, 1000);
   if (!started || !job.requestInFlight()) {
     TEST_IGNORE_MESSAGE("UDP send did not enter object-list scan in-flight state");
   }
 
   BacnetValue value;
   const auto status =
-      session.readProperty(BacnetObjectType::AnalogValue, 200,
-                           BacnetPropertyId::PresentValue, value, 1);
+    session.readProperty(BacnetObjectType::AnalogValue, 200, BacnetPropertyId::PresentValue, value, 1);
 
   TEST_ASSERT_EQUAL_UINT8(
-      static_cast<uint8_t>(BacnetDeviceSessionReadStatus::Busy),
-      static_cast<uint8_t>(status));
+    static_cast<uint8_t>(BacnetDeviceSessionReadStatus::Busy),
+    static_cast<uint8_t>(status));
   session.cancelObjectListScan(job);
   TEST_ASSERT_TRUE(job.isCancelled());
 }
@@ -1006,11 +1303,11 @@ void test_bacnet_property_subscribe_exposes_identity_and_defaults() {
   BacnetClient client;
   BacnetDeviceSession session(client, 1234, IPAddress(192, 168, 1, 50));
   BacnetProperty property =
-      session.object(BacnetObjectType::AnalogValue, 200)
-          .property(BacnetPropertyId::PresentValue, 1);
+    session.object(BacnetObjectType::AnalogValue, 200)
+      .property(BacnetPropertyId::PresentValue, 1);
 
   BacnetPropertySubscription subscription =
-      property.subscribe(nullptr, nullptr, BacnetSubscribeOptions{});
+    property.subscribe(nullptr, nullptr, BacnetSubscribeOptions{});
 
   TEST_ASSERT_EQUAL_UINT16(static_cast<uint16_t>(BacnetObjectType::AnalogValue),
                            subscription.objectId().type);
@@ -1022,8 +1319,8 @@ void test_bacnet_property_subscribe_exposes_identity_and_defaults() {
   TEST_ASSERT_FALSE(subscription.inFlight());
   TEST_ASSERT_FALSE(subscription.hasValue());
   TEST_ASSERT_EQUAL_UINT8(
-      static_cast<uint8_t>(BacnetDeviceSessionReadStatus::Skipped),
-      static_cast<uint8_t>(subscription.lastStatus()));
+    static_cast<uint8_t>(BacnetDeviceSessionReadStatus::Skipped),
+    static_cast<uint8_t>(subscription.lastStatus()));
   TEST_ASSERT_EQUAL_UINT32(0, subscription.lastUpdateMs());
 }
 
@@ -1031,8 +1328,8 @@ void test_bacnet_subscription_request_refresh_and_fallback_zero_behavior() {
   BacnetClient client;
   BacnetDeviceSession session(client, 1234, IPAddress(192, 168, 1, 50));
   BacnetProperty property =
-      session.object(BacnetObjectType::AnalogValue, 200)
-          .property(BacnetPropertyId::PresentValue);
+    session.object(BacnetObjectType::AnalogValue, 200)
+      .property(BacnetPropertyId::PresentValue);
 
   SubscriptionCallbackCapture capture;
   BacnetSubscribeOptions options;
@@ -1040,37 +1337,37 @@ void test_bacnet_subscription_request_refresh_and_fallback_zero_behavior() {
   options.immediateFirstRead = false;
 
   BacnetPropertySubscription subscription =
-      property.subscribe(captureSubscriptionNotification, &capture, options);
+    property.subscribe(captureSubscriptionNotification, &capture, options);
 
   session.poll(subscription, 1000);
   TEST_ASSERT_EQUAL_UINT32(0, static_cast<uint32_t>(capture.calls));
   TEST_ASSERT_EQUAL_UINT8(
-      static_cast<uint8_t>(BacnetDeviceSessionReadStatus::Skipped),
-      static_cast<uint8_t>(subscription.lastStatus()));
+    static_cast<uint8_t>(BacnetDeviceSessionReadStatus::Skipped),
+    static_cast<uint8_t>(subscription.lastStatus()));
 
   subscription.requestRefresh();
   session.poll(subscription, 1001);
   TEST_ASSERT_EQUAL_UINT32(1, static_cast<uint32_t>(capture.calls));
   TEST_ASSERT_EQUAL_UINT8(
-      static_cast<uint8_t>(BacnetDeviceSessionReadStatus::SendFailed),
-      static_cast<uint8_t>(subscription.lastStatus()));
+    static_cast<uint8_t>(BacnetDeviceSessionReadStatus::SendFailed),
+    static_cast<uint8_t>(subscription.lastStatus()));
   TEST_ASSERT_EQUAL_UINT32(1001, subscription.lastUpdateMs());
   TEST_ASSERT_FALSE(subscription.hasValue());
   TEST_ASSERT_TRUE(capture.statusChanged);
   TEST_ASSERT_TRUE(bacnetSubscriptionReasonContains(
-      capture.reason, BacnetSubscriptionNotificationReason::StatusChanged));
+    capture.reason, BacnetSubscriptionNotificationReason::StatusChanged));
 }
 
 void test_bacnet_subscription_stop_disables_polling() {
   BacnetClient client;
   BacnetDeviceSession session(client, 1234, IPAddress(192, 168, 1, 50));
   BacnetProperty property =
-      session.object(BacnetObjectType::MultiStateValue, 2000)
-          .property(BacnetPropertyId::PresentValue);
+    session.object(BacnetObjectType::MultiStateValue, 2000)
+      .property(BacnetPropertyId::PresentValue);
 
   SubscriptionCallbackCapture capture;
   BacnetPropertySubscription subscription =
-      property.subscribe(captureSubscriptionNotification, &capture);
+    property.subscribe(captureSubscriptionNotification, &capture);
 
   subscription.stop();
   session.poll(subscription, 2000);
@@ -1079,16 +1376,16 @@ void test_bacnet_subscription_stop_disables_polling() {
   TEST_ASSERT_FALSE(subscription.inFlight());
   TEST_ASSERT_EQUAL_UINT32(0, static_cast<uint32_t>(capture.calls));
   TEST_ASSERT_EQUAL_UINT8(
-      static_cast<uint8_t>(BacnetDeviceSessionReadStatus::Skipped),
-      static_cast<uint8_t>(subscription.lastStatus()));
+    static_cast<uint8_t>(BacnetDeviceSessionReadStatus::Skipped),
+    static_cast<uint8_t>(subscription.lastStatus()));
 }
 
 void test_bacnet_subscription_notify_status_change_false_suppresses_callback() {
   BacnetClient client;
   BacnetDeviceSession session(client, 1234, IPAddress(192, 168, 1, 50));
   BacnetProperty property =
-      session.object(BacnetObjectType::AnalogValue, 200)
-          .property(BacnetPropertyId::PresentValue);
+    session.object(BacnetObjectType::AnalogValue, 200)
+      .property(BacnetPropertyId::PresentValue);
 
   SubscriptionCallbackCapture capture;
   BacnetSubscribeOptions options;
@@ -1097,26 +1394,26 @@ void test_bacnet_subscription_notify_status_change_false_suppresses_callback() {
   options.notifyOnStatusChange = false;
 
   BacnetPropertySubscription subscription =
-      property.subscribe(captureSubscriptionNotification, &capture, options);
+    property.subscribe(captureSubscriptionNotification, &capture, options);
 
   subscription.requestRefresh();
   session.poll(subscription, 1000);
 
   TEST_ASSERT_EQUAL_UINT8(
-      static_cast<uint8_t>(BacnetDeviceSessionReadStatus::SendFailed),
-      static_cast<uint8_t>(subscription.lastStatus()));
+    static_cast<uint8_t>(BacnetDeviceSessionReadStatus::SendFailed),
+    static_cast<uint8_t>(subscription.lastStatus()));
   TEST_ASSERT_EQUAL_UINT32(0, static_cast<uint32_t>(capture.calls));
   TEST_ASSERT_EQUAL_UINT8(
-      static_cast<uint8_t>(BacnetSubscriptionNotificationReason::None),
-      static_cast<uint8_t>(subscription.lastNotificationReason()));
+    static_cast<uint8_t>(BacnetSubscriptionNotificationReason::None),
+    static_cast<uint8_t>(subscription.lastNotificationReason()));
 }
 
 void test_bacnet_subscription_immediate_first_read_works_with_fallback_zero() {
   BacnetClient client;
   BacnetDeviceSession session(client, 1234, IPAddress(192, 168, 1, 50));
   BacnetProperty property =
-      session.object(BacnetObjectType::AnalogValue, 200)
-          .property(BacnetPropertyId::PresentValue);
+    session.object(BacnetObjectType::AnalogValue, 200)
+      .property(BacnetPropertyId::PresentValue);
 
   SubscriptionCallbackCapture capture;
   BacnetSubscribeOptions options;
@@ -1124,12 +1421,12 @@ void test_bacnet_subscription_immediate_first_read_works_with_fallback_zero() {
   options.immediateFirstRead = true;
 
   BacnetPropertySubscription subscription =
-      property.subscribe(captureSubscriptionNotification, &capture, options);
+    property.subscribe(captureSubscriptionNotification, &capture, options);
 
   session.poll(subscription, 1000);
   TEST_ASSERT_EQUAL_UINT8(
-      static_cast<uint8_t>(BacnetDeviceSessionReadStatus::SendFailed),
-      static_cast<uint8_t>(subscription.lastStatus()));
+    static_cast<uint8_t>(BacnetDeviceSessionReadStatus::SendFailed),
+    static_cast<uint8_t>(subscription.lastStatus()));
   TEST_ASSERT_EQUAL_UINT32(1000, subscription.lastUpdateMs());
 
   session.poll(subscription, 2000);
@@ -1141,8 +1438,8 @@ void test_bacnet_subscription_move_while_in_flight_keeps_session_reference_safe(
   TEST_ASSERT_TRUE(client.begin(47810));
   BacnetDeviceSession session(client, 1234, IPAddress(192, 0, 2, 50));
   BacnetProperty property =
-      session.object(BacnetObjectType::AnalogValue, 200)
-          .property(BacnetPropertyId::PresentValue);
+    session.object(BacnetObjectType::AnalogValue, 200)
+      .property(BacnetPropertyId::PresentValue);
 
   BacnetPropertySubscription subscription = property.subscribe(nullptr);
   session.poll(subscription, 1000);
@@ -1159,10 +1456,9 @@ void test_bacnet_subscription_move_while_in_flight_keeps_session_reference_safe(
 
   BacnetValue value;
   const auto status =
-      session.readProperty(BacnetObjectType::AnalogValue, 200,
-                           BacnetPropertyId::PresentValue, value, 1);
+    session.readProperty(BacnetObjectType::AnalogValue, 200, BacnetPropertyId::PresentValue, value, 1);
   TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetDeviceSessionReadStatus::Busy),
-                         static_cast<uint8_t>(status));
+                          static_cast<uint8_t>(status));
 }
 
 void test_bacnet_subscription_stop_while_in_flight_allows_blocking_read() {
@@ -1170,8 +1466,8 @@ void test_bacnet_subscription_stop_while_in_flight_allows_blocking_read() {
   TEST_ASSERT_TRUE(client.begin(47811));
   BacnetDeviceSession session(client, 1234, IPAddress(192, 0, 2, 50));
   BacnetProperty property =
-      session.object(BacnetObjectType::AnalogValue, 200)
-          .property(BacnetPropertyId::PresentValue);
+    session.object(BacnetObjectType::AnalogValue, 200)
+      .property(BacnetPropertyId::PresentValue);
 
   BacnetPropertySubscription subscription = property.subscribe(nullptr);
   session.poll(subscription, 1000);
@@ -1186,11 +1482,10 @@ void test_bacnet_subscription_stop_while_in_flight_allows_blocking_read() {
 
   BacnetValue value;
   const auto status =
-      session.readProperty(BacnetObjectType::AnalogValue, 200,
-                           BacnetPropertyId::PresentValue, value, 1);
+    session.readProperty(BacnetObjectType::AnalogValue, 200, BacnetPropertyId::PresentValue, value, 1);
   TEST_ASSERT_NOT_EQUAL_UINT8(
-      static_cast<uint8_t>(BacnetDeviceSessionReadStatus::Busy),
-      static_cast<uint8_t>(status));
+    static_cast<uint8_t>(BacnetDeviceSessionReadStatus::Busy),
+    static_cast<uint8_t>(status));
 }
 
 void test_bacnet_subscription_destruction_while_in_flight_releases_session() {
@@ -1201,8 +1496,8 @@ void test_bacnet_subscription_destruction_while_in_flight_releases_session() {
 
   {
     BacnetProperty property =
-        session.object(BacnetObjectType::AnalogValue, 200)
-            .property(BacnetPropertyId::PresentValue);
+      session.object(BacnetObjectType::AnalogValue, 200)
+        .property(BacnetPropertyId::PresentValue);
     BacnetPropertySubscription subscription = property.subscribe(nullptr);
     session.poll(subscription, 1000);
     enteredInFlight = subscription.inFlight();
@@ -1214,11 +1509,10 @@ void test_bacnet_subscription_destruction_while_in_flight_releases_session() {
 
   BacnetValue value;
   const auto status =
-      session.readProperty(BacnetObjectType::AnalogValue, 200,
-                           BacnetPropertyId::PresentValue, value, 1);
+    session.readProperty(BacnetObjectType::AnalogValue, 200, BacnetPropertyId::PresentValue, value, 1);
   TEST_ASSERT_NOT_EQUAL_UINT8(
-      static_cast<uint8_t>(BacnetDeviceSessionReadStatus::Busy),
-      static_cast<uint8_t>(status));
+    static_cast<uint8_t>(BacnetDeviceSessionReadStatus::Busy),
+    static_cast<uint8_t>(status));
 }
 
 void setup() {
