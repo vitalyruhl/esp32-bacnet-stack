@@ -7,3 +7,8 @@
   or network-facing work.
 - Read `mem:shared/release_rules` before version, changelog, release, or
   integration work.
+- Read `mem:shared/bacnet_agent_start_points` before BACnet reference or Serena-memory work.
+- Read `mem:shared/bacnet_reference_landscape` before using external BACnet references.
+- Read `mem:shared/bacnet_transport_support_matrix` before transport assumptions.
+- Read `mem:shared/reusable_stack_architecture_lessons` before changing reusable BACnet boundaries.
+- Read `mem:shared/bacnet_open_questions` before turning uncertain reference claims into facts.
