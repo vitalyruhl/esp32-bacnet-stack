@@ -4,6 +4,9 @@ This changelog is a curated overview.
 
 ## Unreleased
 
+- Added a release backcheck script and documentation to verify the published
+  PlatformIO Registry package from an external consumer copy of the WAGO HIL
+  acceptance example.
 - Added read-only object status/health snapshots for simple BACnet clients,
   covering `present-value`, `status-flags`, `event-state`, `reliability`, and
   `out-of-service` with conservative Normal/Warning/Error/OutOfService/Unknown
