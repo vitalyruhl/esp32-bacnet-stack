@@ -367,6 +367,16 @@ class BacnetDeviceSession {
                       IPAddress address,
                       uint16_t port = BacnetClient::kDefaultPort);
 
+  static BacnetDeviceSession fromEndpoint(
+      BacnetClient& client,
+      uint32_t deviceInstance,
+      IPAddress address,
+      uint16_t port = BacnetClient::kDefaultPort);
+  static BacnetDeviceSession fromIAm(
+      BacnetClient& client,
+      const BacnetIAmDevice& device,
+      uint16_t port = BacnetClient::kDefaultPort);
+
   BacnetClient& client();
   const BacnetClient& client() const;
   uint32_t deviceInstance() const;
