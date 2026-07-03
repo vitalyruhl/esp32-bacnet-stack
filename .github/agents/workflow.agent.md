@@ -135,6 +135,29 @@ workflow-specific gates below.
 - Do not invent non-PlatformIO release steps.
 - Version bumps follow central + project profile.
 
+## Version Impact Gate
+
+- `workflow.begin` MUST classify version impact for issue-scoped product work and
+  report one of these outcomes before implementation starts:
+  - `Version impact: required, expected bump: patch|minor|major, reason`
+  - `Version impact: not required, reason`
+  - `Version impact: uncertain, blocker or explicit follow-up required`
+- Version-impact classification is required when scope clearly touches product
+  code, public API, PlatformIO config, build matrix/metadata, examples that
+  affect build output, dependencies, or release artifacts.
+- PlatformIO config and build matrix changes are version-impacting by default
+  unless the task is explicitly docs/governance-only or covered by the existing
+  GitHub Actions-only dependency-update exception.
+- `workflow.begin` is setup-oriented and MUST NOT edit version files by default
+  unless the user explicitly requests implementation in the same prompt.
+- `workflow.checkpoint` MUST verify that required version bumps are present
+  before commit when product/build/API/version-impacting changes are included.
+- `workflow.toMain` MUST block merge readiness when a required version bump is
+  missing.
+- Intentional version-bump deferrals are blockers unless the user explicitly
+  instructs no version bump for the current action.
+- Governance/docs-only changes keep version bump skipped with explicit reason.
+
 ## Shortcuts
 
 - Shortcuts run sequentially. If `workflow.audit` blockers remain, stop before
@@ -145,16 +168,18 @@ workflow-specific gates below.
   clean English name; preserve exact names only when requested; detect linked
   issue scope; for issue-scoped work, move every active issue to `In Progress`,
   verify the Project status read-back, and report old/new status; report a
-  blocker if Project status cannot be updated; report branch; do not edit
-  code/build files or run implementation work unless explicitly requested after
-  setup.
+  blocker if Project status cannot be updated; report branch; apply Version
+  Impact Gate classification for issue-scoped product work; do not edit
+  code/build/version files or run implementation work unless explicitly
+  requested after setup.
 - `workflow.checkpoint`: verify branch/status; refuse direct `main`/`master`
   except docs-only TODO exception; inspect `git diff --stat`; stage with
   `git add -A`; create one meaningful English commit; push only current work
   branch; run, skip, or reuse validation by central validation policy; for any
   touched `.c`, `.cc`, `.cpp`, `.cxx`, `.h`, `.hh`, or `.hpp` files, `cppcheck`
   must be run through `pre-commit` before commit and reported as passed, reused,
-  or explicitly blocked with a reason.
+  or explicitly blocked with a reason; enforce Version Impact Gate requirements
+  and block checkpoint when a required version bump is missing.
   For `workflow.checkpoint`, validation must be performed before the final staged
   commit state is accepted. If validation modifies any file, the workflow MUST
   stop the checkpoint sequence, report the modified files, inspect the diff, rerun
@@ -180,9 +205,11 @@ run failed, was autofixed, or left unreported file modifications.
   complete; for any touched `.c`, `.cc`, `.cpp`, `.cxx`, `.h`, `.hh`, or `.hpp`
   files, `cppcheck` must also be run through `pre-commit` before `toMain` can
   complete and must be reported as passed, reused, or explicitly blocked with a
-  reason; identify associated issues; update GitHub Project status according to
-  the default/explicit rules above; report reviews, checks, conflicts, branch
-  protection, issue status updates, and docs results; bypass only when
+  reason; enforce Version Impact Gate and block merge readiness when required
+  version bump changes are missing; identify associated issues; update GitHub
+  Project status according to the default/explicit rules above; report reviews,
+  checks, conflicts, branch protection, issue status updates, and docs results;
+  bypass only when
   explicitly requested or already allowed by governance for the current action;
   never bypass required checks without explicit confirmed exception and
   reported reason. Owner/admin bypass does not weaken final state requirements:

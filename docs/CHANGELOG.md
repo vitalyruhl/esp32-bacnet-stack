@@ -4,6 +4,10 @@ This changelog is a curated overview.
 
 ## Unreleased
 
+- Bumped the library version to `0.21.0` and aligned example `APP_VERSION`
+  constants after introducing compile-time BACnet write feature-gate
+  foundation and related PlatformIO build-matrix validation environments.
+
 - Added `BacnetDeviceSession::fromIAm()` and
   `BacnetDeviceSession::fromEndpoint()` helpers for creating client sessions
   from discovered I-Am metadata or known BACnet/IP endpoints.
