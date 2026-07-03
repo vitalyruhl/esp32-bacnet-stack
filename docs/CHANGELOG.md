@@ -4,6 +4,10 @@ This changelog is a curated overview.
 
 ## Unreleased
 
+- Added `BacnetDeviceSession::fromIAm()` and
+  `BacnetDeviceSession::fromEndpoint()` helpers for creating client sessions
+  from discovered I-Am metadata or known BACnet/IP endpoints.
+- Bumped the library and example version constants to `0.20.0`.
 - Updated `examples/client-object-list-scan-basic` as the canonical serial-only
   BACnet/IP client example, covering known-target startup, a simple Device
   property read, object-list scan, and fallback-polled `present-value`

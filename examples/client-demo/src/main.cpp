@@ -30,7 +30,7 @@
 #endif
 
 #ifndef APP_VERSION
-#define APP_VERSION "0.19.0"
+#define APP_VERSION "0.20.0"
 #endif
 #ifndef APP_NAME
 #define APP_NAME "BACnet Client Demo"
@@ -1395,8 +1395,9 @@ static void selectBacnetDevice(uint32_t deviceInstance,
 
   resetBacnetPreviews();
   activeBacnetVendorId = vendorId;
-  activeBacnetSession.reset(
-      new BacnetDeviceSession(bacnetClient, deviceInstance, address, port));
+  activeBacnetSession.reset(new BacnetDeviceSession(
+      BacnetDeviceSession::fromEndpoint(bacnetClient, deviceInstance, address,
+                                        port)));
   bacnetDeviceSelected = true;
   bacnetScanStatus = "Scan queued for selected device";
 
@@ -1413,6 +1414,34 @@ static void selectBacnetDevice(uint32_t deviceInstance,
   bacnetScanRequested = true;
   bacnetGuiLog(LogLevel::Info, "scan queued for selected device %lu",
                static_cast<unsigned long>(deviceInstance));
+}
+
+static void selectBacnetDevice(const BacnetIAmDevice& device) {
+  if (bacnetDeviceSelected || isZeroBacnetAddress(device.address)) {
+    return;
+  }
+
+  resetBacnetPreviews();
+  activeBacnetVendorId = device.vendorId;
+  activeBacnetSession.reset(new BacnetDeviceSession(
+      BacnetDeviceSession::fromIAm(bacnetClient, device)));
+  bacnetDeviceSelected = true;
+  bacnetScanStatus = "Scan queued for selected device";
+
+  Serial.print("[I] BACnet selected device ");
+  Serial.print(device.deviceInstance);
+  Serial.print(" at ");
+  Serial.print(device.address);
+  Serial.print(":");
+  Serial.println(BacnetClient::kDefaultPort);
+  bacnetGuiLog(LogLevel::Info, "selected device %lu at %s:%u",
+               static_cast<unsigned long>(device.deviceInstance),
+               device.address.toString().c_str(),
+               static_cast<unsigned>(BacnetClient::kDefaultPort));
+
+  bacnetScanRequested = true;
+  bacnetGuiLog(LogLevel::Info, "scan queued for selected device %lu",
+               static_cast<unsigned long>(device.deviceInstance));
 }
 
 static void clearBacnetRuntime() {
@@ -1472,8 +1501,7 @@ static void pollBacnetDiscovery() {
 
   BacnetIAmDevice device;
   if (bacnetClient.pollIAm(device) && !bacnetDeviceSelected) {
-    selectBacnetDevice(device.deviceInstance, device.address,
-                       BacnetClient::kDefaultPort, device.vendorId);
+    selectBacnetDevice(device);
   }
 
   if (!bacnetDeviceSelected && millis() - lastWhoIsAt >= kWhoIsIntervalMs) {

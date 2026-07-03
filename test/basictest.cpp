@@ -624,6 +624,33 @@ void test_bacnet_device_session_keeps_remote_device_metadata() {
   TEST_ASSERT_EQUAL_UINT32(1234, deviceObject.instance);
 }
 
+void test_bacnet_device_session_from_endpoint_keeps_metadata() {
+  BacnetClient client;
+  IPAddress address(192, 168, 1, 51);
+  BacnetDeviceSession session =
+      BacnetDeviceSession::fromEndpoint(client, 5678, address, 47810);
+
+  TEST_ASSERT_EQUAL_UINT32(5678, session.deviceInstance());
+  TEST_ASSERT_EQUAL_STRING("192.168.1.51", session.address().toString().c_str());
+  TEST_ASSERT_EQUAL_UINT16(47810, session.port());
+  TEST_ASSERT_EQUAL_PTR(&client, &session.client());
+}
+
+void test_bacnet_device_session_from_i_am_uses_default_port() {
+  BacnetClient client;
+  BacnetIAmDevice device;
+  device.address = IPAddress(192, 168, 1, 52);
+  device.deviceInstance = 9012;
+  device.vendorId = 222;
+
+  BacnetDeviceSession session = BacnetDeviceSession::fromIAm(client, device);
+
+  TEST_ASSERT_EQUAL_UINT32(9012, session.deviceInstance());
+  TEST_ASSERT_EQUAL_STRING("192.168.1.52", session.address().toString().c_str());
+  TEST_ASSERT_EQUAL_UINT16(BacnetClient::kDefaultPort, session.port());
+  TEST_ASSERT_EQUAL_PTR(&client, &session.client());
+}
+
 void test_bacnet_device_session_reports_send_failure() {
   BacnetClient client;
   BacnetDeviceSession session(client, 1234, IPAddress(0, 0, 0, 0));
@@ -1225,6 +1252,8 @@ void setup() {
   RUN_TEST(test_bacnet_client_parses_property_list_count_ack);
   RUN_TEST(test_bacnet_client_parses_property_list_entry_ack);
   RUN_TEST(test_bacnet_device_session_keeps_remote_device_metadata);
+  RUN_TEST(test_bacnet_device_session_from_endpoint_keeps_metadata);
+  RUN_TEST(test_bacnet_device_session_from_i_am_uses_default_port);
   RUN_TEST(test_bacnet_device_session_reports_send_failure);
   RUN_TEST(test_bacnet_device_session_creates_remote_object);
   RUN_TEST(test_bacnet_remote_object_creates_property_request);

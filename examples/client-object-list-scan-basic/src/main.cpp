@@ -18,7 +18,7 @@
 #endif
 
 #ifndef APP_VERSION
-#define APP_VERSION "0.19.0"
+#define APP_VERSION "0.20.0"
 #endif
 
 #ifndef MY_USE_DHCP
@@ -291,8 +291,9 @@ void runScan() {
     Serial.println(BACNET_TARGET_ADDRESS);
     return;
   }
-  static BacnetDeviceSession session(bacnetClient, BACNET_TARGET_DEVICE_INSTANCE,
-                                     targetAddress, BACNET_TARGET_PORT);
+  static BacnetDeviceSession session = BacnetDeviceSession::fromEndpoint(
+      bacnetClient, BACNET_TARGET_DEVICE_INSTANCE, targetAddress,
+      BACNET_TARGET_PORT);
 
   Serial.print("[I] target BACnet IP ");
   Serial.println(targetAddress);

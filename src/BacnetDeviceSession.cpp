@@ -407,6 +407,19 @@ BacnetDeviceSession::BacnetDeviceSession(BacnetClient& client,
       address_(address),
       port_(port) {}
 
+BacnetDeviceSession BacnetDeviceSession::fromEndpoint(BacnetClient& client,
+                                                       uint32_t deviceInstance,
+                                                       IPAddress address,
+                                                       uint16_t port) {
+  return BacnetDeviceSession(client, deviceInstance, address, port);
+}
+
+BacnetDeviceSession BacnetDeviceSession::fromIAm(BacnetClient& client,
+                                                 const BacnetIAmDevice& device,
+                                                 uint16_t port) {
+  return fromEndpoint(client, device.deviceInstance, device.address, port);
+}
+
 BacnetClient& BacnetDeviceSession::client() {
   return client_;
 }

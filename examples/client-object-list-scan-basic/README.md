@@ -8,7 +8,7 @@ The sketch demonstrates:
 
 - WiFi startup with optional static IP settings
 - BACnet/IP client startup
-- known-target `BacnetDeviceSession` creation
+- known-target `BacnetDeviceSession::fromEndpoint()` creation
 - one simple Device `object-name` read through `BacnetProperty`
 - object-list scan through `BacnetDeviceSession::scanObjectList()`
 - one fallback-polled `present-value` subscription

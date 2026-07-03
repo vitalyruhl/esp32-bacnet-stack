@@ -158,18 +158,23 @@ from a WAGO device instance `<DEVICE_INSTANCE>`.
 
 Known remote devices can also be represented with `BacnetDeviceSession`. The
 session stores the device instance, address, and BACnet/IP port while
-`BacnetClient` remains the transport owner.
+`BacnetClient` remains the transport owner. Applications may keep using the
+public constructor directly, or use the small factory helpers when starting
+from a discovered I-Am result or a known endpoint:
 
 For simple reads, `BacnetDeviceSession::readProperty()` provides a blocking
 helper around the existing ReadProperty send/poll flow:
 
 ```cpp
-BacnetDeviceSession device(client, discovered.deviceInstance,
-                           discovered.address);
+BacnetDeviceSession discoveredDevice =
+    BacnetDeviceSession::fromIAm(client, discovered);
+
+BacnetDeviceSession knownDevice = BacnetDeviceSession::fromEndpoint(
+    client, 1234, IPAddress(192, 0, 2, 101), BacnetClient::kDefaultPort);
 
 BacnetValue value;
-const auto status = device.readProperty(
-    device.deviceObject(), BacnetPropertyId::ObjectName, value);
+const auto status = discoveredDevice.readProperty(
+    discoveredDevice.deviceObject(), BacnetPropertyId::ObjectName, value);
 
 if (status == BacnetDeviceSessionReadStatus::Ack) {
   Serial.println(value.displayText());
