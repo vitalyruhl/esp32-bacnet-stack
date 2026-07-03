@@ -35,7 +35,7 @@ write flows, and server MVP remain future work.
 | Writes | WriteProperty | 🚫 Not implemented | No write API shipped in current client runtime. |
 | Writes | PresentValue priority write helpers | ⏳ Planned | Future client capability, not currently implemented. |
 | Writes | Hardware writes | 🚫 Not implemented | Disabled by default; future explicit opt-in only. |
-| Examples / validation | `examples/client-object-list-scan-basic` | ✅ Implemented | Minimal serial-oriented object-list validation example for common process object reads. |
+| Examples / validation | `examples/client-object-list-scan-basic` | ✅ Implemented | Canonical serial-only basic client example for known-target property read, object-list scan, and fallback polling. |
 | Examples / validation | `examples/client-demo` | ✅ Implemented | End-to-end client demo with discovery, scan, process-value updates, and a read-only value/status browser view. |
 | Examples / validation | `examples/hil-wago-client-acceptance` | 🧪 Local HIL validated | Local hardware acceptance runner for client scenarios. |
 | Examples / validation | HIL scenario S01 non-blocking object-list scan | 🧪 Local HIL validated | Validated on local ESP32/BACnet-IP target setup. |
@@ -76,7 +76,7 @@ Additional status notes:
 
 ## screenshots
 
-![alt text](docs/screenshots/bnm-V0.8.2.jpg)
+![Screenshot V0.19.0](docs/screenshots/bnm-V0.19.0.jpg)
 
 
 ## Repository Layout
@@ -85,7 +85,7 @@ Additional status notes:
 | --- | --- |
 | `src/` | Library headers and implementation |
 | `examples/client-demo/` | Optional GUI client demo with discovery, scan, and fallback-polled value updates |
-| `examples/client-object-list-scan-basic/` | Focused object-list scan and value-read example |
+| `examples/client-object-list-scan-basic/` | Canonical serial-only basic BACnet/IP client example |
 | `examples/hil-wago-client-acceptance/` | Local ESP32/WAGO client acceptance HIL runner |
 | `examples/server-demo/` | Minimal BACnet server role demo |
 | `test/` | PlatformIO Unity tests |
@@ -307,24 +307,37 @@ job reaches a terminal state. One session processes one object-list scan job at
 a time. Present-value refresh for scanned objects is handled through the
 property subscription API with fallback polling.
 
-The `examples/client-object-list-scan-basic` project is a minimal serial-only
-hardware validation sketch for known BACnet/IP devices. It uses local
-`secret/secrets.h` WiFi/static-IP settings, starts `BacnetClient`, creates a
-`BacnetDeviceSession`, scans AV/MV entries with `scanObjectList()`, and prints
-compact object id, object-name, description, and present-value output.
+The `examples/client-object-list-scan-basic` project is the canonical
+serial-only basic BACnet/IP client example for known BACnet/IP devices. It uses
+local `secret/secrets.h` WiFi/static-IP settings, starts `BacnetClient`,
+creates a `BacnetDeviceSession`, reads the Device `object-name`, scans process
+objects with `scanObjectList()`, starts one fallback-polled `present-value`
+subscription, and prints compact Serial output. It does not use ConfigManager,
+web UI, server behavior, or BACnet writes.
 
 The `examples/client-demo` firmware also includes a lightweight BACnet/IP
-Discovery card for demo visibility. It selects the configured BACnet/IP device
-or the first discovered I-Am device, keeps the BME280 status card unchanged,
-and drives a `BacnetObjectListScanJob` from `loop()` for process object
-discovery. Up to 10 found Analog, Binary, and Multi-State process objects are
-displayed with `description` or `objectName` plus `presentValue` status/value.
-The demo also shows one read-only object health/status snapshot selected from
-local configuration or the first discovered process object. Present values
-refresh through `BacnetProperty::subscribe()` with fallback polling. BACnet scan
-and subscription activity is written through the
-BACnet logger and forwarded to the ConfigurationManager GUI log by the demo
-adapter.
+Client card for demo visibility. It selects the configured BACnet/IP device or
+the first discovered I-Am device, keeps the BME280 status card unchanged, and
+drives a `BacnetObjectListScanJob` from `loop()` for process object discovery.
+Up to 10 found Analog, Binary, and Multi-State process objects are displayed
+with `description` or `objectName` plus `presentValue` status/value. The demo
+also shows one read-only object health/status snapshot selected from local
+configuration or the first discovered process object. Present values refresh
+through `BacnetProperty::subscribe()` with fallback polling. BACnet scan and
+subscription activity is written through the BACnet logger and forwarded to the
+ConfigurationManager GUI log by the demo adapter.
+
+The same card exposes a `Scan / Rescan` button to restart the BACnet process
+object scan without reflashing or resetting the ESP32. The action uses the
+ConfigManager runtime-action route and is also available for local checks
+through:
+
+```sh
+curl -X POST "http://<esp-ip>/runtime_action/button?group=bacnet&key=device0_rescan"
+```
+
+The endpoint returns the framework action status, while accepted/rejected
+rescan details are shown in the BACnet GUI log and State field.
 
 ## BACnet Logging
 
@@ -351,8 +364,20 @@ style verbose logs are additionally controlled by
 
 ## Example Local Configuration
 
-The client demo can read local WiFi and BACnet validation values from an ignored
-local secrets file:
+The canonical basic client example reads local WiFi and BACnet target values
+from an ignored local secrets file:
+
+```sh
+cp examples/client-object-list-scan-basic/src/secret/secrets.example.h \
+  examples/client-object-list-scan-basic/src/secret/secrets.h
+```
+
+Edit `examples/client-object-list-scan-basic/src/secret/secrets.h` for local
+WiFi, optional static IP, and BACnet target values. The `secrets.h` file is
+intentionally ignored by Git and must not be committed.
+
+The richer client demo can also read local WiFi and BACnet validation values
+from an ignored local secrets file:
 
 ```sh
 cp examples/client-demo/src/secret/secrets.example.h examples/client-demo/src/secret/secrets.h

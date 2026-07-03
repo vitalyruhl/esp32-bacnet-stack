@@ -4,6 +4,21 @@ This changelog is a curated overview.
 
 ## Unreleased
 
+- Updated `examples/client-object-list-scan-basic` as the canonical serial-only
+  BACnet/IP client example, covering known-target startup, a simple Device
+  property read, object-list scan, and fallback-polled `present-value`
+  subscription.
+- Aligned `examples/client-demo` visible labels with the current client demo
+  scope, covering selected device state, process-object scan groups, read-only
+  object health, fallback polling, and BACnet log output.
+- Improved `examples/client-demo` process-object scan diagnostics, configured
+  read-only fallback objects, and fallback-polled subscription visibility so
+  empty object groups show terminal scan reasons instead of generic
+  placeholders.
+- Added an explicit `Scan / Rescan` action to `examples/client-demo` so BACnet
+  process-object scans can be restarted from the web UI or ConfigManager
+  runtime-action route without reset or re-upload.
+- Bumped the library and example version constants to `0.19.0`.
 - Added a release backcheck script and documentation to verify the published
   PlatformIO Registry package from an external consumer copy of the WAGO HIL
   acceptance example.
