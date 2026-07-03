@@ -4,6 +4,9 @@ This changelog is a curated overview.
 
 ## Unreleased
 
+- Added client-side BACnet property cache storage for collected/read
+  properties and bumped the library/example versions to `0.22.0`.
+
 - Bumped the library version to `0.21.0` and aligned example `APP_VERSION`
   constants after introducing compile-time BACnet write feature-gate
   foundation and related PlatformIO build-matrix validation environments.
