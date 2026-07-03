@@ -42,6 +42,30 @@ BacnetDeviceSessionReadStatus BacnetProperty::read(
   return session_->readProperty(objectId_, propertyId_, value, timeoutMs, arrayIndex_);
 }
 
+BacnetValue BacnetProperty::lastValue() const {
+  BacnetCachedProperty cached;
+  if (!session_->cachedProperty(objectId_, propertyId_, cached, arrayIndex_)) {
+    return BacnetValue{};
+  }
+  return cached.value;
+}
+
+BacnetPropertyReadStatus BacnetProperty::lastStatus() const {
+  BacnetCachedProperty cached;
+  if (!session_->cachedProperty(objectId_, propertyId_, cached, arrayIndex_)) {
+    return BacnetPropertyReadStatus::Skipped;
+  }
+  return cached.status;
+}
+
+uint32_t BacnetProperty::lastUpdateMs() const {
+  BacnetCachedProperty cached;
+  if (!session_->cachedProperty(objectId_, propertyId_, cached, arrayIndex_)) {
+    return 0;
+  }
+  return cached.updatedAtMs;
+}
+
 BacnetRemoteObject::BacnetRemoteObject(BacnetDeviceSession& session,
                                        BacnetObjectId objectId)
     : session_(&session), objectId_(objectId) {}
@@ -88,4 +112,14 @@ BacnetPropertyListReadResult BacnetRemoteObject::readPropertyList(
 BacnetPropertyReadAllResult BacnetRemoteObject::readAllProperties(
   const BacnetPropertyId* properties, size_t propertyCount, BacnetPropertyReadResult* results, size_t resultCapacity, uint32_t timeoutMs) const {
   return session_->readAllProperties(objectId_, properties, propertyCount, results, resultCapacity, timeoutMs);
+}
+
+BacnetPropertyReadAllResult BacnetRemoteObject::readAllAdvertisedProperties(
+  BacnetPropertyId* properties,
+  size_t propertyCapacity,
+  BacnetPropertyReadResult* results,
+  size_t resultCapacity,
+  uint32_t timeoutMs) const {
+  return session_->readAllAdvertisedProperties(
+    objectId_, properties, propertyCapacity, results, resultCapacity, timeoutMs);
 }

@@ -21,6 +21,9 @@ public:
   BacnetDeviceSessionReadStatus read(
     BacnetValue& value,
     uint32_t timeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs) const;
+  BacnetValue lastValue() const;
+  BacnetPropertyReadStatus lastStatus() const;
+  uint32_t lastUpdateMs() const;
 
 private:
   BacnetDeviceSession* session_;
@@ -58,6 +61,12 @@ public:
   BacnetPropertyReadAllResult readAllProperties(
     const BacnetPropertyId* properties,
     size_t propertyCount,
+    BacnetPropertyReadResult* results,
+    size_t resultCapacity,
+    uint32_t timeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs) const;
+  BacnetPropertyReadAllResult readAllAdvertisedProperties(
+    BacnetPropertyId* properties,
+    size_t propertyCapacity,
     BacnetPropertyReadResult* results,
     size_t resultCapacity,
     uint32_t timeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs) const;
