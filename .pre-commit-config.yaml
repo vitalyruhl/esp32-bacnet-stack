@@ -11,6 +11,18 @@ repos:
       - id: check-added-large-files
   - repo: local
     hooks:
+      - id: clang-format
+        name: clang-format
+        entry: pwsh
+        language: system
+        files: ^(src|examples|test)/.*\.(c|cc|cpp|cxx|h|hpp|hh|ino)$
+        args:
+          - -NoLogo
+          - -NoProfile
+          - -ExecutionPolicy
+          - Bypass
+          - -File
+          - tools/run-clang-format.ps1
       - id: cppcheck
         name: cppcheck
         entry: pwsh
