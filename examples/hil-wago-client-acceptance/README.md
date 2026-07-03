@@ -32,12 +32,12 @@ Current implemented scenario:
 
 Current planned scenario blocks (runner scaffold exists):
 
-- property cache
-- subscribe-any-property
-- fallback polling value change
-- SubscribeCOV where supported
-- WriteProperty only when explicitly enabled
-- PresentValue priority write only when explicitly enabled
+- `S04` property cache
+- `S05` subscribe-any-property
+- `S06` fallback polling value change
+- `S07` SubscribeCOV where supported
+- `S08` WriteProperty only when explicitly enabled
+- `S09` PresentValue priority write only when explicitly enabled
 
 Writes are disabled by default. Write scenarios must remain explicit opt-in via
 local secrets flags.

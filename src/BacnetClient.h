@@ -68,9 +68,12 @@ inline const char* bacnetObjectTypeText(uint16_t objectType) {
 }
 
 enum class BacnetPropertyId : uint32_t {
+  CovIncrement = 22,
   Description = 28,
   EventState = 36,
   FirmwareRevision = 44,
+  MaxPresentValue = 65,
+  MinPresentValue = 69,
   ModelName = 70,
   NumberOfStates = 74,
   ObjectList = 76,
@@ -81,8 +84,10 @@ enum class BacnetPropertyId : uint32_t {
   PriorityArray = 87,
   Reliability = 103,
   RelinquishDefault = 104,
+  Resolution = 106,
   StateText = 110,
   StatusFlags = 111,
+  Units = 117,
   PropertyList = 371,
   VendorName = 121,
 };

@@ -9,18 +9,22 @@ coverage are still evolving.
 ## Current Status
 
 BACnet/IP client APIs are already usable for common read-oriented use cases,
-including common process object present-value reads, while advanced discovery,
-write flows, and server MVP remain future work.
+including common process object present-value reads, cached-property access,
+read-only process-object helpers, and Analog Value metadata reads, while
+advanced discovery, write flows, and server MVP remain future work.
 
 ## Implementation Matrix
 
 | Area | Capability | Status | Notes |
 | --- | --- | --- | --- |
 | Client discovery | Who-Is / I-Am discovery | ✅ Implemented | Core discovery flow available through `BacnetClient`. |
-| Client discovery | Known-device session with `BacnetDeviceSession` | ✅ Implemented | Session keeps target identity and drives device-scoped calls. |
+| Client discovery | Known-device session with `BacnetDeviceSession` | ✅ Implemented | Session keeps target identity, drives device-scoped calls, and can be created from a known endpoint or discovered `I-Am` metadata. |
 | ReadProperty / values | Generic ReadProperty model | ✅ Implemented | Object + property + optional array index request model is available. |
 | ReadProperty / values | Reading known device/object properties | ✅ Implemented | Works for selected known properties and known object IDs. |
+| ReadProperty / values | Client-side property cache access | ✅ Implemented | Cached value/status/last-update access is available through `BacnetDeviceSession`, `BacnetProperty`, and `BacnetRemoteObject` helpers. |
 | ReadProperty / values | Reading selected `present-value` from known AI/AO/AV, BI/BO/BV, and MI/MO/MV objects | 🟢 Use-case ready | Suitable for practical value monitoring on known process objects. |
+| ReadProperty / values | Read-only process-object convenience helpers for known AI/AO/AV, BI/BO/BV, and MI/MO/MV objects | 🟢 Use-case ready | `BacnetProcessObject` exposes typed convenience access to `present-value`, status snapshots, and cached helper reads for common process objects. |
+| ReadProperty / values | Read-only Analog Value metadata helpers | ✅ Implemented | Engineering units, min/max present-value, resolution, and COV increment reads are available for practical Analog Value monitoring flows. |
 | ReadProperty / values | Reading object health/status from `status-flags`, `event-state`, `reliability`, and `out-of-service` | 🟢 Use-case ready | `BacnetDeviceSession::readObjectStatus()` reads each property safely and preserves per-property status. |
 | ReadProperty / values | Derived Normal/Warning/Error/OutOfService/Unknown state | 🟡 Partial | Conservative derivation is implemented; warning/error hardware cases still need targeted HIL validation. |
 | ReadProperty / values | Displaying/forwarding selected BACnet values by fallback polling | 🟢 Use-case ready | Property subscription abstraction with fallback polling is available. |
@@ -36,7 +40,7 @@ write flows, and server MVP remain future work.
 | Writes | PresentValue priority write helpers | ⏳ Planned | Future client capability, not currently implemented. |
 | Writes | Hardware writes | 🚫 Not implemented | Disabled by default; future explicit opt-in only. |
 | Examples / validation | `examples/client-object-list-scan-basic` | ✅ Implemented | Canonical serial-only basic client example for known-target property read, object-list scan, and fallback polling. |
-| Examples / validation | `examples/client-demo` | ✅ Implemented | End-to-end client demo with discovery, scan, process-value updates, and a read-only value/status browser view. |
+| Examples / validation | `examples/client-demo` | ✅ Implemented | End-to-end client demo with discovery, scan, process-value updates, a read-only value/status browser view, and a watched Analog Value card. |
 | Examples / validation | `examples/hil-wago-client-acceptance` | 🧪 Local HIL validated | Local hardware acceptance runner for client scenarios. |
 | Examples / validation | HIL scenario S01 non-blocking object-list scan | 🧪 Local HIL validated | Validated on local ESP32/BACnet-IP target setup. |
 | Examples / validation | HIL scenario S02 common process present-value reads | 🧪 Local HIL validated | Validated on local ESP32/WAGO BACnet-IP target setup. |
@@ -52,6 +56,7 @@ Terminology:
 - object-list scan means scanning entries from the remote Device object's `object-list`.
 - optional reads during object-list scan means selected reads such as `object-name`, `description`, and `present-value`.
 - property-list discovery/read-all means discovering advertised properties of an object where available and safely reading them with one status per property.
+- property cache access means using the latest stored value/status/update timestamps from earlier reads or fallback-polled subscriptions.
 - for simple use cases that need a few known variables and `present-value` display/forwarding, the current client API is already usable.
 
 Additional status notes:
@@ -76,7 +81,7 @@ Additional status notes:
 
 ## screenshots
 
-![Screenshot V0.19.0](docs/screenshots/bnm-V0.19.0.jpg)
+![Screenshot V0.24.0](docs/screenshots/bnm-V0.24.0.jpg)
 
 ## Repository Layout
 

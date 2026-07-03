@@ -2,6 +2,7 @@
 
 #include "BacnetDeviceSession.h"
 
+#include "BacnetDisplayText.h"
 #include "BacnetRemoteObject.h"
 
 #include <cstring>
@@ -129,6 +130,19 @@ bool bacnetDecodeStatusFlags(const BacnetValue& value,
   flags.overridden = (value.bitStringValue & (1UL << 2)) != 0;
   flags.outOfService = (value.bitStringValue & (1UL << 3)) != 0;
   return true;
+}
+
+bool bacnetEngineeringUnitId(const BacnetValue& value, uint32_t& unitId) {
+  if (value.type == BacnetValueType::Enumerated ||
+      value.type == BacnetValueType::Unsigned) {
+    unitId = value.unsignedValue;
+    return true;
+  }
+  return false;
+}
+
+const char* bacnetEngineeringUnitSymbol(uint32_t unitId) {
+  return bacnetCommonEngineeringUnitSymbol(unitId);
 }
 
 const char* bacnetEventStateText(uint32_t eventState) {
@@ -469,6 +483,42 @@ BacnetRemoteObject BacnetDeviceSession::object(BacnetObjectType objectType,
                                                uint32_t objectInstance) {
   return object(
     BacnetObjectId{static_cast<uint16_t>(objectType), objectInstance});
+}
+
+BacnetProcessObject BacnetDeviceSession::analogInput(uint32_t objectInstance) {
+  return BacnetProcessObject(*this, BacnetObjectType::AnalogInput, objectInstance);
+}
+
+BacnetProcessObject BacnetDeviceSession::analogOutput(uint32_t objectInstance) {
+  return BacnetProcessObject(*this, BacnetObjectType::AnalogOutput, objectInstance);
+}
+
+BacnetProcessObject BacnetDeviceSession::analogValue(uint32_t objectInstance) {
+  return BacnetProcessObject(*this, BacnetObjectType::AnalogValue, objectInstance);
+}
+
+BacnetProcessObject BacnetDeviceSession::binaryInput(uint32_t objectInstance) {
+  return BacnetProcessObject(*this, BacnetObjectType::BinaryInput, objectInstance);
+}
+
+BacnetProcessObject BacnetDeviceSession::binaryOutput(uint32_t objectInstance) {
+  return BacnetProcessObject(*this, BacnetObjectType::BinaryOutput, objectInstance);
+}
+
+BacnetProcessObject BacnetDeviceSession::binaryValue(uint32_t objectInstance) {
+  return BacnetProcessObject(*this, BacnetObjectType::BinaryValue, objectInstance);
+}
+
+BacnetProcessObject BacnetDeviceSession::multiStateInput(uint32_t objectInstance) {
+  return BacnetProcessObject(*this, BacnetObjectType::MultiStateInput, objectInstance);
+}
+
+BacnetProcessObject BacnetDeviceSession::multiStateOutput(uint32_t objectInstance) {
+  return BacnetProcessObject(*this, BacnetObjectType::MultiStateOutput, objectInstance);
+}
+
+BacnetProcessObject BacnetDeviceSession::multiStateValue(uint32_t objectInstance) {
+  return BacnetProcessObject(*this, BacnetObjectType::MultiStateValue, objectInstance);
 }
 
 BacnetDeviceSessionReadStatus BacnetDeviceSession::readProperty(
@@ -1352,7 +1402,7 @@ void BacnetDeviceSession::updatePropertyCache(
   const BacnetPropertyRequest& request,
   BacnetPropertyReadStatus status,
   const BacnetValue* value,
-  uint32_t updatedAtMs,
+  uint32_t attemptAtMs,
   uint32_t errorClass,
   uint32_t errorCode) {
   BacnetCachedProperty* entry = findOrCreateCachedProperty(request);
@@ -1361,12 +1411,14 @@ void BacnetDeviceSession::updatePropertyCache(
   }
 
   entry->status = status;
-  entry->updatedAtMs = updatedAtMs;
+  entry->lastAttemptMs = attemptAtMs;
   entry->errorClass = errorClass;
   entry->errorCode = errorCode;
-  if (value != nullptr) {
+  if (status == BacnetPropertyReadStatus::Ack && value != nullptr) {
     entry->value = *value;
     entry->hasValue = true;
+    entry->lastSuccessMs = attemptAtMs;
+    entry->updatedAtMs = attemptAtMs;
   }
 }
 
