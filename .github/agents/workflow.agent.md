@@ -155,6 +155,14 @@ workflow-specific gates below.
   touched `.c`, `.cc`, `.cpp`, `.cxx`, `.h`, `.hh`, or `.hpp` files, `cppcheck`
   must be run through `pre-commit` before commit and reported as passed, reused,
   or explicitly blocked with a reason.
+  For `workflow.checkpoint`, validation must be performed before the final staged
+  commit state is accepted. If validation modifies any file, the workflow MUST
+  stop the checkpoint sequence, report the modified files, inspect the diff, rerun
+  validation, and only then stage and commit the final no-op validation state.
+
+Before creating the commit, run and report `git status --short` after validation.
+A checkpoint commit MUST NOT be created from a state where the last validation
+run failed, was autofixed, or left unreported file modifications.
 - `workflow.docs`: narrow documentation-only synchronization.
 - `workflow.audit`: strictly read-only; no file changes, branch changes,
   commits, merges, cleanup, release updates, or destructive actions; report
@@ -183,6 +191,16 @@ workflow-specific gates below.
   unless explicitly preserved. Fast-forward/`ff` MUST preserve linear history
   where expected and must satisfy the same final synchronization and cleanup
   requirements.
+  During `workflow.toMain`, only list validation commands as passed when they were
+  actually executed after the latest relevant file changes, or when reuse is
+  valid under central validation reuse rules.
+
+  If a validation command is only covered indirectly by a wrapper, report it as
+  wrapper-covered instead of listing it as a separately executed command.
+
+  Before PR creation and again before merge, verify that the working tree is clean
+  after validation. If validation modifies files, commit those changes through the
+  same PR workflow before claiming merge readiness.
 - `workflow.cleanBranches`: delete only branches verified integrated; include
   both local and remote cleanup; delete already-integrated remote
   feature/work branches when safe and allowed; fetch/prune tracking refs after

@@ -272,7 +272,32 @@ Serena indexing does not replace mandatory direct governance reads, direct file 
 - Run relevant tests when tests are present and affected.
 - Container/image builds are not required unless configured or explicitly in
   scope.
+- full_precommit: `pwsh -NoProfile -ExecutionPolicy Bypass -File tools/run-precommit-full.ps1`
 - Report required validation that cannot run.
+
+### Autofix-Aware Validation
+
+Validation commands that may modify files, especially `pre-commit`,
+formatters, line-ending fixers, EOF fixers, generated-file refreshes, or
+tooling wrappers, are not considered passed when they exit non-zero or modify
+the working tree.
+
+After every validation command that may modify files, run `git status --short`
+before reporting the validation result.
+
+If validation modifies files:
+
+- report the validation as `FAILED/AUTOFIXED`, not `OK`
+- report the modified files
+- inspect the focused diff
+- rerun the same validation after the changes are included in the intended
+  scope
+- only report `OK` after a subsequent run exits successfully and leaves the
+  working tree unchanged
+
+Never mark pre-commit, formatting, linting, or wrapper validation as passed
+based only on the final hook names shown in output. The command exit status and
+post-validation working-tree state are part of the validation result.
 
 ## Validation Reuse
 
