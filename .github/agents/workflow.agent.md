@@ -175,41 +175,52 @@ workflow-specific gates below.
 - `workflow.checkpoint`: verify branch/status; refuse direct `main`/`master`
   except docs-only TODO exception; inspect `git diff --stat`; stage with
   `git add -A`; create one meaningful English commit; push only current work
-  branch; run, skip, or reuse validation by central validation policy; for any
-  touched `.c`, `.cc`, `.cpp`, `.cxx`, `.h`, `.hh`, or `.hpp` files, `cppcheck`
-  must be run through `pre-commit` before commit and reported as passed, reused,
-  or explicitly blocked with a reason; enforce Version Impact Gate requirements
-  and block checkpoint when a required version bump is missing.
-  For `workflow.checkpoint`, validation must be performed before the final staged
-  commit state is accepted. If validation modifies any file, the workflow MUST
-  stop the checkpoint sequence, report the modified files, inspect the diff, rerun
-  validation, and only then stage and commit the final no-op validation state.
+  branch; run, skip, or reuse validation by central validation policy in this
+  order: branch/status/diff inspection, autofix-capable validation first,
+  `git status --short`, rerun until clean/no modifications, expensive
+  project-profile PlatformIO validation, final `git status --short`, then
+  commit readiness reporting. For any touched `.c`, `.cc`, `.cpp`, `.cxx`,
+  `.h`, `.hh`, or `.hpp` files, `cppcheck` must be run through `pre-commit`
+  before expensive PlatformIO validation and reported as passed, reused, or
+  explicitly blocked with a reason; enforce Version Impact Gate requirements
+  and block checkpoint when a required version bump is missing. For
+  `workflow.checkpoint`, validation must be performed before the final staged
+  commit state is accepted. If autofix-capable validation modifies files, the
+  workflow MUST stop before commit, report the modified files, inspect the diff,
+  rerun the same autofix-capable validation until it exits cleanly, and only
+  then accept PlatformIO pass/reuse and stage/commit the final no-op state.
 
-Before creating the commit, run and report `git status --short` after validation.
-A checkpoint commit MUST NOT be created from a state where the last validation
-run failed, was autofixed, or left unreported file modifications.
+Before creating the commit, run and report `git status --short` after the final
+validation sequence. A checkpoint commit MUST NOT be created from a state where
+the last validation run failed, was autofixed, or left unreported file
+modifications.
 - `workflow.docs`: narrow documentation-only synchronization.
 - `workflow.audit`: strictly read-only; no file changes, branch changes,
   commits, merges, cleanup, release updates, or destructive actions; report
   blockers before follow-up workflow.
 - `workflow.ship`: build/verify artifacts without implicit merge.
-- `workflow.ready`: prepare review/integration; run/skip/reuse validation; do
-  not merge to `main`, update `release/*`, or push unless explicitly requested
-  or covered by named workflow.
+- `workflow.ready`: prepare review/integration; inspect branch/status/diff, run
+  autofix-capable validation first, run `git status --short`, rerun until clean,
+  then run or validly reuse expensive project-profile PlatformIO validation for
+  the final file state, run final `git status --short`, and only then report
+  readiness. Do not merge to `main`, update `release/*`, or push unless
+  explicitly requested or covered by named workflow.
 - `workflow.toMain`: PR workflow by default unless fast-forward/`ff` requested;
   commit/push/PR creation/merge/cleanup allowed only in this explicit workflow;
-  run/skip/reuse validation; run `docs.agent.md` and require the docs gate to
-  pass or have findings resolved; the PlatformIO test command is mandatory for
-  this workflow: `pio test -e usb --without-uploading --without-testing` must be
-  run and reported as passed, reused, or explicitly blocked before `toMain` can
-  complete; for any touched `.c`, `.cc`, `.cpp`, `.cxx`, `.h`, `.hh`, or `.hpp`
-  files, `cppcheck` must also be run through `pre-commit` before `toMain` can
-  complete and must be reported as passed, reused, or explicitly blocked with a
-  reason; enforce Version Impact Gate and block merge readiness when required
-  version bump changes are missing; identify associated issues; update GitHub
-  Project status according to the default/explicit rules above; report reviews,
-  checks, conflicts, branch protection, issue status updates, and docs results;
-  bypass only when
+  run/skip/reuse validation in this order: branch/status/diff inspection,
+  autofix-capable validation first, `git status --short`, rerun until clean/no
+  modifications, expensive project-profile PlatformIO validation, final
+  `git status --short`, then PR/merge readiness reporting; run `docs.agent.md`
+  and require the docs gate to pass or have findings resolved; the
+  project-profile mandatory test command is required for this workflow and must
+  run after the latest autofix modifications unless reuse is valid under
+  central validation reuse rules; for any touched `.c`, `.cc`, `.cpp`, `.cxx`,
+  `.h`, `.hh`, or `.hpp` files, `cppcheck` through `pre-commit` must run before
+  expensive PlatformIO validation unless explicitly blocked and reported;
+  enforce Version Impact Gate and block merge readiness when required version
+  bump changes are missing; identify associated issues; update GitHub Project
+  status according to the default/explicit rules above; report reviews, checks,
+  conflicts, branch protection, issue status updates, and docs results; bypass only when
   explicitly requested or already allowed by governance for the current action;
   never bypass required checks without explicit confirmed exception and
   reported reason. Owner/admin bypass does not weaken final state requirements:
@@ -218,16 +229,17 @@ run failed, was autofixed, or left unreported file modifications.
   unless explicitly preserved. Fast-forward/`ff` MUST preserve linear history
   where expected and must satisfy the same final synchronization and cleanup
   requirements.
-  During `workflow.toMain`, only list validation commands as passed when they were
-  actually executed after the latest relevant file changes, or when reuse is
-  valid under central validation reuse rules.
+  During `workflow.toMain`, only list validation commands as passed when they
+  were actually executed after the latest relevant file changes, or when reuse
+  is valid under central validation reuse rules.
 
   If a validation command is only covered indirectly by a wrapper, report it as
   wrapper-covered instead of listing it as a separately executed command.
 
-  Before PR creation and again before merge, verify that the working tree is clean
-  after validation. If validation modifies files, commit those changes through the
-  same PR workflow before claiming merge readiness.
+  Before PR creation and again before merge readiness, verify that the final
+  file state passed the autofix-first validation order and that the working tree
+  is clean after validation. If validation modifies files, commit those changes
+  through the same PR workflow before claiming merge readiness.
 - `workflow.cleanBranches`: delete only branches verified integrated; include
   both local and remote cleanup; delete already-integrated remote
   feature/work branches when safe and allowed; fetch/prune tracking refs after
