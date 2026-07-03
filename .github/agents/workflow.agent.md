@@ -151,7 +151,10 @@ workflow-specific gates below.
 - `workflow.checkpoint`: verify branch/status; refuse direct `main`/`master`
   except docs-only TODO exception; inspect `git diff --stat`; stage with
   `git add -A`; create one meaningful English commit; push only current work
-  branch; run, skip, or reuse validation by central validation policy.
+  branch; run, skip, or reuse validation by central validation policy; for any
+  touched `.c`, `.cc`, `.cpp`, `.cxx`, `.h`, `.hh`, or `.hpp` files, `cppcheck`
+  must be run through `pre-commit` before commit and reported as passed, reused,
+  or explicitly blocked with a reason.
 - `workflow.docs`: narrow documentation-only synchronization.
 - `workflow.audit`: strictly read-only; no file changes, branch changes,
   commits, merges, cleanup, release updates, or destructive actions; report
@@ -163,17 +166,23 @@ workflow-specific gates below.
 - `workflow.toMain`: PR workflow by default unless fast-forward/`ff` requested;
   commit/push/PR creation/merge/cleanup allowed only in this explicit workflow;
   run/skip/reuse validation; run `docs.agent.md` and require the docs gate to
-  pass or have findings resolved; identify associated issues; update GitHub
-  Project status according to the default/explicit rules above; report reviews,
-  checks, conflicts, branch protection, issue status updates, and docs results;
-  bypass only when explicitly requested or already allowed by governance for the
-  current action; never bypass required checks without explicit confirmed
-  exception and reported reason. Owner/admin bypass does not weaken final state
-  requirements: local `main` MUST equal `origin/main`, the working tree MUST be
-  clean, and no leftover local, remote, or stale-tracking non-main work branches
-  may remain unless explicitly preserved. Fast-forward/`ff` MUST preserve linear
-  history where expected and must satisfy the same final synchronization and
-  cleanup requirements.
+  pass or have findings resolved; the PlatformIO test command is mandatory for
+  this workflow: `pio test -e usb --without-uploading --without-testing` must be
+  run and reported as passed, reused, or explicitly blocked before `toMain` can
+  complete; for any touched `.c`, `.cc`, `.cpp`, `.cxx`, `.h`, `.hh`, or `.hpp`
+  files, `cppcheck` must also be run through `pre-commit` before `toMain` can
+  complete and must be reported as passed, reused, or explicitly blocked with a
+  reason; identify associated issues; update GitHub Project status according to
+  the default/explicit rules above; report reviews, checks, conflicts, branch
+  protection, issue status updates, and docs results; bypass only when
+  explicitly requested or already allowed by governance for the current action;
+  never bypass required checks without explicit confirmed exception and
+  reported reason. Owner/admin bypass does not weaken final state requirements:
+  local `main` MUST equal `origin/main`, the working tree MUST be clean, and no
+  leftover local, remote, or stale-tracking non-main work branches may remain
+  unless explicitly preserved. Fast-forward/`ff` MUST preserve linear history
+  where expected and must satisfy the same final synchronization and cleanup
+  requirements.
 - `workflow.cleanBranches`: delete only branches verified integrated; include
   both local and remote cleanup; delete already-integrated remote
   feature/work branches when safe and allowed; fetch/prune tracking refs after
@@ -258,8 +267,12 @@ blocker.
 
 `workflow.toMain` acceptance criteria:
 
-- required validation passed, was skipped, or was reused only according to
-  central validation rules
+- required validation passed, was reused only according to central validation
+  rules, or was explicitly blocked with a reported reason; `pio test -e usb
+  --without-uploading --without-testing` is mandatory for this workflow and must
+  not be skipped silently; if the work touches `.c`, `.cc`, `.cpp`, `.cxx`, `.h`,
+  `.hh`, or `.hpp` files, `cppcheck` through `pre-commit` is also mandatory and
+  must not be skipped silently
 - `docs.agent.md` passed, or every docs finding was resolved before completion
 - associated issues detected and verified against branch, commits, PR metadata,
   and explicit user instructions

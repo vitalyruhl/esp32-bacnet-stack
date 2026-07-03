@@ -6,7 +6,7 @@ For each header you get:
 - the **most-used** types / functions / methods (not an academic 100% dump)
 - a tiny example
 
-> Note: Some headers (e.g. `<vector>`, `<string>`, `<algorithm>`) have *very large* APIs.  
+> Note: Some headers (e.g. `<vector>`, `<string>`, `<algorithm>`) have *very large* APIs.
 > Here you’ll find the members people actually use day-to-day.
 
 ---
@@ -581,4 +581,3 @@ std::memset(buf, 0, sizeof(buf));
 ```
 
 ---
-

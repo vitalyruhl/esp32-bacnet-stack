@@ -2,8 +2,8 @@
 
 This document is a **project-specific** GPIO reference for an ESP32-WROOM-32 board.
 
-> more Info about ESP32: [ESPConnect](https://thelastoutpostworkshop.github.io/ESPConnect/) 
-> note : only on cromium based browsers! 
+> more Info about ESP32: [ESPConnect](https://thelastoutpostworkshop.github.io/ESPConnect/)
+> note : only on cromium based browsers!
 
 ## Overview
 
@@ -216,4 +216,3 @@ Hibernation
   - Hash (SHA-2)
   - RSA
   - Random Number Generator (RNG)
-

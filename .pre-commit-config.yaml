@@ -1,0 +1,25 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-yaml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: mixed-line-ending
+      - id: check-added-large-files
+  - repo: local
+    hooks:
+      - id: cppcheck
+        name: cppcheck
+        entry: pwsh
+        language: system
+        files: ^(src|examples|test)/.*\.(c|cc|cpp|cxx|h|hpp|hh)$
+        args:
+          - -NoLogo
+          - -NoProfile
+          - -ExecutionPolicy
+          - Bypass
+          - -File
+          - tools/run-cppcheck.ps1
