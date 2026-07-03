@@ -5,6 +5,7 @@
 #include <Arduino.h>
 #include <WiFiUdp.h>
 
+#include "BacnetFeatureGates.h"
 #include "BacnetLogger.h"
 
 #include <cstddef>

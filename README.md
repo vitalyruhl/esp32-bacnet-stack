@@ -169,6 +169,11 @@ Compile tests without upload:
 pio test -e usb --without-uploading --without-testing
 ```
 
+Optional compile-time write feature gates:
+
+- `ESP_BACNET_ENABLE_WRITE_PROPERTY` (default `0`)
+- `ESP_BACNET_ENABLE_PRIORITY_WRITE` (default `0`, requires write-property flag)
+
 Build changed or directly affected examples when needed. See [Client Examples](docs/client/examples.md) for example roles and [docs/repository-settings.md](docs/repository-settings.md) for repository setup notes.
 
 ## Dependency Maintenance
