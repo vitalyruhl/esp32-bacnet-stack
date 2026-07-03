@@ -9,6 +9,7 @@
 
 class BacnetDeviceSession;
 class BacnetObjectListScanJob;
+class BacnetProcessObject;
 class BacnetProperty;
 class BacnetRemoteObject;
 class BacnetPropertySubscription;
@@ -207,6 +208,8 @@ struct BacnetObjectStatus {
 
 bool bacnetDecodeStatusFlags(const BacnetValue& value,
                              BacnetStatusFlags& flags);
+bool bacnetEngineeringUnitId(const BacnetValue& value, uint32_t& unitId);
+const char* bacnetEngineeringUnitSymbol(uint32_t unitId);
 const char* bacnetEventStateText(uint32_t eventState);
 const char* bacnetReliabilityText(uint32_t reliability);
 BacnetObjectHealthState bacnetDeriveObjectHealthState(
@@ -288,6 +291,8 @@ struct BacnetCachedProperty {
   BacnetPropertyReadStatus status = BacnetPropertyReadStatus::Skipped;
   BacnetValue value;
   uint32_t updatedAtMs = 0;
+  uint32_t lastAttemptMs = 0;
+  uint32_t lastSuccessMs = 0;
   uint32_t errorClass = 0;
   uint32_t errorCode = 0;
   bool hasValue = false;
@@ -402,6 +407,15 @@ public:
   BacnetRemoteObject object(BacnetObjectId objectId);
   BacnetRemoteObject object(BacnetObjectType objectType,
                             uint32_t objectInstance);
+  BacnetProcessObject analogInput(uint32_t objectInstance);
+  BacnetProcessObject analogOutput(uint32_t objectInstance);
+  BacnetProcessObject analogValue(uint32_t objectInstance);
+  BacnetProcessObject binaryInput(uint32_t objectInstance);
+  BacnetProcessObject binaryOutput(uint32_t objectInstance);
+  BacnetProcessObject binaryValue(uint32_t objectInstance);
+  BacnetProcessObject multiStateInput(uint32_t objectInstance);
+  BacnetProcessObject multiStateOutput(uint32_t objectInstance);
+  BacnetProcessObject multiStateValue(uint32_t objectInstance);
 
   BacnetDeviceSessionReadStatus readProperty(
     BacnetObjectId object, BacnetPropertyId property, BacnetValue& value, uint32_t timeoutMs = kDefaultReadTimeoutMs, uint32_t arrayIndex = kBacnetNoArrayIndex);
@@ -492,6 +506,9 @@ public:
 private:
   friend class BacnetPropertySubscription;
   friend class BacnetObjectListScanJob;
+#if defined(UNIT_TEST)
+  friend void test_bacnet_property_cache_keeps_value_after_failed_refresh();
+#endif
 
   static const char* subscriptionPollTriggerText(
     BacnetPropertySubscription::PollTrigger trigger);
@@ -554,6 +571,76 @@ private:
   bool propertyCacheUsed_[kMaxCachedProperties] = {};
   size_t propertyCacheCount_ = 0;
   size_t nextPropertyCacheSlot_ = 0;
+};
+
+class BacnetProcessObject {
+public:
+  BacnetProcessObject(BacnetDeviceSession& session,
+                      BacnetObjectType objectType,
+                      uint32_t objectInstance);
+  BacnetProcessObject(BacnetDeviceSession& session, BacnetObjectId objectId);
+
+  BacnetObjectId objectId() const;
+  BacnetRemoteObject remoteObject() const;
+  BacnetProperty property(
+    BacnetPropertyId id,
+    uint32_t arrayIndex = kBacnetNoArrayIndex) const;
+
+  BacnetProperty presentValueProperty() const;
+  BacnetDeviceSessionReadStatus readPresentValue(
+    BacnetValue& value,
+    uint32_t timeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs) const;
+  BacnetDeviceSessionReadStatus readPresentValue(
+    uint32_t timeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs) const;
+  BacnetValue presentValue() const;
+  bool hasPresentValue() const;
+  BacnetPropertyReadStatus presentValueStatus() const;
+  uint32_t presentValueLastUpdateMs() const;
+  uint32_t presentValueLastAttemptMs() const;
+  uint32_t presentValueLastSuccessMs() const;
+  BacnetDeviceSessionReadStatus readEngineeringUnits(
+    BacnetValue& value,
+    uint32_t timeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs) const;
+  BacnetDeviceSessionReadStatus readEngineeringUnits(
+    uint32_t timeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs) const;
+  BacnetValue engineeringUnits() const;
+  const char* engineeringUnitSymbol() const;
+  BacnetDeviceSessionReadStatus readMinPresentValue(
+    BacnetValue& value,
+    uint32_t timeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs) const;
+  BacnetDeviceSessionReadStatus readMinPresentValue(
+    uint32_t timeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs) const;
+  BacnetDeviceSessionReadStatus readMaxPresentValue(
+    BacnetValue& value,
+    uint32_t timeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs) const;
+  BacnetDeviceSessionReadStatus readMaxPresentValue(
+    uint32_t timeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs) const;
+  BacnetDeviceSessionReadStatus readResolution(
+    BacnetValue& value,
+    uint32_t timeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs) const;
+  BacnetDeviceSessionReadStatus readResolution(
+    uint32_t timeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs) const;
+  BacnetDeviceSessionReadStatus readCovIncrement(
+    BacnetValue& value,
+    uint32_t timeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs) const;
+  BacnetDeviceSessionReadStatus readCovIncrement(
+    uint32_t timeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs) const;
+
+  BacnetObjectStatus readStatus(
+    uint32_t timeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs,
+    bool presentValueRequired = true) const;
+  BacnetStatusFlags statusFlags() const;
+  BacnetPropertyReadStatus statusFlagsStatus() const;
+  uint32_t eventState() const;
+  BacnetPropertyReadStatus eventStateStatus() const;
+  uint32_t reliability() const;
+  BacnetPropertyReadStatus reliabilityStatus() const;
+  bool outOfService() const;
+  BacnetPropertyReadStatus outOfServiceStatus() const;
+
+private:
+  BacnetDeviceSession* session_;
+  BacnetObjectId objectId_;
 };
 
 struct BacnetObjectScanOptions {

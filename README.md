@@ -76,7 +76,7 @@ Additional status notes:
 
 ## screenshots
 
-![Screenshot V0.19.0](docs/screenshots/bnm-V0.19.0.jpg)
+![Screenshot V0.24.0](docs/screenshots/bnm-V0.24.0.jpg)
 
 ## Repository Layout
 

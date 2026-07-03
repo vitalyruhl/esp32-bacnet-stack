@@ -535,12 +535,18 @@ const char* objectTypeName(uint16_t objectType) {
 
 const char* propertyName(BacnetPropertyId property) {
   switch (property) {
+    case BacnetPropertyId::CovIncrement:
+      return "covIncrement";
     case BacnetPropertyId::Description:
       return "description";
     case BacnetPropertyId::EventState:
       return "eventState";
     case BacnetPropertyId::FirmwareRevision:
       return "firmwareRevision";
+    case BacnetPropertyId::MaxPresentValue:
+      return "maxPresentValue";
+    case BacnetPropertyId::MinPresentValue:
+      return "minPresentValue";
     case BacnetPropertyId::ModelName:
       return "modelName";
     case BacnetPropertyId::NumberOfStates:
@@ -563,10 +569,14 @@ const char* propertyName(BacnetPropertyId property) {
       return "reliability";
     case BacnetPropertyId::RelinquishDefault:
       return "relinquishDefault";
+    case BacnetPropertyId::Resolution:
+      return "resolution";
     case BacnetPropertyId::StateText:
       return "stateText";
     case BacnetPropertyId::StatusFlags:
       return "statusFlags";
+    case BacnetPropertyId::Units:
+      return "units";
     case BacnetPropertyId::VendorName:
       return "vendorName";
     default:

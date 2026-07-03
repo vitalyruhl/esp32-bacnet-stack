@@ -4,6 +4,10 @@ This changelog is a curated overview.
 
 ## Unreleased
 
+- Added read-only BACnet process-object convenience helpers, Analog Value
+  metadata helpers, and a watched Analog Value card in `examples/client-demo`,
+  and bumped the library/example versions to `0.24.0`.
+
 - Added `BacnetProperty::lastValue()`, `BacnetProperty::lastStatus()`, and
   `BacnetProperty::lastUpdateMs()` cache accessors,
   `readAllAdvertisedProperties()` helpers for property-list-driven reads, and
