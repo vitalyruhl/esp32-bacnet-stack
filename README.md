@@ -78,7 +78,6 @@ Additional status notes:
 
 ![Screenshot V0.19.0](docs/screenshots/bnm-V0.19.0.jpg)
 
-
 ## Repository Layout
 
 | Path | Purpose |
@@ -116,283 +115,47 @@ void loop() {
 }
 ```
 
-## BACnet/IP Client Discovery
+## Documentation
 
-The client discovery layer supports:
+Detailed documentation is split by topic:
 
-- builds standard BACnet/IP Who-Is requests
-- sends Who-Is on UDP port `47808`
-- parses minimal I-Am responses into `BacnetIAmDevice`
-- exposes source address, discovered device instance, max APDU, segmentation,
-  and vendor ID
+- [Client Guide](docs/client/README.md)
+- [Important Client Notes](docs/client/important.md)
+- [Client API](docs/client/api.md)
+- [Client Examples](docs/client/examples.md)
+- [Server Guide](docs/server/README.md)
+- [Planned Server Work](docs/server/planned.md)
+- [Repository Settings](docs/repository-settings.md)
+- [License Model](docs/license-model.md)
 
-The `examples/client-demo` firmware demonstrates discovery on ESP32. It uses
-the optional ConfigurationManager-based example setup to connect WiFi, then
-sends Who-Is to the local BACnet/IP broadcast address every 30 seconds and logs
-received I-Am responses.
+## Minimal Client Example
 
-Hardware validation for this slice was performed against a WAGO BACnet/IP
-server at `<BACNET_DEVICE_IP>:47808`; the ESP32 repeatedly discovered device
-instance `<DEVICE_INSTANCE>`.
-
-The exported WAGO BACnet/IP test server configuration and programmed reference
-objects are documented in `dev-info/Wago_TestServer/`.
-
-## BACnet/IP Client ReadProperty
-
-The client ReadProperty layer is still intentionally compact, but now uses a
-generic property-access model:
-
-- builds minimal confirmed ReadProperty requests
-- accepts object type, object instance, property identifier, and optional array
-  index through `BacnetPropertyRequest`
-- sends ReadProperty to a BACnet/IP device
-- parses confirmed ReadProperty ACKs into typed `BacnetValue` results with
-  display text conversion for demos and logs
-- includes public object, property, request, and value helper types small
-  enough to reuse later from server-side work
-
-The initial property targets are device `objectName`, `vendorName`,
-`modelName`, and `firmwareRevision`. Hardware validation read those properties
-from a WAGO device instance `<DEVICE_INSTANCE>`.
-
-Known remote devices can also be represented with `BacnetDeviceSession`. The
-session stores the device instance, address, and BACnet/IP port while
-`BacnetClient` remains the transport owner. Applications may keep using the
-public constructor directly, or use the small factory helpers when starting
-from a discovered I-Am result or a known endpoint:
-
-For simple reads, `BacnetDeviceSession::readProperty()` provides a blocking
-helper around the existing ReadProperty send/poll flow:
+The library supports simple known-target reads through `BacnetDeviceSession`:
 
 ```cpp
-BacnetDeviceSession discoveredDevice =
-    BacnetDeviceSession::fromIAm(client, discovered);
+#include <EspBacnet.h>
 
-BacnetDeviceSession knownDevice = BacnetDeviceSession::fromEndpoint(
-    client, 1234, IPAddress(192, 0, 2, 101), BacnetClient::kDefaultPort);
+BacnetClient client;
+BacnetDeviceSession device =
+    BacnetDeviceSession::fromEndpoint(client, 1234,
+                                      IPAddress(192, 0, 2, 101));
 
-BacnetValue value;
-const auto status = discoveredDevice.readProperty(
-    discoveredDevice.deviceObject(), BacnetPropertyId::ObjectName, value);
+void setup() {
+  client.begin();
 
-if (status == BacnetDeviceSessionReadStatus::Ack) {
-  Serial.println(value.displayText());
-}
-```
-
-The `examples/client-demo` firmware now keeps BACnet protocol behavior in the
-reusable library APIs and limits its own BACnet code to configuration, GUI
-binding, display rows, and log adaptation.
-
-`BacnetRemoteObject` and `BacnetProperty` provide lightweight wrappers over
-the same session read path:
-
-```cpp
-auto mv2000 = device.object(BacnetObjectType::MultiStateValue, 2000);
-
-BacnetValue value;
-const auto status = mv2000.readPresentValue(value);
-
-if (status == BacnetDeviceSessionReadStatus::Ack) {
-  Serial.println(value.displayText());
-}
-```
-
-The wrappers do not add scan, cache, queue, or automatic scheduler state.
-
-`BacnetProperty::subscribe()` adds an optional caller-owned property
-subscription handle. It uses callback notifications and session-driven fallback
-polling. The library does not spawn background tasks; the application drives
-polling from `loop()`.
-
-```cpp
-auto property = device.object(BacnetObjectType::AnalogValue, 200)
-                    .property(BacnetPropertyId::PresentValue);
-
-void onSubscription(const BacnetSubscriptionNotification& n) {
-  if (n.status == BacnetDeviceSessionReadStatus::Ack && n.hasValue) {
-    Serial.printf("value: %s\n", n.value->displayText());
-  }
-}
-
-BacnetSubscribeOptions options;
-options.fallbackPollMs = 5000;
-options.immediateFirstRead = true;
-
-auto sub = property.subscribe(onSubscription, nullptr, options);
-
-void loop() {
-  // Run one non-blocking step; call frequently from the main loop.
-  device.poll(sub);
-
-  // Optional: trigger an on-demand refresh outside fallback cadence.
-  // sub.requestRefresh();
-}
-```
-
-Subscription notes:
-
-- The caller owns the `BacnetPropertySubscription` handle lifetime.
-- The subscription must not outlive the `BacnetDeviceSession` that created it.
-- Callbacks run synchronously inside `BacnetDeviceSession::poll()`.
-- Notification pointers are valid only during the callback; copy values that
-  must be retained.
-- One session processes at most one subscription read request in flight.
-- `fallbackPollMs = 0` disables periodic fallback polling.
-- `requestRefresh()` schedules an immediate one-shot read when idle.
-- `stop()` deactivates the subscription and suppresses further polling.
-
-`BacnetDeviceSession::scanObjectList()` keeps the blocking convenience scan over
-the remote Device object's `object-list` property. The caller owns the result
-buffer and optional filters:
-
-```cpp
-const BacnetObjectType valueTypes[] = {
-    BacnetObjectType::AnalogValue,
-    BacnetObjectType::MultiStateValue,
-};
-
-BacnetObjectScanOptions scanOptions;
-scanOptions.objectTypes = valueTypes;
-scanOptions.objectTypeCount = 2;
-scanOptions.maxObjectListEntries = 600;
-
-BacnetScannedObject foundObjects[10];
-const auto scan = device.scanObjectList(
-    scanOptions, foundObjects, 10);
-
-for (size_t i = 0; i < scan.stored; ++i) {
-  auto object = device.object(foundObjects[i].objectId);
   BacnetValue value;
-  object.readPresentValue(value);
-}
-```
+  const auto status = device.readProperty(
+      device.deviceObject(), BacnetPropertyId::ObjectName, value);
 
-The blocking scan is implemented on top of the same small scan job used by the
-non-blocking API. Applications that must keep `loop()` responsive can drive the
-scan explicitly:
-
-```cpp
-static BacnetScannedObject foundObjects[10];
-static BacnetObjectListScanJob scanJob;
-static const BacnetObjectType valueTypes[] = {
-    BacnetObjectType::AnalogValue,
-    BacnetObjectType::MultiStateValue,
-};
-
-void startScan(BacnetDeviceSession& device) {
-  BacnetObjectScanOptions scanOptions;
-  bacnetSetObjectTypeFilter(scanOptions, valueTypes);
-  scanOptions.maxObjectListEntries = 600;
-  scanOptions.readObjectName = true;
-  scanOptions.readDescription = true;
-  scanOptions.readPresentValue = true;
-
-  device.beginObjectListScan(scanJob, scanOptions, foundObjects, 10);
-}
-
-void loopScan(BacnetDeviceSession& device) {
-  if (scanJob.isActive()) {
-    device.pollObjectListScan(scanJob);
-  }
-
-  if (scanJob.isComplete()) {
-    const BacnetObjectScanResult& scan = scanJob.summary();
-    // Consume foundObjects[0..scan.stored).
+  if (status == BacnetDeviceSessionReadStatus::Ack) {
+    Serial.println(value.displayText());
   }
 }
+
+void loop() {}
 ```
 
-`BacnetObjectListScanJob::progress()` exposes the scan status, phase, current
-object-list index, in-flight flag, and summary counters. The scan job stores the
-options by value, but pointer fields such as `objectTypes` still reference
-caller-owned storage; keep those arrays and the result buffer alive until the
-job reaches a terminal state. One session processes one object-list scan job at
-a time. Present-value refresh for scanned objects is handled through the
-property subscription API with fallback polling.
-
-The `examples/client-object-list-scan-basic` project is the canonical
-serial-only basic BACnet/IP client example for known BACnet/IP devices. It uses
-local `secret/secrets.h` WiFi/static-IP settings, starts `BacnetClient`,
-creates a `BacnetDeviceSession`, reads the Device `object-name`, scans process
-objects with `scanObjectList()`, starts one fallback-polled `present-value`
-subscription, and prints compact Serial output. It does not use ConfigManager,
-web UI, server behavior, or BACnet writes.
-
-The `examples/client-demo` firmware also includes a lightweight BACnet/IP
-Client card for demo visibility. It selects the configured BACnet/IP device or
-the first discovered I-Am device, keeps the BME280 status card unchanged, and
-drives a `BacnetObjectListScanJob` from `loop()` for process object discovery.
-Up to 10 found Analog, Binary, and Multi-State process objects are displayed
-with `description` or `objectName` plus `presentValue` status/value. The demo
-also shows one read-only object health/status snapshot selected from local
-configuration or the first discovered process object. Present values refresh
-through `BacnetProperty::subscribe()` with fallback polling. BACnet scan and
-subscription activity is written through the BACnet logger and forwarded to the
-ConfigurationManager GUI log by the demo adapter.
-
-The same card exposes a `Scan / Rescan` button to restart the BACnet process
-object scan without reflashing or resetting the ESP32. The action uses the
-ConfigManager runtime-action route and is also available for local checks
-through:
-
-```sh
-curl -X POST "http://<esp-ip>/runtime_action/button?group=bacnet&key=device0_rescan"
-```
-
-The endpoint returns the framework action status, while accepted/rejected
-rescan details are shown in the BACnet GUI log and State field.
-
-## BACnet Logging
-
-The library exposes a small structured logging layer:
-
-- `BacnetLogLevel`
-- `BacnetLogRecord`
-- `BacnetLogOutput`
-- `BacnetLogger`
-- `BacnetScopedLogTag`
-
-Applications attach zero, one, or multiple outputs to
-`BacnetClient::logger()`. The core library does not depend on Serial,
-ConfigurationManager, MQTT, or file output. Outputs can define their own level,
-filter, timestamp mode, and rate limit.
-
-`BacnetLogRecord::message` and `BacnetLogRecord::tag` pointers are valid only
-during the `BacnetLogOutput::log()` callback. Buffered outputs must copy those
-fields if they keep records for later `tick()` processing.
-
-Logging callsites are controlled by `BACNET_ENABLE_LOGGING`. Debug and trace
-style verbose logs are additionally controlled by
-`BACNET_ENABLE_VERBOSE_LOGGING`.
-
-## Example Local Configuration
-
-The canonical basic client example reads local WiFi and BACnet target values
-from an ignored local secrets file:
-
-```sh
-cp examples/client-object-list-scan-basic/src/secret/secrets.example.h \
-  examples/client-object-list-scan-basic/src/secret/secrets.h
-```
-
-Edit `examples/client-object-list-scan-basic/src/secret/secrets.h` for local
-WiFi, optional static IP, and BACnet target values. The `secrets.h` file is
-intentionally ignored by Git and must not be committed.
-
-The richer client demo can also read local WiFi and BACnet validation values
-from an ignored local secrets file:
-
-```sh
-cp examples/client-demo/src/secret/secrets.example.h examples/client-demo/src/secret/secrets.h
-```
-
-Edit `examples/client-demo/src/secret/secrets.h` for local WiFi, optional
-static IP, optional MAC-priority, and BACnet target values. The `secrets.h` file
-is intentionally ignored by Git and must not be committed.
-
-## Build / Validation
+## Build Basics
 
 Root build:
 
@@ -400,36 +163,47 @@ Root build:
 pio run -e usb
 ```
 
-Tests:
+Compile tests without upload:
 
 ```sh
 pio test -e usb --without-uploading --without-testing
 ```
 
-Examples policy:
-
-- Build changed or directly affected examples only.
-- For BACnet client runtime/API changes, also build the local acceptance runner.
-
-```sh
-pio run -d examples/hil-wago-client-acceptance -e usb
-```
-
-Hardware HIL upload/monitor is local-only and should run only with explicit local approval:
-
-```sh
-pio run -d examples/hil-wago-client-acceptance -e usb -t upload
-pio device monitor -p COM4 -b 115200
-```
-
-Upload and serial monitor commands are intentionally not part of the default
-validation flow because they interact with local hardware.
+Build changed or directly affected examples when needed. See [Client Examples](docs/client/examples.md) for example roles and [docs/repository-settings.md](docs/repository-settings.md) for repository setup notes.
 
 ## Dependency Maintenance
 
-Dependabot is configured for GitHub Actions. GitHub's official Dependabot
-ecosystem list does not include PlatformIO as a package ecosystem, so PlatformIO
-platform and library dependency updates are currently manual.
+Dependabot is configured for GitHub Actions. PlatformIO platform and library dependency updates are currently manual.
+
+<!-- markdownlint-disable MD033 -->
+
+<br>
+<br>
+
+## Donate
+
+<table align="center" width="100%" border="0" bgcolor:=#3f3f3f>
+<tr align="center">
+<td align="center">
+if you prefer a one-time donation
+
+[![donate-Paypal](https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif)](https://paypal.me/FamilieRuhl)
+
+</td>
+
+<td align="center">
+Become a patron, by simply clicking on this button (**very appreciated!**):
+
+[![Become a patron](https://c5.patreon.com/external/logo/become_a_patron_button.png)](https://www.patreon.com/join/6555448/checkout?ru=undefined)
+
+</td>
+</tr>
+</table>
+
+<br>
+<br>
+
+<!-- markdownlint-enable MD033 -->
 
 ## License
 
