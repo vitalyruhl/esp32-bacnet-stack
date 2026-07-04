@@ -2,18 +2,15 @@
 
 #include <Arduino.h>
 
-#include <BME280_I2C.h>
 #include <EspBacnet.h>
-#include <Ticker.h>
 #include <WiFi.h>
 
 #include "ConfigManager.h"
-#include "alarm/AlarmManager.h"
 #include "core/CoreSettings.h"
 #include "core/CoreWiFiServices.h"
-#include "helpers/HelperModule.h"
 #include "logging/LoggingManager.h"
 
+#include "BacnetDemoFallbackObjects.h"
 #include "BacnetDemoFormat.h"
 #include "BacnetDemoWatchedAnalogValue.h"
 
@@ -27,10 +24,6 @@
 #define CM_HAS_WIFI_SECRETS 1
 #else
 #define CM_HAS_WIFI_SECRETS 0
-#endif
-
-#ifndef BME280_ADDRESS
-#define BME280_ADDRESS 0x76
 #endif
 
 #ifndef APP_VERSION
@@ -48,9 +41,6 @@
 #define OTA_PASSWORD SETTINGS_PASSWORD
 #endif
 
-#define I2C_SDA 21
-#define I2C_SCL 22
-
 extern ConfigManagerClass ConfigManager;
 
 static cm::CoreSettings& coreSettings = cm::CoreSettings::instance();
@@ -58,10 +48,7 @@ static cm::CoreSystemSettings& systemSettings = coreSettings.system;
 static cm::CoreWiFiSettings& wifiSettings = coreSettings.wifi;
 static cm::CoreNtpSettings& ntpSettings = coreSettings.ntp;
 static cm::CoreWiFiServices wifiServices;
-static cm::AlarmManager alarmManager;
 
-static BME280_I2C bme280;
-static Ticker temperatureTicker;
 static BacnetClient bacnetClient;
 
 #ifndef BACNET_WHOIS_DESTINATION
@@ -88,20 +75,11 @@ static BacnetClient bacnetClient;
 #define BACNET_STATUS_OBJECT_INSTANCE 0
 #endif
 
-#ifndef BACNET_FALLBACK_ANALOG_OBJECT_TYPE
-#define BACNET_FALLBACK_ANALOG_OBJECT_TYPE 2
-#endif
 #ifndef BACNET_FALLBACK_ANALOG_OBJECT_INSTANCE
 #define BACNET_FALLBACK_ANALOG_OBJECT_INSTANCE 220
 #endif
-#ifndef BACNET_FALLBACK_BINARY_OBJECT_TYPE
-#define BACNET_FALLBACK_BINARY_OBJECT_TYPE 5
-#endif
 #ifndef BACNET_FALLBACK_BINARY_OBJECT_INSTANCE
 #define BACNET_FALLBACK_BINARY_OBJECT_INSTANCE 320
-#endif
-#ifndef BACNET_FALLBACK_MULTISTATE_OBJECT_TYPE
-#define BACNET_FALLBACK_MULTISTATE_OBJECT_TYPE 19
 #endif
 #ifndef BACNET_FALLBACK_MULTISTATE_OBJECT_INSTANCE
 #define BACNET_FALLBACK_MULTISTATE_OBJECT_INSTANCE 2020
@@ -119,11 +97,6 @@ static constexpr size_t kBacnetScanResultCapacity = kBacnetMaxFoundObjectsToDisp
 static constexpr size_t kBacnetPreviewPropertyCount = 4;
 static constexpr uint32_t kBacnetSubscriptionFallbackPollMs = 30000;
 static constexpr uint32_t kWatchedAnalogValuePollMs = 3000;
-
-static float temperature = 0.0f;
-static float dewPoint = 0.0f;
-static float humidity = 0.0f;
-static float pressure = 0.0f;
 
 static IPAddress whoIsDestination;
 static IPAddress configuredBacnetTargetAddress;
@@ -205,7 +178,6 @@ static const BacnetObjectType kValueObjectScanFilter[] = {
 };
 
 static const char GLOBAL_THEME_OVERRIDE[] PROGMEM = R"CSS(
-.myCSSTempClass { color:rgb(198, 16, 16) !important; font-weight:900!important; font-size: 1.2rem!important; }
 .live-cards {
   align-items: flex-start !important;
   grid-template-columns: minmax(620px, 820px) minmax(280px, 1fr) !important;
@@ -330,52 +302,6 @@ static void setupGuiLogging() {
   bacnetLogOutput.setMinIntervalMs(0);
   bacnetClient.logger().addOutput(bacnetLogOutput);
 }
-
-struct TempSettings {
-  Config<float>* tempCorrection = nullptr;
-  Config<float>* humidityCorrection = nullptr;
-  Config<int>* seaLevelPressure = nullptr;
-  Config<int>* readIntervalSec = nullptr;
-
-  void create() {
-    tempCorrection = &ConfigManager.addSettingFloat("TCO")
-                        .name("Temperature Correction")
-                        .category("Temp")
-                        .defaultValue(0.0f)
-                        .build();
-    humidityCorrection = &ConfigManager.addSettingFloat("HYO")
-                            .name("Humidity Correction")
-                            .category("Temp")
-                            .defaultValue(0.0f)
-                            .build();
-    seaLevelPressure = &ConfigManager.addSettingInt("SLP")
-                          .name("Sea Level Pressure")
-                          .category("Temp")
-                          .defaultValue(1013)
-                          .build();
-    readIntervalSec = &ConfigManager.addSettingInt("ReadTemp")
-                         .name("Read Temp/Humidity every (s)")
-                         .category("Temp")
-                         .defaultValue(30)
-                         .build();
-  }
-
-  void placeInUi() const {
-    if (!tempCorrection || !humidityCorrection || !seaLevelPressure ||
-        !readIntervalSec) {
-      return;
-    }
-
-    ConfigManager.addSettingsPage("Temp", 40);
-    ConfigManager.addSettingsGroup("Temp", "Temp", "Temperature", 40);
-    ConfigManager.addToSettingsGroup(tempCorrection->getKey(), "Temp", "Temp", "Temperature", 10);
-    ConfigManager.addToSettingsGroup(humidityCorrection->getKey(), "Temp", "Temp", "Temperature", 20);
-    ConfigManager.addToSettingsGroup(seaLevelPressure->getKey(), "Temp", "Temp", "Temperature", 30);
-    ConfigManager.addToSettingsGroup(readIntervalSec->getKey(), "Temp", "Temp", "Temperature", 40);
-  }
-};
-
-static TempSettings tempSettings;
 
 static bool parseBacnetAddress(const char* label,
                                const char* addressText,
@@ -1032,51 +958,6 @@ static void fillWatchedAnalogRuntime(JsonObject& data) {
 }
 
 static void setupRuntimeUI() {
-  auto live = ConfigManager.liveGroup("sensors")
-                .page("Sensors", 10)
-                .card("BME280 - Temperature Sensor");
-
-  live.value("temp", []() { return temperature; })
-    .label("Temperature")
-    .unit("C")
-    .precision(1)
-    .addCSSClass("myCSSTempClass")
-    .order(10);
-
-  live.value("hum", []() { return humidity; })
-    .label("Humidity")
-    .unit("%")
-    .precision(1)
-    .order(11);
-
-  live.value("pressure", []() { return pressure; })
-    .label("Pressure")
-    .unit("hPa")
-    .precision(1)
-    .order(12);
-
-  auto dewpointGroup = ConfigManager.liveGroup("sensors")
-                         .page("Sensors", 10)
-                         .card("BME280 - Temperature Sensor")
-                         .group("Dewpoint", 20);
-
-  dewpointGroup.value("dew", []() { return dewPoint; })
-    .label("Dewpoint")
-    .unit("C")
-    .precision(1)
-    .order(20);
-
-  alarmManager.addDigitalWarning({
-    .id = "dewRisk",
-    .name = "Condensation Risk",
-    .kind = cm::AlarmKind::DigitalActive,
-    .severity = cm::AlarmSeverity::Warning,
-    .enabled = true,
-    .getter = []() { return temperature < dewPoint; },
-  });
-
-  alarmManager.addWarningToLive("dewRisk", 30, "Sensors", "BME280 - Temperature Sensor", "Dewpoint", "Condensation Risk");
-
   auto bacnetDeviceGroup = ConfigManager.liveGroup("bacnet")
                              .page("Sensors", 10)
                              .card("BACnet/IP Client", 20)
@@ -1210,38 +1091,6 @@ static void setupRuntimeUI() {
   watchedAnalogGroup
     .button("watchedAv_details", "Log to Serial", []() { logWatchedAnalogDetails(); })
     .order(50);
-}
-
-static void readBme280() {
-  bme280.setSeaLevelPressure(tempSettings.seaLevelPressure->get());
-  bme280.read();
-
-  temperature = bme280.data.temperature + tempSettings.tempCorrection->get();
-  humidity = bme280.data.humidity + tempSettings.humidityCorrection->get();
-  pressure = bme280.data.pressure;
-  dewPoint = cm::helpers::computeDewPoint(temperature, humidity);
-}
-
-static void setupTemperatureMeasuring() {
-  Serial.println("[I] Initializing BME280 sensor");
-
-  bme280.setAddress(BME280_ADDRESS, I2C_SDA, I2C_SCL);
-
-  const bool ok = bme280.begin(
-    bme280.BME280_STANDBY_0_5, bme280.BME280_FILTER_OFF, bme280.BME280_SPI3_DISABLE, bme280.BME280_OVERSAMPLING_1, bme280.BME280_OVERSAMPLING_1, bme280.BME280_OVERSAMPLING_1, bme280.BME280_MODE_NORMAL);
-
-  if (!ok) {
-    Serial.println("[W] BME280 not initialized, continuing without sensor");
-    return;
-  }
-
-  Serial.println("[I] BME280 ready");
-  int interval = tempSettings.readIntervalSec->get();
-  if (interval < 2) {
-    interval = 2;
-  }
-  temperatureTicker.attach(static_cast<float>(interval), readBme280);
-  readBme280();
 }
 
 static void sendWhoIs() {
@@ -1410,8 +1259,7 @@ static size_t appendConfiguredFallbackObjects(BacnetDeviceSession& session,
 
   if (readConfiguredFallbackObject(
         session,
-        BacnetObjectId{BACNET_FALLBACK_ANALOG_OBJECT_TYPE,
-                       BACNET_FALLBACK_ANALOG_OBJECT_INSTANCE},
+        bacnetDemoFallbackAnalogObject(BACNET_FALLBACK_ANALOG_OBJECT_INSTANCE),
         scanBuffer[scanSlot],
         analogValues,
         kBacnetMaxFoundObjectsToDisplay)) {
@@ -1421,8 +1269,7 @@ static size_t appendConfiguredFallbackObjects(BacnetDeviceSession& session,
   ++scanSlot;
   if (readConfiguredFallbackObject(
         session,
-        BacnetObjectId{BACNET_FALLBACK_BINARY_OBJECT_TYPE,
-                       BACNET_FALLBACK_BINARY_OBJECT_INSTANCE},
+        bacnetDemoFallbackBinaryObject(BACNET_FALLBACK_BINARY_OBJECT_INSTANCE),
         scanBuffer[scanSlot],
         binaryValues,
         kBacnetMaxFoundObjectsToDisplay)) {
@@ -1432,8 +1279,8 @@ static size_t appendConfiguredFallbackObjects(BacnetDeviceSession& session,
   ++scanSlot;
   if (readConfiguredFallbackObject(
         session,
-        BacnetObjectId{BACNET_FALLBACK_MULTISTATE_OBJECT_TYPE,
-                       BACNET_FALLBACK_MULTISTATE_OBJECT_INSTANCE},
+        bacnetDemoFallbackMultiStateObject(
+          BACNET_FALLBACK_MULTISTATE_OBJECT_INSTANCE),
         scanBuffer[scanSlot],
         multiStateValues,
         kBacnetMaxFoundObjectsToDisplay)) {
@@ -1752,14 +1599,10 @@ void setup() {
   coreSettings.attachSystem(ConfigManager);
   coreSettings.attachNtp(ConfigManager);
 
-  tempSettings.create();
-  tempSettings.placeInUi();
-
   ConfigManager.loadAll();
   setupNetworkDefaults();
 
   setupRuntimeUI();
-  setupTemperatureMeasuring();
 
 #if defined(WIFI_FILTER_MAC_PRIORITY)
   ConfigManager.setAccessPointMacPriority(WIFI_FILTER_MAC_PRIORITY);
@@ -1832,7 +1675,6 @@ void loop() {
   ConfigManager.handleClient();
   cm::LoggingManager::instance().loop();
   bacnetClient.logger().tick();
-  alarmManager.update();
   pollBacnetDiscovery();
   processPendingBacnetRescan();
   pollBacnetSubscriptions();

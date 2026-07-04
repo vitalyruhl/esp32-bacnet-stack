@@ -17,6 +17,10 @@ This changelog is a curated overview.
   through grouped providers instead of per-field `String` callbacks.
 - Split the watched Analog Value object name and description in the compact
   runtime card and shortened metadata output by avoiding repeated units.
+- Removed the inactive BME280 live sensor card from `examples/client-demo`,
+  moved its future BACnet-server draft into `examples/server-demo` behind a
+  disabled build block, and moved fallback object type defaults out of the main
+  client sketch.
 - Kept object descriptions visible in compact object rows when they differ from
   the selected display label.
 - Kept library and example version references aligned at `0.24.1`.
