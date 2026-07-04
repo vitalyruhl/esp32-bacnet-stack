@@ -342,7 +342,7 @@ void BacnetDemoWatchedAnalogValue::appendUnitSuffix(String& text) const {
 }
 
 String BacnetDemoWatchedAnalogValue::metadataValueCore(
-  const Preview::MetadataField& field) const {
+  const Preview::MetadataField& field) {
   if (field.hasValue) {
     return field.value.displayText();
   }
@@ -359,7 +359,7 @@ String BacnetDemoWatchedAnalogValue::metadataValueText(
 }
 
 String BacnetDemoWatchedAnalogValue::metadataStatusText(
-  BacnetPropertyReadStatus status) const {
+  BacnetPropertyReadStatus status) {
   if (status == BacnetPropertyReadStatus::UnsupportedProperty ||
       status == BacnetPropertyReadStatus::ArrayIndexNotSupported ||
       status == BacnetPropertyReadStatus::UnsupportedDatatype) {
@@ -437,7 +437,7 @@ String BacnetDemoWatchedAnalogValue::alarmStateFromStatus(
   const BacnetObjectStatus& status,
   bool hasStatusFlags,
   bool hasEventState,
-  bool hasOutOfService) const {
+  bool hasOutOfService) {
   if (status.outOfServiceStatus == BacnetPropertyReadStatus::Ack &&
       status.outOfService) {
     return "out-of-service";

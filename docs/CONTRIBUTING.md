@@ -54,6 +54,18 @@ ESP32, PlatformIO, Arduino, and C++17.
 - Compile-only tests: `pio test -e usb --without-uploading --without-testing`
 - Client demo build: `pio run -d examples/client-demo -e usb`
 - Server demo build: `pio run -d examples/server-demo -e usb`
+- Full local governance gate: `pwsh -NoProfile -ExecutionPolicy Bypass -File tools/run-precommit-full.ps1`
+- Direct static analysis gate: `pwsh -NoProfile -ExecutionPolicy Bypass -File tools/run-cppcheck.ps1`
+
+### Cppcheck policy
+
+1. `error`, `warning`, `performance`, `portability`, and `style` findings are mandatory-fix by default.
+2. The mandatory gate runs on the severity set above; `information` findings are triaged separately and tool-status-only messages do not require code changes.
+3. `unmatchedSuppression` findings must be fixed by removing or correcting stale suppressions.
+4. Suppressions are allowed only for confirmed false positives, must be as narrow as possible, and must include a clear reason near the suppression.
+5. Prefer fixing code over adding suppressions.
+6. Do not weaken cppcheck globally just to pass the gate.
+7. If a safe fix is not possible in the current slice, open a follow-up issue and document the risk and justification.
 
 ## 7. Dependency maintenance
 

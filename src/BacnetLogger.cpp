@@ -294,7 +294,7 @@ void BacnetLogger::buildTag(const char* explicitTag, char* buffer, size_t buffer
     if (value == nullptr || value[0] == '\0' || used >= bufferSize - 1) {
       return;
     }
-    if (used != 0 && used < bufferSize - 1) {
+    if (used != 0) {
       buffer[used++] = '/';
       buffer[used] = '\0';
     }

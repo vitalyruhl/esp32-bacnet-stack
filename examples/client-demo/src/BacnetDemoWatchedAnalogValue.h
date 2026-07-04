@@ -98,23 +98,23 @@ private:
   void handleSubscriptionUpdate(
     const BacnetSubscriptionNotification& notification);
   void appendUnitSuffix(String& text) const;
-  String metadataValueCore(const Preview::MetadataField& field) const;
+  static String metadataValueCore(const Preview::MetadataField& field);
   String metadataValueText(const Preview::MetadataField& field) const;
   String cachedValueWithUnit(const BacnetValue& value,
                              BacnetPropertyReadStatus status,
                              bool hasValue) const;
-  String metadataStatusText(BacnetPropertyReadStatus status) const;
+  static String metadataStatusText(BacnetPropertyReadStatus status);
   void updateEngineeringUnit(BacnetPropertyReadStatus status,
                              const BacnetValue& value,
                              bool hasValue);
-  void updateMetadataField(Preview::MetadataField& field,
-                           BacnetProcessObject watched,
-                           BacnetPropertyId propertyId,
-                           BacnetPropertyReadStatus status);
-  String alarmStateFromStatus(const BacnetObjectStatus& status,
-                              bool hasStatusFlags,
-                              bool hasEventState,
-                              bool hasOutOfService) const;
+  static void updateMetadataField(Preview::MetadataField& field,
+                                  BacnetProcessObject watched,
+                                  BacnetPropertyId propertyId,
+                                  BacnetPropertyReadStatus status);
+  static String alarmStateFromStatus(const BacnetObjectStatus& status,
+                                     bool hasStatusFlags,
+                                     bool hasEventState,
+                                     bool hasOutOfService);
   void updateFromCache();
   void readIdentity(BacnetProcessObject watched);
   BacnetPropertyReadStatus readMetadataProperty(BacnetProcessObject watched,

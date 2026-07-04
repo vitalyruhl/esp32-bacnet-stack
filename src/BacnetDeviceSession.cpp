@@ -681,12 +681,12 @@ BacnetPropertyReadStatus BacnetDeviceSession::readPropertyDetailed(
 }
 
 bool BacnetDeviceSession::cachedProperty(
-  BacnetObjectId object,
+  BacnetObjectId objectId,
   BacnetPropertyId property,
   BacnetCachedProperty& cached,
   uint32_t arrayIndex) const {
   const BacnetCachedProperty* entry = findCachedProperty(
-    BacnetPropertyRequest{object, property, arrayIndex});
+    BacnetPropertyRequest{objectId, property, arrayIndex});
   if (entry == nullptr) {
     return false;
   }
@@ -713,7 +713,7 @@ size_t BacnetDeviceSession::cachedPropertyCount() const {
 }
 
 BacnetPropertyListReadResult BacnetDeviceSession::readPropertyList(
-  BacnetObjectId object,
+  BacnetObjectId objectId,
   BacnetPropertyId* properties,
   size_t propertyCapacity,
   uint32_t timeoutMs) {
@@ -723,7 +723,7 @@ BacnetPropertyListReadResult BacnetDeviceSession::readPropertyList(
   uint32_t errorCode = 0;
 
   result.status = readPropertyDetailed(
-    BacnetPropertyRequest{object, BacnetPropertyId::PropertyList, 0},
+    BacnetPropertyRequest{objectId, BacnetPropertyId::PropertyList, 0},
     countValue,
     timeoutMs,
     errorClass,
@@ -745,7 +745,7 @@ BacnetPropertyListReadResult BacnetDeviceSession::readPropertyList(
   for (size_t i = 0; i < limit; ++i) {
     BacnetValue propertyValue;
     const BacnetPropertyReadStatus status = readPropertyDetailed(
-      BacnetPropertyRequest{object, BacnetPropertyId::PropertyList, static_cast<uint32_t>(i + 1)},
+      BacnetPropertyRequest{objectId, BacnetPropertyId::PropertyList, static_cast<uint32_t>(i + 1)},
       propertyValue,
       timeoutMs,
       errorClass,
@@ -784,7 +784,7 @@ BacnetPropertyListReadResult BacnetDeviceSession::readPropertyList(
 }
 
 BacnetPropertyReadAllResult BacnetDeviceSession::readAllProperties(
-  BacnetObjectId object,
+  BacnetObjectId objectId,
   const BacnetPropertyId* properties,
   size_t propertyCount,
   BacnetPropertyReadResult* results,
@@ -810,7 +810,7 @@ BacnetPropertyReadAllResult BacnetDeviceSession::readAllProperties(
     uint32_t errorClass = 0;
     uint32_t errorCode = 0;
     entry.status = readPropertyDetailed(
-      BacnetPropertyRequest{object, properties[i], kBacnetNoArrayIndex},
+      BacnetPropertyRequest{objectId, properties[i], kBacnetNoArrayIndex},
       entry.value,
       timeoutMs,
       errorClass,
@@ -846,7 +846,7 @@ BacnetPropertyReadAllResult BacnetDeviceSession::readAllProperties(
 }
 
 BacnetPropertyReadAllResult BacnetDeviceSession::readAllAdvertisedProperties(
-  BacnetObjectId object,
+  BacnetObjectId objectId,
   BacnetPropertyId* properties,
   size_t propertyCapacity,
   BacnetPropertyReadResult* results,
@@ -854,7 +854,7 @@ BacnetPropertyReadAllResult BacnetDeviceSession::readAllAdvertisedProperties(
   uint32_t timeoutMs) {
   BacnetPropertyReadAllResult summary;
   const BacnetPropertyListReadResult propertyList =
-    readPropertyList(object, properties, propertyCapacity, timeoutMs);
+    readPropertyList(objectId, properties, propertyCapacity, timeoutMs);
   summary.propertyListStatus = propertyList.status;
   summary.advertised = propertyList.advertised;
   summary.collected = propertyList.stored;
@@ -865,7 +865,7 @@ BacnetPropertyReadAllResult BacnetDeviceSession::readAllAdvertisedProperties(
   }
 
   BacnetPropertyReadAllResult readSummary = readAllProperties(
-    object, properties, propertyList.stored, results, resultCapacity, timeoutMs);
+    objectId, properties, propertyList.stored, results, resultCapacity, timeoutMs);
   readSummary.propertyListStatus = propertyList.status;
   readSummary.advertised = propertyList.advertised;
   readSummary.collected = propertyList.stored;
@@ -1406,10 +1406,6 @@ void BacnetDeviceSession::updatePropertyCache(
   uint32_t errorClass,
   uint32_t errorCode) {
   BacnetCachedProperty* entry = findOrCreateCachedProperty(request);
-  if (entry == nullptr) {
-    return;
-  }
-
   entry->status = status;
   entry->lastAttemptMs = attemptAtMs;
   entry->errorClass = errorClass;

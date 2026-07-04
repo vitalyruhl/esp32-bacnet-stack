@@ -23,7 +23,7 @@ bool booleanValueFromCachedProcessValue(const BacnetValue& value,
   return false;
 }
 
-BacnetPropertyReadStatus cachedPropertyStatus(BacnetDeviceSession& session,
+BacnetPropertyReadStatus cachedPropertyStatus(const BacnetDeviceSession& session,
                                               BacnetObjectId objectId,
                                               BacnetPropertyId propertyId,
                                               BacnetValue* value = nullptr) {
@@ -316,9 +316,9 @@ BacnetObjectStatus BacnetProcessObject::readStatus(
   BacnetObjectStatus status;
   status.objectId = objectId_;
 
-  const BacnetProperty presentValue = presentValueProperty();
-  presentValue.read(status.presentValue, timeoutMs);
-  status.presentValueStatus = presentValue.lastStatus();
+  const BacnetProperty presentValueProp = presentValueProperty();
+  presentValueProp.read(status.presentValue, timeoutMs);
+  status.presentValueStatus = presentValueProp.lastStatus();
 
   BacnetValue statusFlagsValue;
   const BacnetProperty statusFlagsProperty =
@@ -391,12 +391,12 @@ BacnetPropertyReadStatus BacnetProcessObject::statusFlagsStatus() const {
 
 uint32_t BacnetProcessObject::eventState() const {
   BacnetValue value;
-  uint32_t eventState = 0;
+  uint32_t eventStateValue = 0;
   if (cachedPropertyStatus(*session_, objectId_, BacnetPropertyId::EventState, &value) ==
       BacnetPropertyReadStatus::Ack) {
-    enumValueFromCachedProcessValue(value, eventState);
+    enumValueFromCachedProcessValue(value, eventStateValue);
   }
-  return eventState;
+  return eventStateValue;
 }
 
 BacnetPropertyReadStatus BacnetProcessObject::eventStateStatus() const {
@@ -404,8 +404,8 @@ BacnetPropertyReadStatus BacnetProcessObject::eventStateStatus() const {
   const BacnetPropertyReadStatus status = cachedPropertyStatus(
     *session_, objectId_, BacnetPropertyId::EventState, &value);
   if (status == BacnetPropertyReadStatus::Ack) {
-    uint32_t eventState = 0;
-    return enumValueFromCachedProcessValue(value, eventState)
+    uint32_t eventStateValue = 0;
+    return enumValueFromCachedProcessValue(value, eventStateValue)
              ? BacnetPropertyReadStatus::Ack
              : BacnetPropertyReadStatus::DecodeError;
   }
@@ -414,12 +414,12 @@ BacnetPropertyReadStatus BacnetProcessObject::eventStateStatus() const {
 
 uint32_t BacnetProcessObject::reliability() const {
   BacnetValue value;
-  uint32_t reliability = 0;
+  uint32_t reliabilityValue = 0;
   if (cachedPropertyStatus(*session_, objectId_, BacnetPropertyId::Reliability, &value) ==
       BacnetPropertyReadStatus::Ack) {
-    enumValueFromCachedProcessValue(value, reliability);
+    enumValueFromCachedProcessValue(value, reliabilityValue);
   }
-  return reliability;
+  return reliabilityValue;
 }
 
 BacnetPropertyReadStatus BacnetProcessObject::reliabilityStatus() const {
@@ -427,8 +427,8 @@ BacnetPropertyReadStatus BacnetProcessObject::reliabilityStatus() const {
   const BacnetPropertyReadStatus status = cachedPropertyStatus(
     *session_, objectId_, BacnetPropertyId::Reliability, &value);
   if (status == BacnetPropertyReadStatus::Ack) {
-    uint32_t reliability = 0;
-    return enumValueFromCachedProcessValue(value, reliability)
+    uint32_t reliabilityValue = 0;
+    return enumValueFromCachedProcessValue(value, reliabilityValue)
              ? BacnetPropertyReadStatus::Ack
              : BacnetPropertyReadStatus::DecodeError;
   }
@@ -437,12 +437,12 @@ BacnetPropertyReadStatus BacnetProcessObject::reliabilityStatus() const {
 
 bool BacnetProcessObject::outOfService() const {
   BacnetValue value;
-  bool outOfService = false;
+  bool isOutOfService = false;
   if (cachedPropertyStatus(*session_, objectId_, BacnetPropertyId::OutOfService, &value) ==
       BacnetPropertyReadStatus::Ack) {
-    booleanValueFromCachedProcessValue(value, outOfService);
+    booleanValueFromCachedProcessValue(value, isOutOfService);
   }
-  return outOfService;
+  return isOutOfService;
 }
 
 BacnetPropertyReadStatus BacnetProcessObject::outOfServiceStatus() const {
@@ -450,8 +450,8 @@ BacnetPropertyReadStatus BacnetProcessObject::outOfServiceStatus() const {
   const BacnetPropertyReadStatus status = cachedPropertyStatus(
     *session_, objectId_, BacnetPropertyId::OutOfService, &value);
   if (status == BacnetPropertyReadStatus::Ack) {
-    bool outOfService = false;
-    return booleanValueFromCachedProcessValue(value, outOfService)
+    bool isOutOfService = false;
+    return booleanValueFromCachedProcessValue(value, isOutOfService)
              ? BacnetPropertyReadStatus::Ack
              : BacnetPropertyReadStatus::DecodeError;
   }

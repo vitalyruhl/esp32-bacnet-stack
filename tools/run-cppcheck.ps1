@@ -3,11 +3,29 @@ param(
     [string[]]$Files
 )
 
-$cppcheck = 'C:\Program Files\Cppcheck\cppcheck.exe'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 
+$cppcheckCandidates = @(
+    'C:\Program Files\Cppcheck\cppcheck.exe',
+    'cppcheck'
+)
+
+$cppcheck = $null
+foreach ($candidate in $cppcheckCandidates) {
+    if (Test-Path -LiteralPath $candidate) {
+        $cppcheck = $candidate
+        break
+    }
+
+    $resolvedCommand = Get-Command $candidate -ErrorAction SilentlyContinue
+    if ($resolvedCommand) {
+        $cppcheck = $resolvedCommand.Source
+        break
+    }
+}
+
 if (-not (Test-Path $cppcheck)) {
-    Write-Error "cppcheck executable not found at $cppcheck"
+    Write-Error "cppcheck executable not found. Install cppcheck or add it to PATH."
     exit 1
 }
 
@@ -22,14 +40,14 @@ if (-not $Files -or $Files.Count -eq 0) {
 Write-Host "Running cppcheck on: $($Files -join ', ')"
 
 & $cppcheck `
-    --enable=warning,style,performance,portability,information `
+    --error-exitcode=1 `
+    --enable=warning,style,performance,portability `
     --inline-suppr `
     --language=c++ `
     --std=c++17 `
     -DARDUINO=10819 `
     -DESP32 `
     -DPROGMEM= `
-    --suppress=unknownMacro:examples/client-demo/src/main.cpp `
     --quiet `
     @Files
 

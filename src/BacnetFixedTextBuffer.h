@@ -41,7 +41,7 @@ struct FixedTextBuffer {
   }
 
   void append(char value) {
-    char text[2] = {value, '\0'};
+    const char text[2] = {value, '\0'};
     append(text);
   }
 

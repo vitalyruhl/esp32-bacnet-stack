@@ -189,7 +189,7 @@ bool parseApplicationSigned(const uint8_t* buffer, size_t length, size_t& offset
   const bool isContextTag = (tag & 0x08) != 0;
   const uint8_t valueLength = tag & 0x07;
   if (isContextTag || tagNumber != kApplicationTagSigned ||
-      valueLength == 0 || valueLength > 4 || valueLength == 5 ||
+      valueLength == 0 || valueLength > 4 ||
       offset + valueLength > length) {
     return false;
   }
@@ -650,8 +650,8 @@ ReadPropertyResponseKind classifyReadPropertyResponse(
 }
 } // namespace
 
-bool BacnetClient::begin(uint16_t localPort) {
-  localPort_ = localPort;
+bool BacnetClient::begin(uint16_t port) {
+  localPort_ = port;
   running_ = udp_.begin(localPort_) == 1;
   if (running_) {
     logger_.info("BACnet/Client", "client started on UDP %u", static_cast<unsigned>(localPort_));

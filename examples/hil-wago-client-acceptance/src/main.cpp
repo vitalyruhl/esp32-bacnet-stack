@@ -641,20 +641,20 @@ ScenarioOutcome runNonBlockingObjectListScanScenario() {
   Serial.print(" expected-mv=");
   Serial.println(requireExpectedMv ? (expectedMvFound ? "yes" : "no") : "skip");
 
-  bool ok = true;
-  ok = ok && !scanJob.isActive();
-  ok = ok && scanJob.isComplete();
-  ok = ok && !scanJob.isFailed();
-  ok = ok && !scanJob.requestInFlight();
-  ok = ok && progressAdvanced;
-  ok = ok && requestWasIdle;
-  ok = ok && summary.objectListCountStatus == BacnetDeviceSessionReadStatus::Ack;
-  ok = ok && summary.inspected > 0;
-  ok = ok && summary.found > 0;
-  ok = ok && summary.stored > 0;
-  ok = ok && expectedAvFound;
-  ok = ok && expectedMvFound;
-  ok = ok && validateOptionalPropertyStatuses(summary);
+  const bool ok =
+    !scanJob.isActive() &&
+    scanJob.isComplete() &&
+    !scanJob.isFailed() &&
+    !scanJob.requestInFlight() &&
+    progressAdvanced &&
+    requestWasIdle &&
+    summary.objectListCountStatus == BacnetDeviceSessionReadStatus::Ack &&
+    summary.inspected > 0 &&
+    summary.found > 0 &&
+    summary.stored > 0 &&
+    expectedAvFound &&
+    expectedMvFound &&
+    validateOptionalPropertyStatuses(summary);
 
   return ok ? ScenarioOutcome::Pass : ScenarioOutcome::Fail;
 }

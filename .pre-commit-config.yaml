@@ -28,6 +28,7 @@ repos:
         entry: pwsh
         language: system
         files: ^(src|examples|test)/.*\.(c|cc|cpp|cxx|h|hpp|hh)$
+        pass_filenames: false
         args:
           - -NoLogo
           - -NoProfile
