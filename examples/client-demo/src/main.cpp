@@ -27,7 +27,7 @@
 #endif
 
 #ifndef APP_VERSION
-#define APP_VERSION "0.24.1"
+#define APP_VERSION "0.24.2"
 #endif
 #ifndef APP_NAME
 #define APP_NAME "BACnet Client Demo"

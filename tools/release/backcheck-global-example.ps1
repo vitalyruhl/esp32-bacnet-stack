@@ -6,12 +6,15 @@ Builds a copied example in .Temp as an external PlatformIO consumer.
 Generates a temporary consumer project from a repository example, rewrites
 the example's platformio.ini dependency for this library, and compiles it.
 
+Optional HIL flags can upload the generated consumer project to ESP32 hardware
+and open a serial monitor.
+
 By default, the tested package version is read from library.json and resolved
 from the PlatformIO registry. Passing -Version forces registry mode for that
 exact published version.
 
 .PARAMETER Version
-Published package version to test (for example 0.24.0). When provided, the
+Published package version to test (for example 0.24.2). When provided, the
 script always uses the PlatformIO registry package.
 
 .PARAMETER Example
@@ -33,15 +36,45 @@ Cannot be combined with -Version.
 .PARAMETER LocalLibraryPath
 Local path used when -UseLocalPath is enabled.
 
+.PARAMETER Upload
+Uploads the generated consumer project after a successful build.
+
+.PARAMETER Monitor
+Starts PlatformIO serial monitor for the generated consumer project.
+
+.PARAMETER UploadPort
+Upload port passed to PlatformIO when -Upload is used.
+
+.PARAMETER MonitorPort
+Monitor port passed to PlatformIO when -Monitor is used.
+
+.PARAMETER MonitorBaud
+Serial monitor baud rate when -Monitor is used. Default: 115200.
+
 .EXAMPLE
 pwsh -NoProfile -ExecutionPolicy Bypass -File tools/release/backcheck-global-example.ps1
 
 Uses library.json version from the registry and default example.
 
 .EXAMPLE
-pwsh -NoProfile -ExecutionPolicy Bypass -File tools/release/backcheck-global-example.ps1 -Version "0.24.0" -Example "examples/client-object-list-scan-basic"
+pwsh -NoProfile -ExecutionPolicy Bypass -File tools/release/backcheck-global-example.ps1 -Version "0.24.2" -Example "examples/client-object-list-scan-basic"
 
-Forces a published package backcheck for 0.24.0 on the selected example.
+Forces a published package backcheck for 0.24.2 on the selected example.
+
+.EXAMPLE
+pwsh -NoProfile -ExecutionPolicy Bypass -File tools/release/backcheck-global-example.ps1 -Version "0.24.2"
+
+Compile-only published package check.
+
+.EXAMPLE
+pwsh -NoProfile -ExecutionPolicy Bypass -File tools/release/backcheck-global-example.ps1 -Version "0.24.2" -Example "examples/hil-wago-client-acceptance" -Upload -UploadPort "COM5"
+
+Published package HIL upload.
+
+.EXAMPLE
+pwsh -NoProfile -ExecutionPolicy Bypass -File tools/release/backcheck-global-example.ps1 -Version "0.24.2" -Example "examples/hil-wago-client-acceptance" -Upload -Monitor -UploadPort "COM5" -MonitorBaud 115200
+
+Published package HIL upload and monitor.
 #>
 [CmdletBinding()]
 Param(
@@ -52,7 +85,12 @@ Param(
   [string] $Example = "examples/hil-wago-client-acceptance",
   [string] $Environment = "usb",
   [switch] $UseLocalPath,
-  [string] $LocalLibraryPath
+  [string] $LocalLibraryPath,
+  [switch] $Upload,
+  [switch] $Monitor,
+  [string] $UploadPort,
+  [string] $MonitorPort,
+  [int] $MonitorBaud = 115200
 )
 
 $ErrorActionPreference = "Stop"
@@ -346,6 +384,35 @@ function Invoke-CheckedCommand {
   return $text
 }
 
+function Invoke-InteractiveCommand {
+  Param(
+    [Parameter(Mandatory = $true)][string] $Command,
+    [Parameter(Mandatory = $true)][string[]] $Arguments,
+    [Parameter(Mandatory = $true)][string] $WorkingDirectory,
+    [long[]] $AcceptedExitCodes = @(0)
+  )
+
+  $display = "$Command $($Arguments -join ' ')"
+  Write-Host ""
+  Write-Host ">>> $display"
+
+  Push-Location $WorkingDirectory
+  try {
+    & $Command @Arguments
+    $exitCode = $LASTEXITCODE
+  } finally {
+    Pop-Location
+  }
+
+  foreach ($accepted in $AcceptedExitCodes) {
+    if ($exitCode -eq $accepted) {
+      return
+    }
+  }
+
+  throw "Command failed with exit code ${exitCode}: $display"
+}
+
 function Set-Utf8NoBomContent {
   Param(
     [Parameter(Mandatory = $true)][string] $Path,
@@ -363,6 +430,14 @@ if ($UseLocalPath -and $PSBoundParameters.ContainsKey("Version")) {
   throw "-Version forces published registry mode and cannot be combined with -UseLocalPath."
 }
 
+if ($UploadPort -and -not $Upload) {
+  throw "-UploadPort requires -Upload."
+}
+
+if ($MonitorBaud -le 0) {
+  throw "-MonitorBaud must be greater than zero."
+}
+
 $effectiveVersion = $Version
 if (-not $effectiveVersion) {
   $effectiveVersion = Get-LibraryVersionFromManifest -RepositoryRoot $repoRoot
@@ -370,6 +445,10 @@ if (-not $effectiveVersion) {
 
 $publishedMode = -not $UseLocalPath
 $modeLabel = if ($publishedMode) { "published-registry" } else { "local-path" }
+$effectiveMonitorPort = $MonitorPort
+if ($Monitor -and -not $effectiveMonitorPort -and $UploadPort) {
+  $effectiveMonitorPort = $UploadPort
+}
 
 $sourceExample = Resolve-ExamplePath -RepositoryRoot $repoRoot -ExamplePath $Example
 $exampleName = Split-Path -Leaf $sourceExample
@@ -422,16 +501,28 @@ Update-PlatformioDependency `
   -RepositoryRoot $repoRoot `
   -PublishedMode $publishedMode
 
+$sourceLocalSecrets = Join-Path $sourceExample "src\secret\secrets.h"
 $secretsExample = Join-Path $consumerProject "src\secret\secrets.example.h"
-$dummySecrets = Join-Path $consumerProject "src\secret\secrets.h"
-if (Test-Path -LiteralPath $secretsExample) {
+$consumerSecrets = Join-Path $consumerProject "src\secret\secrets.h"
+$secretsMode = "none"
+
+if (($Upload -or $Monitor) -and (Test-Path -LiteralPath $sourceLocalSecrets)) {
+  New-Item -ItemType Directory -Force -Path (Split-Path -Parent $consumerSecrets) | Out-Null
+  Copy-Item -LiteralPath $sourceLocalSecrets -Destination $consumerSecrets -Force
+  $secretsMode = "local-secrets-copied"
+} elseif (Test-Path -LiteralPath $secretsExample) {
   $dummyContent = @(
     "// Generated by tools/release/backcheck-global-example.ps1 for compile-only release backcheck."
     "// Contains placeholder values copied from secrets.example.h; do not add real credentials here."
     ""
     (Get-Content -Raw -LiteralPath $secretsExample)
   ) -join "`n"
-  Set-Utf8NoBomContent -Path $dummySecrets -Value $dummyContent
+  Set-Utf8NoBomContent -Path $consumerSecrets -Value $dummyContent
+  $secretsMode = "placeholder-from-example"
+}
+
+if (($Upload -or $Monitor) -and $secretsMode -ne "local-secrets-copied") {
+  Write-Host "[W] HIL mode requested, but no local secrets.h found in source example."
 }
 
 Write-Host ""
@@ -442,6 +533,16 @@ Write-Host "  Environment         : $Environment"
 Write-Host "  Mode                : $modeLabel"
 Write-Host "  Version tested      : $effectiveVersion"
 Write-Host "  Dependency used     : $libSpec"
+Write-Host "  Secrets mode        : $secretsMode"
+Write-Host "  Upload enabled      : $($Upload.IsPresent)"
+if ($Upload) {
+  Write-Host "  Upload port         : $(if ($UploadPort) { $UploadPort } else { '<default>' })"
+}
+Write-Host "  Monitor enabled     : $($Monitor.IsPresent)"
+if ($Monitor) {
+  Write-Host "  Monitor port        : $(if ($effectiveMonitorPort) { $effectiveMonitorPort } else { '<default>' })"
+  Write-Host "  Monitor baud        : $MonitorBaud"
+}
 
 Invoke-CheckedCommand -Command "pio" -Arguments @("pkg", "install") -WorkingDirectory $consumerProject | Out-Null
 
@@ -482,8 +583,47 @@ if ($publishedMode) {
 
 Invoke-CheckedCommand -Command "pio" -Arguments @("run", "-e", $Environment) -WorkingDirectory $consumerProject | Out-Null
 
+$uploadPassed = $false
+if ($Upload) {
+  $uploadArgs = @("run", "-e", $Environment, "-t", "upload")
+  if ($UploadPort) {
+    $uploadArgs += @("--upload-port", $UploadPort)
+  }
+  Invoke-CheckedCommand -Command "pio" -Arguments $uploadArgs -WorkingDirectory $consumerProject | Out-Null
+  $uploadPassed = $true
+}
+
+$monitorStarted = $false
+if ($Monitor) {
+  Write-Host ""
+  Write-Host "Monitor is interactive. Stop it with Ctrl+C when you are done."
+
+  $monitorArgs = @("device", "monitor", "-e", $Environment, "--baud", "$MonitorBaud")
+  if ($effectiveMonitorPort) {
+    $monitorArgs += @("--port", $effectiveMonitorPort)
+  }
+
+  $monitorStarted = $true
+  Invoke-InteractiveCommand `
+    -Command "pio" `
+    -Arguments $monitorArgs `
+    -WorkingDirectory $consumerProject `
+    -AcceptedExitCodes @(0, 1, 130, -1073741510)
+}
+
 Write-Host ""
 Write-Host "Release backcheck passed."
+Write-Host "  Build            : passed"
+if ($Upload) {
+  Write-Host "  Upload           : $(if ($uploadPassed) { 'passed' } else { 'not run' })"
+} else {
+  Write-Host "  Upload           : skipped (not requested)"
+}
+if ($Monitor) {
+  Write-Host "  Monitor          : $(if ($monitorStarted) { 'started (interactive)' } else { 'not started' })"
+} else {
+  Write-Host "  Monitor          : skipped (not requested)"
+}
 Write-Host "  Built dependency : $libSpec"
 Write-Host "  Consumer project : $consumerProject"
 Write-Host "  Environment      : $Environment"
