@@ -6,6 +6,16 @@ This changelog is a curated overview.
 
 - No unreleased changes documented yet.
 
+## 0.24.2
+
+- Reduced stack pressure in BACnet value parsing paths in `BacnetClient` by
+  replacing `snprintf`-heavy numeric formatting with lightweight fixed-buffer
+  formatting helpers in hot read-property decode paths.
+- Increased loop task stack for
+  `examples/hil-wago-client-acceptance` (`ARDUINO_LOOP_STACK_SIZE=16384`) to
+  keep local HIL acceptance scenarios stable under larger runtime call chains.
+- Kept library and example version references aligned at `0.24.2`.
+
 ## 0.24.1
 
 - Reduced `examples/client-demo` JSON/RAM pressure by limiting displayed

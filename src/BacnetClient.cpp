@@ -137,6 +137,101 @@ bool setTextValue(BacnetValue& value, BacnetValueType type, const char* text) {
   return copyTextValue(value, text);
 }
 
+size_t writeUnsignedDecimal(char* buffer, size_t bufferSize, uint32_t value) {
+  if (buffer == nullptr || bufferSize == 0) {
+    return 0;
+  }
+
+  char reversed[10] = {};
+  size_t digits = 0;
+  do {
+    reversed[digits++] = static_cast<char>('0' + (value % 10));
+    value /= 10;
+  } while (value != 0 && digits < sizeof(reversed));
+
+  if (digits + 1 > bufferSize) {
+    return 0;
+  }
+
+  for (size_t i = 0; i < digits; ++i) {
+    buffer[i] = reversed[digits - 1 - i];
+  }
+  buffer[digits] = '\0';
+  return digits;
+}
+
+size_t writeSignedDecimal(char* buffer, size_t bufferSize, int32_t value) {
+  if (buffer == nullptr || bufferSize == 0) {
+    return 0;
+  }
+
+  size_t used = 0;
+  uint32_t magnitude = 0;
+  if (value < 0) {
+    if (bufferSize < 2) {
+      return 0;
+    }
+    buffer[used++] = '-';
+    magnitude = static_cast<uint32_t>(-(static_cast<int64_t>(value)));
+  } else {
+    magnitude = static_cast<uint32_t>(value);
+  }
+
+  const size_t written =
+    writeUnsignedDecimal(&buffer[used], bufferSize - used, magnitude);
+  return written == 0 ? 0 : (used + written);
+}
+
+bool writeFixed3Decimal(char* buffer, size_t bufferSize, float value) {
+  if (buffer == nullptr || bufferSize == 0) {
+    return false;
+  }
+
+  size_t used = 0;
+  if (value < 0.0f) {
+    if (bufferSize < 2) {
+      return false;
+    }
+    buffer[used++] = '-';
+    value = -value;
+  }
+
+  const uint32_t scaled = static_cast<uint32_t>((value * 1000.0f) + 0.5f);
+  const uint32_t integerPart = scaled / 1000U;
+  const uint32_t fractionalPart = scaled % 1000U;
+
+  const size_t integerChars =
+    writeUnsignedDecimal(&buffer[used], bufferSize - used, integerPart);
+  if (integerChars == 0) {
+    return false;
+  }
+  used += integerChars;
+
+  if (used + 4 >= bufferSize) {
+    return false;
+  }
+  buffer[used++] = '.';
+  buffer[used++] = static_cast<char>('0' + ((fractionalPart / 100U) % 10U));
+  buffer[used++] = static_cast<char>('0' + ((fractionalPart / 10U) % 10U));
+  buffer[used++] = static_cast<char>('0' + (fractionalPart % 10U));
+  buffer[used] = '\0';
+  return true;
+}
+
+bool writeHex32(char* buffer, size_t bufferSize, uint32_t value) {
+  if (buffer == nullptr || bufferSize < 9) {
+    return false;
+  }
+
+  static const char kHex[] = "0123456789abcdef";
+  for (int i = 0; i < 8; ++i) {
+    const uint8_t shift = static_cast<uint8_t>((7 - i) * 4);
+    buffer[i] = kHex[(value >> shift) & 0x0FU];
+  }
+  buffer[8] = '\0';
+  return true;
+}
+
 bool parseApplicationNull(const uint8_t* buffer, size_t length, size_t& offset, BacnetValue& value) {
   size_t valueLength = 0;
   if (!readApplicationTagHeader(buffer, length, offset, kApplicationTagNull, valueLength) ||
@@ -174,8 +269,10 @@ bool parseApplicationUnsigned(const uint8_t* buffer, size_t length, size_t& offs
                  ? BacnetValueType::Enumerated
                  : BacnetValueType::Unsigned;
   value.unsignedValue = parsedValue;
-  char text[BacnetValue::kMaxTextLength] = {};
-  std::snprintf(text, sizeof(text), "%lu", static_cast<unsigned long>(parsedValue));
+  char text[16] = {};
+  if (writeUnsignedDecimal(text, sizeof(text), parsedValue) == 0) {
+    return false;
+  }
   return copyTextValue(value, text);
 }
 
@@ -207,8 +304,10 @@ bool parseApplicationSigned(const uint8_t* buffer, size_t length, size_t& offset
 
   value.type = BacnetValueType::Signed;
   value.signedValue = parsedValue;
-  char text[BacnetValue::kMaxTextLength] = {};
-  std::snprintf(text, sizeof(text), "%ld", static_cast<long>(parsedValue));
+  char text[16] = {};
+  if (writeSignedDecimal(text, sizeof(text), parsedValue) == 0) {
+    return false;
+  }
   return copyTextValue(value, text);
 }
 
@@ -231,8 +330,10 @@ bool parseApplicationReal(const uint8_t* buffer, size_t length, size_t& offset, 
 
   value.type = BacnetValueType::Real;
   value.realValue = parsedValue;
-  char text[BacnetValue::kMaxTextLength] = {};
-  std::snprintf(text, sizeof(text), "%.3f", static_cast<double>(parsedValue));
+  char text[24] = {};
+  if (!writeFixed3Decimal(text, sizeof(text), parsedValue)) {
+    return false;
+  }
   return copyTextValue(value, text);
 }
 
@@ -265,8 +366,27 @@ bool parseApplicationBitString(const uint8_t* buffer, size_t length, size_t& off
   }
 
   offset += dataLength;
-  char text[BacnetValue::kMaxTextLength] = {};
-  std::snprintf(text, sizeof(text), "bits=0x%08lx/%u", static_cast<unsigned long>(value.bitStringValue), static_cast<unsigned>(value.bitStringBitCount));
+  char hex[9] = {};
+  if (!writeHex32(hex, sizeof(hex), value.bitStringValue)) {
+    return false;
+  }
+  char bits[8] = {};
+  if (writeUnsignedDecimal(bits, sizeof(bits), value.bitStringBitCount) == 0) {
+    return false;
+  }
+  char text[32] = "bits=0x";
+  size_t used = std::strlen(text);
+  const size_t hexLen = std::strlen(hex);
+  const size_t bitsLen = std::strlen(bits);
+  if (used + hexLen + 1 + bitsLen + 1 > sizeof(text)) {
+    return false;
+  }
+  std::memcpy(&text[used], hex, hexLen);
+  used += hexLen;
+  text[used++] = '/';
+  std::memcpy(&text[used], bits, bitsLen);
+  used += bitsLen;
+  text[used] = '\0';
   return copyTextValue(value, text);
 }
 
@@ -280,8 +400,16 @@ bool parseApplicationObjectIdentifier(const uint8_t* buffer, size_t length, size
   const uint32_t instance = objectIdentifier & kObjectInstanceMask;
   value.type = BacnetValueType::ObjectIdentifier;
   value.objectValue = BacnetObjectId{objectType, instance};
-  char text[BacnetValue::kMaxTextLength] = {};
-  std::snprintf(text, sizeof(text), "%u,%lu", objectType, static_cast<unsigned long>(instance));
+  char text[24] = {};
+  const size_t typeChars =
+    writeUnsignedDecimal(text, sizeof(text), static_cast<uint32_t>(objectType));
+  if (typeChars == 0 || typeChars + 2 > sizeof(text)) {
+    return false;
+  }
+  text[typeChars] = ',';
+  if (writeUnsignedDecimal(&text[typeChars + 1], sizeof(text) - typeChars - 1, instance) == 0) {
+    return false;
+  }
   return copyTextValue(value, text);
 }
 
@@ -301,8 +429,15 @@ bool appendText(char* target, size_t targetSize, size_t& used, const char* text)
   return true;
 }
 
+bool appendUnsignedDecimal(char* target, size_t targetSize, size_t& used, uint32_t value) {
+  char digits[16] = {};
+  const size_t digitCount = writeUnsignedDecimal(digits, sizeof(digits), value);
+  return digitCount != 0 && appendText(target, targetSize, used, digits);
+}
+
 bool parseApplicationObjectIdentifierList(const uint8_t* buffer, size_t length, size_t& offset, BacnetValue& value) {
-  char text[BacnetValue::kMaxTextLength] = {};
+  char* text = value.text;
+  text[0] = '\0';
   size_t used = 0;
 
   while (offset < length && buffer[offset] != 0x3F) {
@@ -313,15 +448,19 @@ bool parseApplicationObjectIdentifierList(const uint8_t* buffer, size_t length, 
 
     const uint16_t objectType = static_cast<uint16_t>(objectIdentifier >> 22);
     const uint32_t instance = objectIdentifier & kObjectInstanceMask;
-    char entry[24] = {};
-    std::snprintf(entry, sizeof(entry), "%s%u,%lu", used == 0 ? "" : ";", objectType, static_cast<unsigned long>(instance));
-    if (!appendText(text, sizeof(text), used, entry)) {
+    if (used > 0 && !appendText(text, BacnetValue::kMaxTextLength, used, ";")) {
+      break;
+    }
+    if (!appendUnsignedDecimal(text, BacnetValue::kMaxTextLength, used, static_cast<uint32_t>(objectType)) ||
+        !appendText(text, BacnetValue::kMaxTextLength, used, ",") ||
+        !appendUnsignedDecimal(text, BacnetValue::kMaxTextLength, used, instance)) {
       break;
     }
   }
 
   value.type = BacnetValueType::ObjectIdentifierList;
-  return used > 0 && copyTextValue(value, text);
+  value.textLength = used;
+  return used > 0;
 }
 
 bool parseApplicationCharacterString(const uint8_t* buffer, size_t length, size_t& offset, BacnetValue& value) {
@@ -375,8 +514,11 @@ bool parseUnsupportedApplicationValue(const uint8_t* buffer, size_t length, size
   }
 
   offset += valueLength;
-  char text[BacnetValue::kMaxTextLength] = {};
-  std::snprintf(text, sizeof(text), "unsupported application tag %u", tagNumber);
+  char text[48] = "unsupported application tag ";
+  size_t used = std::strlen(text);
+  if (!appendUnsignedDecimal(text, sizeof(text), used, tagNumber)) {
+    return false;
+  }
   return setTextValue(value, BacnetValueType::Unsupported, text);
 }
 
@@ -1189,10 +1331,16 @@ bool BacnetClient::parseReadPropertyError(const uint8_t* buffer, size_t length, 
 
   uint32_t parsedErrorClass = 0;
   uint32_t parsedErrorCode = 0;
-  char text[BacnetValue::kMaxTextLength] = {};
+  char text[64] = {};
+  size_t used = 0;
   if (readApplicationValue(buffer, length, offset, kApplicationTagEnumerated, parsedErrorClass) &&
       readApplicationValue(buffer, length, offset, kApplicationTagEnumerated, parsedErrorCode)) {
-    std::snprintf(text, sizeof(text), "error class %lu code %lu", static_cast<unsigned long>(parsedErrorClass), static_cast<unsigned long>(parsedErrorCode));
+    if (!appendText(text, sizeof(text), used, "error class ") ||
+        !appendUnsignedDecimal(text, sizeof(text), used, parsedErrorClass) ||
+        !appendText(text, sizeof(text), used, " code ") ||
+        !appendUnsignedDecimal(text, sizeof(text), used, parsedErrorCode)) {
+      return false;
+    }
     if (errorClass != nullptr) {
       *errorClass = parsedErrorClass;
     }
@@ -1200,7 +1348,9 @@ bool BacnetClient::parseReadPropertyError(const uint8_t* buffer, size_t length, 
       *errorCode = parsedErrorCode;
     }
   } else {
-    std::snprintf(text, sizeof(text), "error");
+    if (!appendText(text, sizeof(text), used, "error")) {
+      return false;
+    }
     if (errorClass != nullptr) {
       *errorClass = 0;
     }
