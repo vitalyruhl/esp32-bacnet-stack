@@ -90,6 +90,10 @@ static BacnetDemoLogging demoLogging(ConfigManager, bacnetClient);
 #define BACNET_WATCHED_ANALOG_VALUE_INSTANCE 200
 #endif
 
+#ifndef CLIENT_DEMO_ENABLE_WATCH_METADATA_FIELD
+#define CLIENT_DEMO_ENABLE_WATCH_METADATA_FIELD 0
+#endif
+
 static constexpr uint32_t kWhoIsIntervalMs = 30000;
 static constexpr uint32_t kBacnetScanReadTimeoutMs = 3000;
 static constexpr uint32_t kBacnetMaxObjectListEntriesToInspect = 600;
@@ -762,7 +766,9 @@ static void fillWatchedAnalogRuntime(JsonObject& data) {
   data["watchedAv_label"] = watchedAnalogValue.labelSummary();
   data["watchedAv_description"] = watchedAnalogValue.descriptionSummary();
   data["watchedAv_value"] = watchedAnalogValue.valueSummary();
+#if CLIENT_DEMO_ENABLE_WATCH_METADATA_FIELD
   data["watchedAv_metadata"] = watchedAnalogValue.metadataSummary();
+#endif
   data["watchedAv_alarm"] = watchedAnalogValue.alarmStateSummary();
   data["watchedAv_refresh"] = watchedAnalogValue.refreshSummary();
 }
@@ -876,6 +882,7 @@ static void setupRuntimeUI() {
                       "Watched Analog Value",
                       "AV Watch",
                       30);
+#if CLIENT_DEMO_ENABLE_WATCH_METADATA_FIELD
   addRuntimeTextField("bacnetWatch",
                       "watchedAv_metadata",
                       "Metadata",
@@ -883,6 +890,7 @@ static void setupRuntimeUI() {
                       "Watched Analog Value",
                       "AV Watch",
                       35);
+#endif
   addRuntimeTextField("bacnetWatch",
                       "watchedAv_alarm",
                       "Alarm State",

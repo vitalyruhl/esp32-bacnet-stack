@@ -25,6 +25,9 @@ This changelog is a curated overview.
   sketch, added a reusable BACnet log-level prefix helper, added a demo logging
   compile switch, and limited the demo logger output slots to the single output
   it uses.
+- Made the watched Analog Value metadata runtime field optional so the default
+  client demo payload avoids rebuilding and transferring that detail string on
+  each refresh.
 - Kept object descriptions visible in compact object rows when they differ from
   the selected display label.
 - Kept library and example version references aligned at `0.24.1`.
