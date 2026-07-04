@@ -21,6 +21,10 @@ This changelog is a curated overview.
   moved its future BACnet-server draft into `examples/server-demo` behind a
   disabled build block, and moved fallback object type defaults out of the main
   client sketch.
+- Moved `examples/client-demo` BACnet logging bridge code out of the main
+  sketch, added a reusable BACnet log-level prefix helper, added a demo logging
+  compile switch, and limited the demo logger output slots to the single output
+  it uses.
 - Kept object descriptions visible in compact object rows when they differ from
   the selected display label.
 - Kept library and example version references aligned at `0.24.1`.

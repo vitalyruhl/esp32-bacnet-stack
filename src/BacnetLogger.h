@@ -143,6 +143,7 @@ public:
   void trace(const char* tag, const char* format, ...);
 
   static const char* levelName(BacnetLogLevel level);
+  static const char* levelPrefix(BacnetLogLevel level);
   static bool isEnabledFor(BacnetLogLevel level);
 
 private:

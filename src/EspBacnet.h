@@ -5,6 +5,7 @@
 #include "BacnetClient.h"
 #include "BacnetDeviceSession.h"
 #include "BacnetDisplayText.h"
+#include "BacnetFixedTextBuffer.h"
 #include "BacnetRemoteObject.h"
 #include "BacnetServer.h"
 

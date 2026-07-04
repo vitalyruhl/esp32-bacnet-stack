@@ -16,6 +16,12 @@
 #define I2C_SDA 21
 #define I2C_SCL 22
 
+static const char GLOBAL_THEME_OVERRIDE[] PROGMEM = R"CSS(
+.live-cards {
+  align-items: flex-start !important;
+  grid-template-columns: minmax(620px, 820px) minmax(280px, 1fr) !important;
+})CSS";
+
 static BME280_I2C bme280;
 static Ticker environmentalTicker;
 static float bacnetTemperatureC = 0.0f;
