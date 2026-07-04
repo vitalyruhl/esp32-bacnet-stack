@@ -6,6 +6,16 @@ This changelog is a curated overview.
 
 - No unreleased changes documented yet.
 
+## 0.24.1
+
+- Reduced `examples/client-demo` JSON/RAM pressure by limiting displayed
+  analog, binary, and multi-state object previews to three entries each,
+  shrinking the corresponding scan buffer, and compacting the watched Analog
+  Value card's default live payload.
+- Kept object descriptions visible in compact object rows when they differ from
+  the selected display label.
+- Kept library and example version references aligned at `0.24.1`.
+
 ## 0.24.0
 
 - Added read-only BACnet process-object convenience helpers, Analog Value

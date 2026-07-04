@@ -33,7 +33,7 @@
 #endif
 
 #ifndef APP_VERSION
-#define APP_VERSION "0.24.0"
+#define APP_VERSION "0.24.1"
 #endif
 #ifndef APP_NAME
 #define APP_NAME "BACnet Client Demo"
@@ -113,9 +113,8 @@ static BacnetClient bacnetClient;
 static constexpr uint32_t kWhoIsIntervalMs = 30000;
 static constexpr uint32_t kBacnetScanReadTimeoutMs = 3000;
 static constexpr uint32_t kBacnetMaxObjectListEntriesToInspect = 600;
-static constexpr size_t kBacnetMaxFoundObjectsToDisplay = 10;
-static constexpr size_t kBacnetScanResultCapacity =
-  kBacnetMaxFoundObjectsToDisplay * 3;
+static constexpr size_t kBacnetMaxFoundObjectsToDisplay = 3;
+static constexpr size_t kBacnetScanResultCapacity = kBacnetMaxFoundObjectsToDisplay * 3;
 static constexpr size_t kBacnetPreviewPropertyCount = 4;
 static constexpr uint32_t kBacnetSubscriptionFallbackPollMs = 30000;
 static constexpr uint32_t kWatchedAnalogValuePollMs = 3000;
@@ -139,8 +138,7 @@ static uint16_t activeBacnetVendorId = 0;
 static String bacnetScanStatus = "Scan not started";
 static String bacnetRescanSource = "";
 static size_t bacnetScanStoredObjects = 0;
-static BacnetObjectListScanPhase lastLoggedScanPhase =
-  BacnetObjectListScanPhase::Idle;
+static BacnetObjectListScanPhase lastLoggedScanPhase = BacnetObjectListScanPhase::Idle;
 static uint32_t lastLoggedScanIndex = 0;
 static unsigned long lastWhoIsAt = 0;
 
@@ -235,9 +233,7 @@ static const char GLOBAL_THEME_OVERRIDE[] PROGMEM = R"CSS(
 .dv[data-label="Analog Values"] + .rw .val,
 .dv[data-label="Binary Values"] + .rw .val,
 .dv[data-label="Multi-State Values"] + .rw .val,
-.dv[data-label="Object Health"] + .rw .val,
-.dv[data-label="Read Status"] + .rw .val,
-.dv[data-label="Status Snapshot"] + .rw .val {
+.dv[data-label="Object Health"] + .rw .val {
   display: block !important;
   text-align: left !important;
   white-space: pre-line !important;
@@ -485,6 +481,10 @@ static String bacnetValueObjectRow(const BacnetValueObjectPreview& object) {
   row += ": ";
   row += shortenBacnetLabel(object.label.length() ? object.label
                                                   : String("<unnamed>"));
+  if (object.description.length() > 0 && object.description != object.label) {
+    row += " | D:";
+    row += shortenBacnetLabel(object.description);
+  }
   row += " - V:";
   row += object.presentValue.length() ? object.presentValue
                                       : object.presentValueStatus;
@@ -526,6 +526,21 @@ static String bacnetValueObjectsSummary(const BacnetValueObjectPreview* objects,
     return bacnetScanStatus.length() ? bacnetScanStatus : "No objects found";
   }
   return bacnetScanStatus.length() ? bacnetScanStatus : "Waiting for scan";
+}
+
+static void logWatchedAnalogDetails() {
+  if (!activeBacnetSession) {
+    bacnetGuiLog(LogLevel::Info,
+                 "watched AV details unavailable: no device selected");
+    return;
+  }
+
+  String readStatus = watchedAnalogValue.readStatusSummary();
+  readStatus.replace("\n", "; ");
+  String status = watchedAnalogValue.statusSummary();
+  status.replace("\n", "; ");
+  bacnetGuiLog(LogLevel::Info, "watched AV read details: %s", readStatus.c_str());
+  bacnetGuiLog(LogLevel::Info, "watched AV status details: %s", status.c_str());
 }
 
 static bool firstDiscoveredObject(const BacnetValueObjectPreview* objects,
@@ -857,52 +872,24 @@ static void setupRuntimeUI() {
     .label("Present Value")
     .order(30);
 
-  watchedAnalogGroup.value("watchedAv_unit",
-                           []() { return watchedAnalogValue.engineeringUnitSummary(); })
-    .label("Engineering Unit")
+  watchedAnalogGroup.value("watchedAv_metadata",
+                           []() { return watchedAnalogValue.metadataSummary(); })
+    .label("Metadata")
     .order(35);
-
-  watchedAnalogGroup.value("watchedAv_minMax",
-                           []() { return watchedAnalogValue.minMaxSummary(); })
-    .label("Min / Max")
-    .order(36);
-
-  watchedAnalogGroup.value("watchedAv_resolution",
-                           []() { return watchedAnalogValue.resolutionSummary(); })
-    .label("Resolution")
-    .order(37);
-
-  watchedAnalogGroup.value("watchedAv_cov",
-                           []() { return watchedAnalogValue.covIncrementSummary(); })
-    .label("COV Increment")
-    .order(38);
 
   watchedAnalogGroup.value("watchedAv_alarm",
                            []() { return watchedAnalogValue.alarmStateSummary(); })
     .label("Alarm State")
     .order(39);
 
-  watchedAnalogGroup.value("watchedAv_readStatus",
-                           []() { return watchedAnalogValue.readStatusSummary(); })
-    .label("Read Status")
-    .addCSSClass("bacnetObjectListValue")
-    .order(40);
-
-  watchedAnalogGroup.value("watchedAv_status",
-                           []() { return watchedAnalogValue.statusSummary(); })
-    .label("Status Snapshot")
-    .addCSSClass("bacnetObjectListValue")
+  watchedAnalogGroup.value("watchedAv_refresh",
+                           []() { return watchedAnalogValue.refreshSummary(); })
+    .label("Refresh")
     .order(45);
 
-  watchedAnalogGroup.value("watchedAv_successAge",
-                           []() { return watchedAnalogValue.lastSuccessAgeSummary(); })
-    .label("Value Updated")
-    .order(55);
-
-  watchedAnalogGroup.value("watchedAv_attemptAge",
-                           []() { return watchedAnalogValue.lastAttemptAgeSummary(); })
-    .label("Last Attempt")
-    .order(60);
+  watchedAnalogGroup
+    .button("watchedAv_details", "Log Details", []() { logWatchedAnalogDetails(); })
+    .order(50);
 }
 
 static void readBme280() {

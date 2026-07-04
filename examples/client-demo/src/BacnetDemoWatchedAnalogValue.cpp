@@ -155,6 +155,21 @@ String BacnetDemoWatchedAnalogValue::covIncrementSummary() const {
   return metadataValueText(preview_.covIncrement);
 }
 
+String BacnetDemoWatchedAnalogValue::metadataSummary() const {
+  if (session_ == nullptr) {
+    return "No device selected";
+  }
+
+  String text = engineeringUnitSummary();
+  text += "; range ";
+  text += minMaxSummary();
+  text += "; res ";
+  text += resolutionSummary();
+  text += "; cov ";
+  text += covIncrementSummary();
+  return text;
+}
+
 String BacnetDemoWatchedAnalogValue::readStatusSummary() const {
   if (session_ == nullptr) {
     return "No device selected";
@@ -206,6 +221,19 @@ String BacnetDemoWatchedAnalogValue::statusSummary() const {
   summary += " oos=";
   summary += preview_.outOfService;
   return summary;
+}
+
+String BacnetDemoWatchedAnalogValue::refreshSummary() const {
+  if (session_ == nullptr) {
+    return "No device selected";
+  }
+
+  String text = "updated=";
+  text += preview_.hasPresentValue ? ageSummary(preview_.lastSuccessMs)
+                                   : "no cached value";
+  text += "; attempt=";
+  text += ageSummary(preview_.lastAttemptMs);
+  return text;
 }
 
 String BacnetDemoWatchedAnalogValue::lastAttemptAgeSummary() const {

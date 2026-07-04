@@ -33,9 +33,11 @@ public:
   String minMaxSummary() const;
   String resolutionSummary() const;
   String covIncrementSummary() const;
+  String metadataSummary() const;
   String readStatusSummary() const;
   String alarmStateSummary() const;
   String statusSummary() const;
+  String refreshSummary() const;
   String lastAttemptAgeSummary() const;
   String lastSuccessAgeSummary() const;
 
