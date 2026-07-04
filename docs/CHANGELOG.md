@@ -28,6 +28,8 @@ This changelog is a curated overview.
 - Made the watched Analog Value metadata runtime field optional so the default
   client demo payload avoids rebuilding and transferring that detail string on
   each refresh.
+- Added small reusable BACnet helpers for fixed-buffer object names, scanned
+  labels, numeric value range checks, and object status predicates.
 - Kept object descriptions visible in compact object rows when they differ from
   the selected display label.
 - Kept library and example version references aligned at `0.24.1`.

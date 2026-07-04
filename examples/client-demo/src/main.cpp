@@ -251,39 +251,6 @@ static bool isZeroBacnetAddress(const IPAddress& address) {
          address[3] == 0;
 }
 
-static const char* valueTextOrNull(BacnetDeviceSessionReadStatus status,
-                                   const BacnetValue& value) {
-  return status == BacnetDeviceSessionReadStatus::Ack && value.textLength > 0
-           ? value.displayText()
-           : nullptr;
-}
-
-static const char* scannedObjectNameOrNull(const BacnetScannedObject& scanned) {
-  return valueTextOrNull(scanned.objectNameStatus, scanned.objectName);
-}
-
-static const char* scannedDescriptionOrNull(const BacnetScannedObject& scanned) {
-  return valueTextOrNull(scanned.descriptionStatus, scanned.description);
-}
-
-static const char* scannedLabelOrNull(const BacnetScannedObject& scanned) {
-  const char* objectName = scannedObjectNameOrNull(scanned);
-  if (objectName != nullptr && objectName[0] != '\0') {
-    return objectName;
-  }
-  const char* description = scannedDescriptionOrNull(scanned);
-  if (description != nullptr && description[0] != '\0') {
-    return description;
-  }
-  return nullptr;
-}
-
-static void appendObjectDisplayName(FixedTextBuffer& out,
-                                    const BacnetObjectId& object) {
-  out.append(bacnetObjectTypePrefix(object.type));
-  out.appendFormat("%lu", static_cast<unsigned long>(object.instance));
-}
-
 static void resetValueObjects(BacnetValueObjectPreview* objects, size_t count) {
   for (size_t i = 0; i < count; ++i) {
     objects[i].subscription.reset();
@@ -371,14 +338,15 @@ static BacnetDeviceSessionReadStatus valueObjectPresentValueStatus(
 static void formatBacnetValueObjectRow(
   const BacnetValueObjectPreview& object,
   FixedTextBuffer& out) {
-  appendObjectDisplayName(out, object.object);
+  bacnetAppendObjectDisplayName(out, object.object);
   out.append(": ");
   const char* label =
-    object.scanned != nullptr ? scannedLabelOrNull(*object.scanned) : nullptr;
+    object.scanned != nullptr ? bacnetScannedLabelOrNull(*object.scanned)
+                              : nullptr;
   out.appendShortened(label != nullptr && label[0] != '\0' ? label
                                                            : "<unnamed>");
   const char* description = object.scanned != nullptr
-                              ? scannedDescriptionOrNull(*object.scanned)
+                              ? bacnetScannedDescriptionOrNull(*object.scanned)
                               : nullptr;
   if (description != nullptr && description[0] != '\0' &&
       (label == nullptr || std::strcmp(description, label) != 0)) {
@@ -535,38 +503,6 @@ static void readBacnetObjectStatusPreview(BacnetDeviceSession& session) {
   bacnetStatusPreview.status = status;
 }
 
-static void appendStatusFlagsSummary(FixedTextBuffer& out,
-                                     const BacnetObjectStatus& status) {
-  if (status.statusFlagsStatus != BacnetPropertyReadStatus::Ack) {
-    out.append(bacnetPropertyReadStatusText(status.statusFlagsStatus));
-    return;
-  }
-
-  out.append(status.statusFlags.inAlarm ? "alarm" : "no-alarm");
-  out.append(',');
-  out.append(status.statusFlags.fault ? "fault" : "no-fault");
-  out.append(',');
-  out.append(status.statusFlags.overridden ? "overridden" : "normal");
-  out.append(',');
-  out.append(status.statusFlags.outOfService ? "oos" : "in-service");
-}
-
-static void appendEnumPropertySummary(FixedTextBuffer& out,
-                                      BacnetPropertyReadStatus status,
-                                      const char* text) {
-  out.append(status == BacnetPropertyReadStatus::Ack
-               ? (text != nullptr ? text : "")
-               : bacnetPropertyReadStatusText(status));
-}
-
-static void appendBoolPropertySummary(FixedTextBuffer& out,
-                                      BacnetPropertyReadStatus status,
-                                      bool value) {
-  out.append(status == BacnetPropertyReadStatus::Ack
-               ? (value ? "true" : "false")
-               : bacnetPropertyReadStatusText(status));
-}
-
 static void formatBacnetObjectStatusSummary(FixedTextBuffer& out) {
   if (!activeBacnetSession) {
     out.append("No device selected");
@@ -579,15 +515,16 @@ static void formatBacnetObjectStatusSummary(FixedTextBuffer& out) {
   }
 
   const BacnetObjectStatus& status = bacnetStatusPreview.status;
-  appendObjectDisplayName(out, bacnetStatusPreview.object);
+  bacnetAppendObjectDisplayName(out, bacnetStatusPreview.object);
   out.append(": ");
   const char* label = bacnetStatusPreview.labelSource != nullptr
-                        ? scannedLabelOrNull(*bacnetStatusPreview.labelSource)
+                        ? bacnetScannedLabelOrNull(
+                            *bacnetStatusPreview.labelSource)
                         : nullptr;
   if (label != nullptr && label[0] != '\0') {
     out.appendShortened(label);
   } else {
-    appendObjectDisplayName(out, bacnetStatusPreview.object);
+    bacnetAppendObjectDisplayName(out, bacnetStatusPreview.object);
   }
   out.append("\nstate=");
   out.append(bacnetObjectHealthStateText(status.state));
@@ -598,15 +535,16 @@ static void formatBacnetObjectStatusSummary(FixedTextBuffer& out) {
   out.append(" pv-status=");
   out.append(bacnetPropertyReadStatusText(status.presentValueStatus));
   out.append("\nflags=");
-  appendStatusFlagsSummary(out, status);
+  bacnetAppendStatusFlagsSummary(out, status);
   out.append(" event-state=");
-  appendEnumPropertySummary(
+  bacnetAppendEnumPropertySummary(
     out, status.eventStateStatus, bacnetEventStateText(status.eventState));
   out.append("\nreliability=");
-  appendEnumPropertySummary(
+  bacnetAppendEnumPropertySummary(
     out, status.reliabilityStatus, bacnetReliabilityText(status.reliability));
   out.append(" oos=");
-  appendBoolPropertySummary(out, status.outOfServiceStatus, status.outOfService);
+  bacnetAppendBoolPropertySummary(
+    out, status.outOfServiceStatus, status.outOfService);
 }
 
 static void clearBacnetProcessObjectPreview(const char* status) {
@@ -945,7 +883,7 @@ static void onPresentValueUpdate(
   preview->presentValueStatus = notification.status;
   char objectName[24] = {};
   FixedTextBuffer objectOut(objectName, sizeof(objectName));
-  appendObjectDisplayName(objectOut, notification.objectId);
+  bacnetAppendObjectDisplayName(objectOut, notification.objectId);
   demoLogging.log(BacnetDemoLogging::Level::Info,
                   "subscription update %s present-value %s=%s",
                   objectOut.c_str(),
