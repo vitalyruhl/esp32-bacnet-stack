@@ -12,6 +12,11 @@ This changelog is a curated overview.
   analog, binary, and multi-state object previews to three entries each,
   shrinking the corresponding scan buffer, and compacting the watched Analog
   Value card's default live payload.
+- Reduced additional heap churn in `examples/client-demo` by keeping BACnet
+  preview data source-backed where practical and filling BACnet runtime JSON
+  through grouped providers instead of per-field `String` callbacks.
+- Split the watched Analog Value object name and description in the compact
+  runtime card and shortened metadata output by avoiding repeated units.
 - Kept object descriptions visible in compact object rows when they differ from
   the selected display label.
 - Kept library and example version references aligned at `0.24.1`.

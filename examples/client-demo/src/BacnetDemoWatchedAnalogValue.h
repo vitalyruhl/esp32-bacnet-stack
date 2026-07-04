@@ -28,6 +28,7 @@ public:
 
   String objectSummary() const;
   String labelSummary() const;
+  String descriptionSummary() const;
   String valueSummary() const;
   String engineeringUnitSummary() const;
   String minMaxSummary() const;
@@ -51,9 +52,15 @@ private:
 
     bool configured = false;
     BacnetObjectId object;
-    String label;
-    String presentValue = "not read";
-    String presentValueStatus = "skipped";
+    BacnetValue objectName;
+    BacnetDeviceSessionReadStatus objectNameStatus =
+      BacnetDeviceSessionReadStatus::Skipped;
+    BacnetValue description;
+    BacnetDeviceSessionReadStatus descriptionStatus =
+      BacnetDeviceSessionReadStatus::Skipped;
+    BacnetValue presentValue;
+    BacnetPropertyReadStatus presentValueStatus =
+      BacnetPropertyReadStatus::Skipped;
     bool hasPresentValue = false;
     String lastStatus = "skipped";
     String alarmState = "unknown";
@@ -64,7 +71,7 @@ private:
     String outOfService = "skipped";
     bool engineeringUnitKnown = false;
     uint32_t engineeringUnitId = 0;
-    String engineeringUnitSymbol;
+    const char* engineeringUnitSymbol = nullptr;
     BacnetPropertyReadStatus engineeringUnitStatus =
       BacnetPropertyReadStatus::Skipped;
     bool hasEngineeringUnit = false;
@@ -109,7 +116,7 @@ private:
                               bool hasEventState,
                               bool hasOutOfService) const;
   void updateFromCache();
-  void readLabel(BacnetProcessObject watched);
+  void readIdentity(BacnetProcessObject watched);
   BacnetPropertyReadStatus readMetadataProperty(BacnetProcessObject watched,
                                                 BacnetPropertyId propertyId,
                                                 BacnetValue& value) const;

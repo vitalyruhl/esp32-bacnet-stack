@@ -40,7 +40,7 @@ bool BacnetDemoWatchedAnalogValue::setup(BacnetDeviceSession& session) {
   BacnetProcessObject watched = watchedObject(session);
   preview_.configured = true;
   preview_.object = watched.objectId();
-  readLabel(watched);
+  readIdentity(watched);
   readMetadata(watched);
 
   preview_.presentValueSubscription =
@@ -52,8 +52,10 @@ bool BacnetDemoWatchedAnalogValue::setup(BacnetDeviceSession& session) {
                       preview_.presentValueSubscription->active();
   String message = "watched ";
   message += bacnetObjectDisplayName(watched.objectId());
-  message += " configured label=";
-  message += preview_.label;
+  message += " configured name=";
+  message += labelSummary();
+  message += " description=";
+  message += descriptionSummary();
   message += " fallbackMs=";
   message += String(static_cast<unsigned long>(pollMs_));
   message += " active=";
@@ -97,14 +99,33 @@ String BacnetDemoWatchedAnalogValue::labelSummary() const {
   if (session_ == nullptr) {
     return "No device selected";
   }
-  return preview_.label.length() ? preview_.label : objectSummary();
+  if (preview_.objectNameStatus == BacnetDeviceSessionReadStatus::Ack &&
+      preview_.objectName.textLength > 0) {
+    return preview_.objectName.displayText();
+  }
+  return bacnetReadStatusText(preview_.objectNameStatus);
+}
+
+String BacnetDemoWatchedAnalogValue::descriptionSummary() const {
+  if (session_ == nullptr) {
+    return "No device selected";
+  }
+  if (preview_.descriptionStatus == BacnetDeviceSessionReadStatus::Ack &&
+      preview_.description.textLength > 0) {
+    return preview_.description.displayText();
+  }
+  if (preview_.descriptionStatus == BacnetDeviceSessionReadStatus::Ack) {
+    return "--";
+  }
+  return bacnetReadStatusText(preview_.descriptionStatus);
 }
 
 String BacnetDemoWatchedAnalogValue::valueSummary() const {
   if (session_ == nullptr) {
     return "No device selected";
   }
-  return preview_.hasPresentValue ? preview_.presentValue : "--";
+  return cachedValueWithUnit(
+    preview_.presentValue, preview_.presentValueStatus, preview_.hasPresentValue);
 }
 
 String BacnetDemoWatchedAnalogValue::engineeringUnitSummary() const {
@@ -117,7 +138,8 @@ String BacnetDemoWatchedAnalogValue::engineeringUnitSummary() const {
 
   String text = "unit=";
   text += String(preview_.engineeringUnitId);
-  if (preview_.engineeringUnitSymbol.length() > 0) {
+  if (preview_.engineeringUnitSymbol != nullptr &&
+      preview_.engineeringUnitSymbol[0] != '\0') {
     text += " (";
     text += preview_.engineeringUnitSymbol;
     text += ")";
@@ -162,11 +184,13 @@ String BacnetDemoWatchedAnalogValue::metadataSummary() const {
 
   String text = engineeringUnitSummary();
   text += "; range ";
-  text += minMaxSummary();
+  text += metadataValueCore(preview_.minPresentValue);
+  text += " ... ";
+  text += metadataValueCore(preview_.maxPresentValue);
   text += "; res ";
-  text += resolutionSummary();
+  text += metadataValueCore(preview_.resolution);
   text += "; cov ";
-  text += covIncrementSummary();
+  text += metadataValueCore(preview_.covIncrement);
   return text;
 }
 
@@ -176,7 +200,7 @@ String BacnetDemoWatchedAnalogValue::readStatusSummary() const {
   }
 
   String summary = "present-value=";
-  summary += preview_.presentValueStatus;
+  summary += bacnetPropertyReadStatusText(preview_.presentValueStatus);
   summary += "\nunit=";
   summary += bacnetPropertyReadStatusText(preview_.engineeringUnitStatus);
   summary += " min=";
@@ -205,7 +229,7 @@ String BacnetDemoWatchedAnalogValue::statusSummary() const {
   }
 
   String summary = "pv-read-status=";
-  summary += preview_.presentValueStatus;
+  summary += bacnetPropertyReadStatusText(preview_.presentValueStatus);
   summary += "\nlast-refresh=";
   summary += preview_.lastStatus;
   summary += "\nalarm-state=";
@@ -270,9 +294,8 @@ void BacnetDemoWatchedAnalogValue::resetPreview(const char* status) {
   preview_ = Preview{};
   preview_.object = BacnetObjectId{
     static_cast<uint16_t>(BacnetObjectType::AnalogValue), objectInstance_};
-  preview_.label = "AV" + String(objectInstance_);
-  preview_.presentValueStatus = status != nullptr ? status : "not read";
-  preview_.lastStatus = preview_.presentValueStatus;
+  preview_.presentValueStatus = BacnetPropertyReadStatus::Skipped;
+  preview_.lastStatus = status != nullptr ? status : "not read";
 }
 
 void BacnetDemoWatchedAnalogValue::log(BacnetDemoLogLevel level,
@@ -311,7 +334,8 @@ void BacnetDemoWatchedAnalogValue::handleSubscriptionUpdate(
 
 void BacnetDemoWatchedAnalogValue::appendUnitSuffix(String& text) const {
   if (preview_.engineeringUnitKnown &&
-      preview_.engineeringUnitSymbol.length() > 0) {
+      preview_.engineeringUnitSymbol != nullptr &&
+      preview_.engineeringUnitSymbol[0] != '\0') {
     text += " ";
     text += preview_.engineeringUnitSymbol;
   }
@@ -359,7 +383,7 @@ void BacnetDemoWatchedAnalogValue::updateEngineeringUnit(
     preview_.engineeringUnitKnown = false;
     preview_.hasEngineeringUnit = false;
     preview_.engineeringUnitId = 0;
-    preview_.engineeringUnitSymbol = "";
+    preview_.engineeringUnitSymbol = nullptr;
     return;
   }
 
@@ -368,15 +392,14 @@ void BacnetDemoWatchedAnalogValue::updateEngineeringUnit(
     preview_.engineeringUnitKnown = false;
     preview_.hasEngineeringUnit = false;
     preview_.engineeringUnitId = 0;
-    preview_.engineeringUnitSymbol = "";
+    preview_.engineeringUnitSymbol = nullptr;
     return;
   }
 
   preview_.engineeringUnitKnown = true;
   preview_.hasEngineeringUnit = true;
   preview_.engineeringUnitId = unitId;
-  const char* symbol = bacnetEngineeringUnitSymbol(unitId);
-  preview_.engineeringUnitSymbol = symbol != nullptr ? symbol : "";
+  preview_.engineeringUnitSymbol = bacnetEngineeringUnitSymbol(unitId);
 }
 
 void BacnetDemoWatchedAnalogValue::updateMetadataField(
@@ -484,12 +507,8 @@ void BacnetDemoWatchedAnalogValue::updateFromCache() {
   preview_.configured = true;
   preview_.object = watched.objectId();
   preview_.hasPresentValue = watched.hasPresentValue();
-  preview_.presentValue =
-    cachedValueWithUnit(status.presentValue,
-                        status.presentValueStatus,
-                        preview_.hasPresentValue);
-  preview_.presentValueStatus =
-    bacnetPropertyReadStatusText(status.presentValueStatus);
+  preview_.presentValue = status.presentValue;
+  preview_.presentValueStatus = status.presentValueStatus;
   preview_.lastAttemptMs = watched.presentValueLastAttemptMs();
   preview_.lastSuccessMs = watched.presentValueLastSuccessMs();
   preview_.alarmState =
@@ -506,22 +525,20 @@ void BacnetDemoWatchedAnalogValue::updateFromCache() {
     boolPropertySummary(status.outOfServiceStatus, status.outOfService);
 }
 
-void BacnetDemoWatchedAnalogValue::readLabel(BacnetProcessObject watched) {
-  BacnetValue value;
-  BacnetDeviceSessionReadStatus status =
-    watched.remoteObject().readObjectName(value, timeoutMs_);
-  if (status == BacnetDeviceSessionReadStatus::Ack && value.textLength > 0) {
-    preview_.label = value.displayText();
-    return;
+void BacnetDemoWatchedAnalogValue::readIdentity(BacnetProcessObject watched) {
+  BacnetValue objectName;
+  preview_.objectNameStatus =
+    watched.remoteObject().readObjectName(objectName, timeoutMs_);
+  if (preview_.objectNameStatus == BacnetDeviceSessionReadStatus::Ack) {
+    preview_.objectName = objectName;
   }
 
-  status = watched.remoteObject().readDescription(value, timeoutMs_);
-  if (status == BacnetDeviceSessionReadStatus::Ack && value.textLength > 0) {
-    preview_.label = value.displayText();
-    return;
+  BacnetValue description;
+  preview_.descriptionStatus =
+    watched.remoteObject().readDescription(description, timeoutMs_);
+  if (preview_.descriptionStatus == BacnetDeviceSessionReadStatus::Ack) {
+    preview_.description = description;
   }
-
-  preview_.label = bacnetObjectDisplayName(watched.objectId());
 }
 
 BacnetPropertyReadStatus BacnetDemoWatchedAnalogValue::readMetadataProperty(

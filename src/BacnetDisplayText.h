@@ -133,11 +133,11 @@ inline const char* bacnetCommonEngineeringUnitSymbol(uint32_t unitId) {
     case 54:
       return "kPa";
     case 62:
-      return "degC";
+      return "°C";
     case 63:
       return "K";
     case 64:
-      return "degF";
+      return "°F";
     case 71:
       return "h";
     case 72:
@@ -153,9 +153,9 @@ inline const char* bacnetCommonEngineeringUnitSymbol(uint32_t unitId) {
     case 88:
       return "l/min";
     case 90:
-      return "\xC2\xB0";
+      return "°";
     case 95:
-      return "";
+      return "-";
     case 96:
       return "ppm";
     case 98:
