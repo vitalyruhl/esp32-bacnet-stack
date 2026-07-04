@@ -30,6 +30,8 @@ This changelog is a curated overview.
   each refresh.
 - Added small reusable BACnet helpers for fixed-buffer object names, scanned
   labels, numeric value range checks, and object status predicates.
+- Documented the planned known-point client ergonomics direction without adding
+  a large new client facade or write API.
 - Kept object descriptions visible in compact object rows when they differ from
   the selected display label.
 - Kept library and example version references aligned at `0.24.1`.
