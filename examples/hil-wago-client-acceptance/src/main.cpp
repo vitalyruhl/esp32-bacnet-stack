@@ -1005,13 +1005,7 @@ void setup() {
   delay(1000);
   const ScenarioOutcome outcome = runAcceptanceRunner();
   completed = true;
-  if (outcome == ScenarioOutcome::Pass) {
-    printResult("PASS", "HIL acceptance final result PASS");
-  } else if (outcome == ScenarioOutcome::Skip) {
-    printResult("SKIP", "HIL acceptance final result SKIP");
-  } else {
-    printResult("FAIL", "HIL acceptance final result FAIL");
-  }
+  printResult(scenarioOutcomeText(outcome), "HIL acceptance final result");
 }
 
 void loop() {
