@@ -1496,6 +1496,10 @@ void loop() {
     Serial.print("[D] Loop running, WiFi status=");
     Serial.print(WiFi.status());
     Serial.print(" heap=");
-    Serial.println(ESP.getFreeHeap());
+    Serial.print(ESP.getFreeHeap());
+    Serial.print(" minHeap=");
+    Serial.print(ESP.getMinFreeHeap());
+    Serial.print(" maxAlloc=");
+    Serial.println(ESP.getMaxAllocHeap());
   }
 }
