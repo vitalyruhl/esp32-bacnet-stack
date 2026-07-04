@@ -7,6 +7,7 @@ Use the linked pages depending on what you need:
 - [Important Notes](important.md) for lifecycle, polling, scan, subscription, and safety boundaries.
 - [Client API](api.md) for the current public API overview.
 - [Client Examples](examples.md) for the committed example projects and what each one demonstrates.
+- [Known-Point Ergonomics Direction](known-point-ergonomics.md) for the planned small-client helper direction.
 
 ## Current Scope
 

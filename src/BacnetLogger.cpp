@@ -225,6 +225,24 @@ const char* BacnetLogger::levelName(BacnetLogLevel level) {
   }
 }
 
+const char* BacnetLogger::levelPrefix(BacnetLogLevel level) {
+  switch (level) {
+    case BacnetLogLevel::Fatal:
+    case BacnetLogLevel::Error:
+      return "[E]";
+    case BacnetLogLevel::Warn:
+      return "[W]";
+    case BacnetLogLevel::Debug:
+      return "[D]";
+    case BacnetLogLevel::Trace:
+      return "[T]";
+    case BacnetLogLevel::Info:
+    case BacnetLogLevel::Off:
+    default:
+      return "[I]";
+  }
+}
+
 bool BacnetLogger::isEnabledFor(BacnetLogLevel level) {
 #if !BACNET_ENABLE_LOGGING
   (void)level;

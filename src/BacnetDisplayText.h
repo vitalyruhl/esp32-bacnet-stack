@@ -3,6 +3,7 @@
 #pragma once
 
 #include "BacnetDeviceSession.h"
+#include "BacnetFixedTextBuffer.h"
 
 inline const char* bacnetObjectTypePrefix(uint16_t objectType) {
   switch (static_cast<BacnetObjectType>(objectType)) {
@@ -106,6 +107,135 @@ inline const char* bacnetSubscriptionReasonText(
   return "update";
 }
 
+inline void bacnetAppendObjectDisplayName(FixedTextBuffer& out,
+                                          const BacnetObjectId& object) {
+  out.append(bacnetObjectTypePrefix(object.type));
+  out.appendFormat("%lu", static_cast<unsigned long>(object.instance));
+}
+
+inline const char* bacnetValueTextOrNull(
+  BacnetDeviceSessionReadStatus status,
+  const BacnetValue& value) {
+  return status == BacnetDeviceSessionReadStatus::Ack && value.textLength > 0
+           ? value.displayText()
+           : nullptr;
+}
+
+inline const char* bacnetValueTextOrNull(BacnetPropertyReadStatus status,
+                                         const BacnetValue& value) {
+  return status == BacnetPropertyReadStatus::Ack && value.textLength > 0
+           ? value.displayText()
+           : nullptr;
+}
+
+inline const char* bacnetScannedObjectNameOrNull(
+  const BacnetScannedObject& scanned) {
+  return bacnetValueTextOrNull(scanned.objectNameStatus, scanned.objectName);
+}
+
+inline const char* bacnetScannedDescriptionOrNull(
+  const BacnetScannedObject& scanned) {
+  return bacnetValueTextOrNull(scanned.descriptionStatus, scanned.description);
+}
+
+inline const char* bacnetScannedLabelOrNull(
+  const BacnetScannedObject& scanned) {
+  const char* objectName = bacnetScannedObjectNameOrNull(scanned);
+  if (objectName != nullptr && objectName[0] != '\0') {
+    return objectName;
+  }
+  const char* description = bacnetScannedDescriptionOrNull(scanned);
+  if (description != nullptr && description[0] != '\0') {
+    return description;
+  }
+  return nullptr;
+}
+
+inline bool bacnetValueAsFloat(const BacnetValue& value, float& output) {
+  switch (value.type) {
+    case BacnetValueType::Real:
+      output = value.realValue;
+      return true;
+    case BacnetValueType::Unsigned:
+    case BacnetValueType::Enumerated:
+      output = static_cast<float>(value.unsignedValue);
+      return true;
+    case BacnetValueType::Signed:
+      output = static_cast<float>(value.signedValue);
+      return true;
+    case BacnetValueType::Boolean:
+      output = value.booleanValue ? 1.0f : 0.0f;
+      return true;
+    default:
+      return false;
+  }
+}
+
+inline bool bacnetValueInRange(const BacnetValue& value,
+                               float minValue,
+                               float maxValue) {
+  float numericValue = 0.0f;
+  return bacnetValueAsFloat(value, numericValue) && numericValue >= minValue &&
+         numericValue <= maxValue;
+}
+
+inline bool bacnetStatusHasAlarm(const BacnetObjectStatus& status) {
+  return status.statusFlagsStatus == BacnetPropertyReadStatus::Ack &&
+         status.statusFlags.inAlarm;
+}
+
+inline bool bacnetStatusHasFault(const BacnetObjectStatus& status) {
+  return status.statusFlagsStatus == BacnetPropertyReadStatus::Ack &&
+         status.statusFlags.fault;
+}
+
+inline bool bacnetStatusIsOutOfService(const BacnetObjectStatus& status) {
+  if (status.outOfServiceStatus == BacnetPropertyReadStatus::Ack) {
+    return status.outOfService;
+  }
+  return status.statusFlagsStatus == BacnetPropertyReadStatus::Ack &&
+         status.statusFlags.outOfService;
+}
+
+inline bool bacnetStatusIsNormal(const BacnetObjectStatus& status) {
+  return status.state == BacnetObjectHealthState::Normal &&
+         !bacnetStatusHasAlarm(status) && !bacnetStatusHasFault(status) &&
+         !bacnetStatusIsOutOfService(status);
+}
+
+inline void bacnetAppendStatusFlagsSummary(
+  FixedTextBuffer& out,
+  const BacnetObjectStatus& status) {
+  if (status.statusFlagsStatus != BacnetPropertyReadStatus::Ack) {
+    out.append(bacnetPropertyReadStatusText(status.statusFlagsStatus));
+    return;
+  }
+
+  out.append(status.statusFlags.inAlarm ? "alarm" : "no-alarm");
+  out.append(',');
+  out.append(status.statusFlags.fault ? "fault" : "no-fault");
+  out.append(',');
+  out.append(status.statusFlags.overridden ? "overridden" : "normal");
+  out.append(',');
+  out.append(status.statusFlags.outOfService ? "oos" : "in-service");
+}
+
+inline void bacnetAppendEnumPropertySummary(FixedTextBuffer& out,
+                                            BacnetPropertyReadStatus status,
+                                            const char* text) {
+  out.append(status == BacnetPropertyReadStatus::Ack
+               ? (text != nullptr ? text : "")
+               : bacnetPropertyReadStatusText(status));
+}
+
+inline void bacnetAppendBoolPropertySummary(FixedTextBuffer& out,
+                                            BacnetPropertyReadStatus status,
+                                            bool value) {
+  out.append(status == BacnetPropertyReadStatus::Ack
+               ? (value ? "true" : "false")
+               : bacnetPropertyReadStatusText(status));
+}
+
 inline const char* bacnetCommonEngineeringUnitSymbol(uint32_t unitId) {
   switch (unitId) {
     case 2:
@@ -133,11 +263,11 @@ inline const char* bacnetCommonEngineeringUnitSymbol(uint32_t unitId) {
     case 54:
       return "kPa";
     case 62:
-      return "degC";
+      return "°C";
     case 63:
       return "K";
     case 64:
-      return "degF";
+      return "°F";
     case 71:
       return "h";
     case 72:
@@ -153,9 +283,9 @@ inline const char* bacnetCommonEngineeringUnitSymbol(uint32_t unitId) {
     case 88:
       return "l/min";
     case 90:
-      return "\xC2\xB0";
+      return "°";
     case 95:
-      return "";
+      return "-";
     case 96:
       return "ppm";
     case 98:

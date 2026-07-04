@@ -61,8 +61,7 @@ if (-not $Files -or $Files.Count -eq 0) {
 Write-Host "Running clang-format on: $($Files -join ', ')"
 
 & $clangFormat `
-    --dry-run `
-    --Werror `
+    -i `
     --style=file `
     @Files
 

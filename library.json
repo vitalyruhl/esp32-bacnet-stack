@@ -1,6 +1,6 @@
 {
   "name": "ESP32 BACnet Stack",
-  "version": "0.24.0",
+  "version": "0.24.1",
   "keywords": "esp32, bacnet, bacnet-ip, bacnet-stack, bacnet-client, bacnet-server, building-automation, bms, automation, hvac, scada, arduino, platformio",
   "description": "ESP32 BACnet/IP stack library with client and server support for Arduino and PlatformIO projects.",
   "license": "GPL-2.0-or-later",

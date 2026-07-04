@@ -6,6 +6,36 @@ This changelog is a curated overview.
 
 - No unreleased changes documented yet.
 
+## 0.24.1
+
+- Reduced `examples/client-demo` JSON/RAM pressure by limiting displayed
+  analog, binary, and multi-state object previews to three entries each,
+  shrinking the corresponding scan buffer, and compacting the watched Analog
+  Value card's default live payload.
+- Reduced additional heap churn in `examples/client-demo` by keeping BACnet
+  preview data source-backed where practical and filling BACnet runtime JSON
+  through grouped providers instead of per-field `String` callbacks.
+- Split the watched Analog Value object name and description in the compact
+  runtime card and shortened metadata output by avoiding repeated units.
+- Removed the inactive BME280 live sensor card from `examples/client-demo`,
+  moved its future BACnet-server draft into `examples/server-demo` behind a
+  disabled build block, and moved fallback object type defaults out of the main
+  client sketch.
+- Moved `examples/client-demo` BACnet logging bridge code out of the main
+  sketch, added a reusable BACnet log-level prefix helper, added a demo logging
+  compile switch, and limited the demo logger output slots to the single output
+  it uses.
+- Made the watched Analog Value metadata runtime field optional so the default
+  client demo payload avoids rebuilding and transferring that detail string on
+  each refresh.
+- Added small reusable BACnet helpers for fixed-buffer object names, scanned
+  labels, numeric value range checks, and object status predicates.
+- Documented the planned known-point client ergonomics direction without adding
+  a large new client facade or write API.
+- Kept object descriptions visible in compact object rows when they differ from
+  the selected display label.
+- Kept library and example version references aligned at `0.24.1`.
+
 ## 0.24.0
 
 - Added read-only BACnet process-object convenience helpers, Analog Value

@@ -38,9 +38,6 @@
 
 // Optional read-only fallback objects for visual checks when a target does not
 // answer BACnet object-list reads. Set an instance to 0 to disable that group.
-#define BACNET_FALLBACK_ANALOG_OBJECT_TYPE 2
 #define BACNET_FALLBACK_ANALOG_OBJECT_INSTANCE 220
-#define BACNET_FALLBACK_BINARY_OBJECT_TYPE 5
 #define BACNET_FALLBACK_BINARY_OBJECT_INSTANCE 320
-#define BACNET_FALLBACK_MULTISTATE_OBJECT_TYPE 19
 #define BACNET_FALLBACK_MULTISTATE_OBJECT_INSTANCE 2020

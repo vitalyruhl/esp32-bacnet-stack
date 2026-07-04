@@ -409,6 +409,62 @@ void test_bacnet_engineering_unit_symbol_mapping_is_small_and_safe() {
   TEST_ASSERT_EQUAL_STRING("first", bacnetSubscriptionReasonText(notification));
 }
 
+void test_bacnet_display_value_and_status_helpers() {
+  char objectText[16] = {};
+  FixedTextBuffer objectOut(objectText, sizeof(objectText));
+  bacnetAppendObjectDisplayName(
+    objectOut,
+    BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::AnalogValue), 200});
+  TEST_ASSERT_EQUAL_STRING("AV200", objectOut.c_str());
+
+  BacnetValue objectName;
+  objectName.type = BacnetValueType::CharacterString;
+  snprintf(objectName.text, sizeof(objectName.text), "Room Temperature");
+  objectName.textLength = strlen(objectName.text);
+
+  BacnetValue description;
+  description.type = BacnetValueType::CharacterString;
+  snprintf(description.text, sizeof(description.text), "Fallback Label");
+  description.textLength = strlen(description.text);
+
+  BacnetScannedObject scanned;
+  scanned.objectNameStatus = BacnetDeviceSessionReadStatus::Ack;
+  scanned.objectName = objectName;
+  scanned.descriptionStatus = BacnetDeviceSessionReadStatus::Ack;
+  scanned.description = description;
+  TEST_ASSERT_EQUAL_STRING("Room Temperature",
+                           bacnetScannedLabelOrNull(scanned));
+
+  scanned.objectName.text[0] = '\0';
+  scanned.objectName.textLength = 0;
+  TEST_ASSERT_EQUAL_STRING("Fallback Label", bacnetScannedLabelOrNull(scanned));
+
+  BacnetValue presentValue;
+  presentValue.type = BacnetValueType::Real;
+  presentValue.realValue = 12.5f;
+  float numericValue = 0.0f;
+  TEST_ASSERT_TRUE(bacnetValueAsFloat(presentValue, numericValue));
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, 12.5f, numericValue);
+  TEST_ASSERT_TRUE(bacnetValueInRange(presentValue, 10.0f, 15.0f));
+  TEST_ASSERT_FALSE(bacnetValueInRange(presentValue, 13.0f, 15.0f));
+
+  BacnetObjectStatus status;
+  status.state = BacnetObjectHealthState::Normal;
+  status.statusFlagsStatus = BacnetPropertyReadStatus::Ack;
+  status.outOfServiceStatus = BacnetPropertyReadStatus::Ack;
+  TEST_ASSERT_TRUE(bacnetStatusIsNormal(status));
+  TEST_ASSERT_FALSE(bacnetStatusHasAlarm(status));
+  TEST_ASSERT_FALSE(bacnetStatusIsOutOfService(status));
+
+  status.statusFlags.inAlarm = true;
+  TEST_ASSERT_TRUE(bacnetStatusHasAlarm(status));
+  TEST_ASSERT_FALSE(bacnetStatusIsNormal(status));
+
+  status.statusFlags.inAlarm = false;
+  status.outOfService = true;
+  TEST_ASSERT_TRUE(bacnetStatusIsOutOfService(status));
+}
+
 void test_bacnet_client_builds_mv_present_value_request() {
   uint8_t request[BacnetClient::kMaxReadPropertyRequestSize] = {};
   const uint8_t expected[] = {
@@ -1857,6 +1913,7 @@ void setup() {
   RUN_TEST(test_bacnet_client_builds_ai_present_value_request_with_type_zero);
   RUN_TEST(test_bacnet_property_ids_cover_generic_access_slice);
   RUN_TEST(test_bacnet_engineering_unit_symbol_mapping_is_small_and_safe);
+  RUN_TEST(test_bacnet_display_value_and_status_helpers);
   RUN_TEST(test_bacnet_client_builds_mv_present_value_request);
   RUN_TEST(test_bacnet_client_builds_generic_property_request);
   RUN_TEST(test_bacnet_client_builds_object_list_array_request);
