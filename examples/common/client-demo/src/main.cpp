@@ -3,11 +3,22 @@
 #include <Arduino.h>
 
 #include <EspBacnet.h>
+#ifndef BACNET_DEMO_USE_ETHERNET
+#define BACNET_DEMO_USE_ETHERNET 0
+#endif
+
+#if BACNET_DEMO_USE_ETHERNET
+#include <ETH.h>
+#include <ExampleEthernet.h>
+#else
 #include <WiFi.h>
+#endif
 
 #include "ConfigManager.h"
 #include "core/CoreSettings.h"
+#if !BACNET_DEMO_USE_ETHERNET
 #include "core/CoreWiFiServices.h"
+#endif
 
 #include "BacnetDemoFallbackObjects.h"
 #include "BacnetDemoFormat.h"
@@ -21,16 +32,20 @@
 
 #if __has_include("secret/secrets.h")
 #include "secret/secrets.h"
-#define CM_HAS_WIFI_SECRETS 1
+#define BACNET_DEMO_HAS_SECRETS 1
 #else
-#define CM_HAS_WIFI_SECRETS 0
+#define BACNET_DEMO_HAS_SECRETS 0
 #endif
 
 #ifndef APP_VERSION
-#define APP_VERSION "0.24.2"
+#define APP_VERSION "0.25.0"
 #endif
 #ifndef APP_NAME
+#if BACNET_DEMO_USE_ETHERNET
+#define APP_NAME "BACnet Client Demo ETH"
+#else
 #define APP_NAME "BACnet Client Demo"
+#endif
 #endif
 
 #ifndef SETTINGS_PASSWORD
@@ -41,23 +56,59 @@
 #define OTA_PASSWORD SETTINGS_PASSWORD
 #endif
 
+#if BACNET_DEMO_USE_ETHERNET
+#ifndef MY_ETHERNET_IP
+#define MY_ETHERNET_IP "192.168.2.127"
+#endif
+#ifndef MY_GATEWAY_IP
+#define MY_GATEWAY_IP "192.168.2.1"
+#endif
+#ifndef MY_SUBNET_MASK
+#define MY_SUBNET_MASK "255.255.255.0"
+#endif
+#ifndef MY_DNS_IP
+#define MY_DNS_IP MY_GATEWAY_IP
+#endif
+#ifndef MY_USE_DHCP
+#define MY_USE_DHCP false
+#endif
+#endif
+
 extern ConfigManagerClass ConfigManager;
 
 static cm::CoreSettings& coreSettings = cm::CoreSettings::instance();
 static cm::CoreSystemSettings& systemSettings = coreSettings.system;
-static cm::CoreWiFiSettings& wifiSettings = coreSettings.wifi;
 static cm::CoreNtpSettings& ntpSettings = coreSettings.ntp;
+#if BACNET_DEMO_USE_ETHERNET
+static Config<String> ethernetIp{ConfigOptions<String>{.key = "EthIP", .name = "IP Address", .category = "Ethernet", .defaultValue = String(""), .showInWeb = true, .sortOrder = 1}};
+static Config<String> ethernetSubnet{ConfigOptions<String>{.key = "EthSubnet", .name = "Subnet Mask", .category = "Ethernet", .defaultValue = String(""), .showInWeb = true, .sortOrder = 2}};
+static Config<String> ethernetGateway{ConfigOptions<String>{.key = "EthGateway", .name = "Gateway", .category = "Ethernet", .defaultValue = String(""), .showInWeb = true, .sortOrder = 3}};
+static Config<String> ethernetDns{ConfigOptions<String>{.key = "EthDNS", .name = "Primary DNS", .category = "Ethernet", .defaultValue = String(""), .showInWeb = true, .sortOrder = 4}};
+static Config<String> settingsPassword{ConfigOptions<String>{.key = "SettingsPass", .name = "Settings Password", .category = "System", .defaultValue = String(""), .showInWeb = true, .isPassword = true, .sortOrder = 2}};
+static bool ethernetWasConnected = false;
+static bool ethernetServicesStarted = false;
+#else
+static cm::CoreWiFiSettings& wifiSettings = coreSettings.wifi;
 static cm::CoreWiFiServices wifiServices;
+#endif
 
 static BacnetClient bacnetClient;
 static BacnetDemoLogging demoLogging(ConfigManager, bacnetClient);
 
 #ifndef BACNET_WHOIS_DESTINATION
+#if BACNET_DEMO_USE_ETHERNET
+#define BACNET_WHOIS_DESTINATION "192.168.2.255"
+#else
 #define BACNET_WHOIS_DESTINATION "192.0.2.255"
+#endif
 #endif
 
 #ifndef BACNET_TARGET_ADDRESS
+#if BACNET_DEMO_USE_ETHERNET
+#define BACNET_TARGET_ADDRESS "192.168.2.101"
+#else
 #define BACNET_TARGET_ADDRESS "192.0.2.101"
+#endif
 #endif
 
 #ifndef BACNET_TARGET_DEVICE_INSTANCE
@@ -215,9 +266,11 @@ static const char GLOBAL_THEME_OVERRIDE[] PROGMEM = R"CSS(
 }
 )CSS";
 
+#if !BACNET_DEMO_USE_ETHERNET
 void onWiFiConnected();
 void onWiFiDisconnected();
 void onWiFiAPMode();
+#endif
 static void setupNetworkDefaults();
 
 static bool parseBacnetAddress(const char* label,
@@ -1330,6 +1383,51 @@ static void pollBacnetSubscriptions() {
   watchedAnalogValue.poll(*activeBacnetSession, now);
 }
 
+#if BACNET_DEMO_USE_ETHERNET
+static void registerEthernetSettings() {
+  ConfigManager.setCategoryLayoutOverride(
+    "Ethernet", "Network", "Network", "Ethernet Settings", 10);
+  ConfigManager.addSettingsPage("Network", 10);
+  ConfigManager.addSettingsGroup(
+    "Network", "Network", "Ethernet Settings", 10);
+  ConfigManager.addSetting(&ethernetIp);
+  ConfigManager.addSetting(&ethernetSubnet);
+  ConfigManager.addSetting(&ethernetGateway);
+  ConfigManager.addSetting(&ethernetDns);
+  ConfigManager.addSetting(&settingsPassword);
+}
+
+static void startEthernetServices() {
+  if (!ethernetServicesStarted) {
+    ConfigManager.startWebServerOnNetwork();
+#if CM_ENABLE_OTA
+    ConfigManager.setupOTA(APP_NAME, systemSettings.otaPassword.get());
+#endif
+    configTzTime(ntpSettings.tz.get().c_str(),
+                 ntpSettings.server1.get().c_str(),
+                 ntpSettings.server2.get().c_str());
+    ethernetServicesStarted = true;
+    Serial.println("[I] ConfigManager services started on Ethernet");
+  }
+  startBacnetClient();
+}
+
+static void updateEthernetNetwork() {
+  const bool connected = bacnet_example::EthernetNetwork::hasIp();
+  if (connected && !ethernetWasConnected) {
+    Serial.print("[I] Ethernet station IP: ");
+    Serial.println(bacnet_example::EthernetNetwork::localIp());
+    startEthernetServices();
+  } else if (!connected && ethernetWasConnected) {
+    clearBacnetRuntime();
+    bacnetClient.end();
+    bacnetStarted = false;
+    Serial.println("[W] Ethernet network unavailable");
+  }
+  ethernetWasConnected = connected;
+}
+#endif
+
 void setup() {
   Serial.begin(115200);
   Serial.println("[I] BACnet client demo starting");
@@ -1351,7 +1449,11 @@ void setup() {
   demoLogging.setup();
   configureBacnetAddresses();
 
+#if BACNET_DEMO_USE_ETHERNET
+  registerEthernetSettings();
+#else
   coreSettings.attachWiFi(ConfigManager);
+#endif
   coreSettings.attachSystem(ConfigManager);
   coreSettings.attachNtp(ConfigManager);
 
@@ -1360,15 +1462,29 @@ void setup() {
 
   setupRuntimeUI();
 
-#if defined(WIFI_FILTER_MAC_PRIORITY)
+#if !BACNET_DEMO_USE_ETHERNET && defined(WIFI_FILTER_MAC_PRIORITY)
   ConfigManager.setAccessPointMacPriority(WIFI_FILTER_MAC_PRIORITY);
 #endif
 
+#if BACNET_DEMO_USE_ETHERNET
+  const bacnet_example::EthernetConfig ethernetConfig{
+    MY_USE_DHCP,
+    ethernetIp.get().c_str(),
+    ethernetGateway.get().c_str(),
+    ethernetSubnet.get().c_str(),
+    ethernetDns.get().c_str(),
+  };
+  if (!bacnet_example::EthernetNetwork::begin(APP_NAME, ethernetConfig)) {
+    Serial.println("[E] Ethernet startup failed");
+  }
+#else
   ConfigManager.startWebServer();
+#endif
 
   Serial.println("[I] Setup completed, starting main loop");
 }
 
+#if !BACNET_DEMO_USE_ETHERNET
 void onWiFiConnected() {
   wifiServices.onConnected(ConfigManager, APP_NAME, systemSettings, ntpSettings);
   Serial.print("[I] WiFi station IP: ");
@@ -1389,10 +1505,29 @@ void onWiFiAPMode() {
   Serial.print("[I] WiFi AP mode IP: ");
   Serial.println(WiFi.softAPIP());
 }
+#endif
 
 static void setupNetworkDefaults() {
+#if BACNET_DEMO_USE_ETHERNET
+  if (ethernetIp.get().isEmpty()) {
+    ethernetIp.set(MY_ETHERNET_IP);
+    ethernetSubnet.set(MY_SUBNET_MASK);
+    ethernetGateway.set(MY_GATEWAY_IP);
+    ethernetDns.set(MY_DNS_IP);
+    settingsPassword.set(SETTINGS_PASSWORD);
+#if CM_ENABLE_OTA
+    systemSettings.otaPassword.set(OTA_PASSWORD);
+#endif
+    ConfigManager.saveAll();
+  }
+
+  ConfigManager.setSettingsPassword(settingsPassword.get());
+  settingsPassword.setCallback([](const String& password) {
+    ConfigManager.setSettingsPassword(password);
+  });
+#else
   if (wifiSettings.wifiSsid.get().isEmpty()) {
-#if CM_HAS_WIFI_SECRETS
+#if BACNET_DEMO_HAS_SECRETS
     Serial.println("[I] WiFi SSID empty, applying local secret defaults");
     wifiSettings.wifiSsid.set(MY_WIFI_SSID);
     wifiSettings.wifiPassword.set(MY_WIFI_PASSWORD);
@@ -1424,10 +1559,15 @@ static void setupNetworkDefaults() {
   if (systemSettings.otaPassword.get() != OTA_PASSWORD) {
     systemSettings.otaPassword.save(OTA_PASSWORD);
   }
+#endif
 }
 
 void loop() {
+#if BACNET_DEMO_USE_ETHERNET
+  updateEthernetNetwork();
+#else
   ConfigManager.getWiFiManager().update();
+#endif
   ConfigManager.handleClient();
   demoLogging.loop();
   bacnetClient.logger().tick();
@@ -1439,8 +1579,13 @@ void loop() {
   static unsigned long lastLoopLog = 0;
   if (millis() - lastLoopLog > 60000) {
     lastLoopLog = millis();
+#if BACNET_DEMO_USE_ETHERNET
+    Serial.print("[D] Loop running, Ethernet IP=");
+    Serial.print(bacnet_example::EthernetNetwork::localIp());
+#else
     Serial.print("[D] Loop running, WiFi status=");
     Serial.print(WiFi.status());
+#endif
     Serial.print(" heap=");
     Serial.print(ESP.getFreeHeap());
     Serial.print(" minHeap=");

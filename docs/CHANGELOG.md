@@ -6,6 +6,18 @@ This changelog is a curated overview.
 
 - No unreleased changes documented yet.
 
+## 0.25.0
+
+- Split the optional client demo into explicit WiFi and WT32-ETH01 V1.4
+  Ethernet projects while keeping the shared BACnet/UI application in one
+  example-only source tree.
+- Added reusable WT32-ETH01 Ethernet startup support and `eth` build
+  environments for the basic client, WAGO HIL runner, and server demo.
+- Updated optional demo integration to ConfigManager V4.4.0 and documented the
+  local COM6/GPIO0 serial flashing workflow.
+- Kept BACnet UDP port behavior, Who-Is/I-Am discovery, and the existing WiFi
+  environments unchanged.
+
 ## 0.24.2
 
 - Reduced stack pressure in BACnet value parsing paths in `BacnetClient` by

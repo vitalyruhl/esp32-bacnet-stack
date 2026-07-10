@@ -21,7 +21,8 @@ release_example: release/v0.1.0
 - headers: `include/` when present
 - internal_libs: `lib/` when present
 - examples: `examples/`
-- client_example: `examples/client-demo`
+- client_example_wifi: `examples/client-demo-wifi`
+- client_example_eth: `examples/client-demo-ETH`
 - server_example: `examples/server-demo`
 - tests: `test/` when present
 - docs: `README.md`, `docs/`
@@ -35,8 +36,11 @@ release_example: release/v0.1.0
 ## Validation
 
 - root: `pio run -e usb`
-- client_example: `pio run -d examples/client-demo -e usb`
-- server_example: `pio run -d examples/server-demo -e usb`
+- client_example_wifi: `pio run -d examples/client-demo-wifi -e usb`
+- client_example_eth: `pio run -d examples/client-demo-ETH -e eth`
+- basic_client_example_eth: `pio run -d examples/client-object-list-scan-basic -e eth`
+- hil_client_example_eth: `pio run -d examples/hil-wago-client-acceptance -e eth`
+- server_example: `pio run -d examples/server-demo -e usb -e eth`
 - tests: `pio test -e usb --without-uploading --without-testing`
 - ota_when_relevant: `pio run -e ota`
 - upload/monitor: explicit user request only

@@ -48,7 +48,8 @@ architecture until the small helper layer is proven.
 
 - BACnet write API implementation.
 - MQTT or Home Assistant adapters in the BACnet library.
-- Reintroducing BME/BME280/BME350 sensor logic into `examples/client-demo`.
+- Reintroducing BME/BME280/BME350 sensor logic into the shared client-demo
+  application.
 - Moving ConfigManager-specific UI code into the BACnet library.
 
 Write support should be designed as a separate layer so read/cache/status code

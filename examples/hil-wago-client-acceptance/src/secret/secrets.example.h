@@ -10,6 +10,8 @@
 
 // Static IP settings. Use real local values only in the ignored secrets.h file.
 #define MY_WIFI_IP "192.168.2.126"
+// Optional wired override; otherwise the Ethernet env reuses MY_WIFI_IP.
+// #define MY_ETHERNET_IP "192.168.2.127"
 #define MY_GATEWAY_IP "192.168.2.1"
 #define MY_SUBNET_MASK "255.255.255.0"
 #define MY_DNS_IP "192.168.2.1"

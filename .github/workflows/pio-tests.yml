@@ -34,11 +34,20 @@ jobs:
       - name: Build root project
         run: pio run -e usb
 
-      - name: Build client demo
-        run: pio run -d examples/client-demo -e usb
+      - name: Build WiFi client demo
+        run: pio run -d examples/client-demo-wifi -e usb
+
+      - name: Build Ethernet client demo
+        run: pio run -d examples/client-demo-ETH -e eth
+
+      - name: Build basic client example
+        run: pio run -d examples/client-object-list-scan-basic -e usb -e eth
+
+      - name: Build WAGO HIL runner
+        run: pio run -d examples/hil-wago-client-acceptance -e usb -e eth
 
       - name: Build server demo
-        run: pio run -d examples/server-demo -e usb
+        run: pio run -d examples/server-demo -e usb -e eth
 
       - name: Compile tests
         run: pio test -e usb --without-uploading --without-testing
