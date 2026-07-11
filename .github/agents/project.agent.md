@@ -1,6 +1,16 @@
+---
+name: Project Profile
+description: Project context for agents that need repository-specific facts.
+tools: []
+agents: []
+user-invocable: false
+disable-model-invocation: true
+---
+
 # Project Profile
 
-Mandatory context for all agents; not a work agent.
+Context only, not a work agent. Load it only when repository-specific facts
+are required.
 
 ```yaml
 repo: esp32-bacnet-stack
