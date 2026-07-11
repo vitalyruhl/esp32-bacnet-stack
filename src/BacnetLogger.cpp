@@ -149,6 +149,10 @@ void BacnetLogger::tick(uint32_t nowMs) {
 #endif
 }
 
+void BacnetLogger::tick() {
+  tick(clock_ != nullptr ? clock_->nowMs() : 0);
+}
+
 void BacnetLogger::logTag(BacnetLogLevel level, const char* tag, const char* format, ...) {
   va_list args;
   va_start(args, format);
@@ -266,7 +270,12 @@ void BacnetLogger::logV(BacnetLogLevel level, const char* tag, const char* forma
   char resolvedTag[kMaxTagLength] = {};
   buildTag(tag, resolvedTag, sizeof(resolvedTag));
 
-  const BacnetLogRecord record{level, resolvedTag, message, millis(), "BACnet", nullptr};
+  const BacnetLogRecord record{level,
+                               resolvedTag,
+                               message,
+                               clock_ != nullptr ? clock_->nowMs() : 0,
+                               "BACnet",
+                               nullptr};
   emit(record);
 #else
   (void)level;

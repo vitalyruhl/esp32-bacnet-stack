@@ -6,6 +6,20 @@ This changelog is a curated overview.
 
 - No unreleased changes documented yet.
 
+## 0.26.0
+
+- Extracted Arduino-free BACnet protocol types, BVLC/NPDU/APDU codecs, and
+  common value/object display helpers into portable modules.
+- Added portable endpoint, datagram transport, monotonic-clock, and logging
+  boundaries while keeping the existing Arduino `BacnetClient` API as a
+  compatibility layer.
+- Added a CMake portable compile smoke target that builds the protocol modules
+  without Arduino or ESP32 headers. This is compile coverage only; native
+  Windows transport and CLI support remain planned work.
+- Made the WiFi demo's existing `ESP.h` compatibility wrapper available to
+  external PlatformIO dependencies so the pinned ConfigManager build remains
+  case-sensitive filesystem compatible.
+
 ## 0.25.0
 
 - Split the optional client demo into explicit WiFi and WT32-ETH01 V1.4

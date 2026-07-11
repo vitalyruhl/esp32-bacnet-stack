@@ -200,6 +200,17 @@ Compile tests without upload:
 pio test -e usb --without-uploading --without-testing
 ```
 
+Portable core compile smoke test:
+
+```sh
+cmake -S tools/portable-smoke -B build/portable-smoke
+cmake --build build/portable-smoke
+build/portable-smoke/portable_smoke
+```
+
+The smoke target compiles the portable protocol modules without Arduino or
+ESP32 headers. It does not provide a native transport, Windows runtime, or CLI.
+
 Optional compile-time write feature gates:
 
 - `ESP_BACNET_ENABLE_WRITE_PROPERTY` (default `0`)
