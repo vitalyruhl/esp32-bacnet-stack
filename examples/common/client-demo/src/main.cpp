@@ -112,7 +112,7 @@ static BacnetDemoLogging demoLogging(ConfigManager, bacnetClient);
 #endif
 
 #ifndef BACNET_TARGET_DEVICE_INSTANCE
-#define BACNET_TARGET_DEVICE_INSTANCE 9001
+#define BACNET_TARGET_DEVICE_INSTANCE 1682101
 #endif
 
 #ifndef BACNET_TARGET_PORT
@@ -219,6 +219,7 @@ static BacnetDemoWatchedAnalogValue watchedAnalogValue(
   kWatchedAnalogValuePollMs,
   kBacnetScanReadTimeoutMs);
 static BacnetScannedObject scanBuffer[kBacnetScanResultCapacity];
+static BacnetScannedObject fallbackScanBuffer[3];
 static BacnetObjectListScanJob scanJob;
 static std::unique_ptr<BacnetDeviceSession> activeBacnetSession;
 static const BacnetObjectType kValueObjectScanFilter[] = {
@@ -1063,36 +1064,33 @@ static size_t appendConfiguredFallbackObjects(BacnetDeviceSession& session,
                                               size_t& binaryStored,
                                               size_t& multiStateStored) {
   size_t loaded = 0;
-  size_t scanSlot = 0;
   demoLogging.log(BacnetDemoLogging::Level::Info, "configured fallback probe started");
 
-  if (readConfiguredFallbackObject(
-        session,
-        bacnetDemoFallbackAnalogObject(BACNET_FALLBACK_ANALOG_OBJECT_INSTANCE),
-        scanBuffer[scanSlot],
-        analogValues,
-        kBacnetMaxFoundObjectsToDisplay)) {
+  if (analogStored == 0 && readConfiguredFallbackObject(
+                             session,
+                             bacnetDemoFallbackAnalogObject(BACNET_FALLBACK_ANALOG_OBJECT_INSTANCE),
+                             fallbackScanBuffer[0],
+                             analogValues,
+                             kBacnetMaxFoundObjectsToDisplay)) {
     ++analogStored;
     ++loaded;
   }
-  ++scanSlot;
-  if (readConfiguredFallbackObject(
-        session,
-        bacnetDemoFallbackBinaryObject(BACNET_FALLBACK_BINARY_OBJECT_INSTANCE),
-        scanBuffer[scanSlot],
-        binaryValues,
-        kBacnetMaxFoundObjectsToDisplay)) {
+  if (binaryStored == 0 && readConfiguredFallbackObject(
+                             session,
+                             bacnetDemoFallbackBinaryObject(BACNET_FALLBACK_BINARY_OBJECT_INSTANCE),
+                             fallbackScanBuffer[1],
+                             binaryValues,
+                             kBacnetMaxFoundObjectsToDisplay)) {
     ++binaryStored;
     ++loaded;
   }
-  ++scanSlot;
-  if (readConfiguredFallbackObject(
-        session,
-        bacnetDemoFallbackMultiStateObject(
-          BACNET_FALLBACK_MULTISTATE_OBJECT_INSTANCE),
-        scanBuffer[scanSlot],
-        multiStateValues,
-        kBacnetMaxFoundObjectsToDisplay)) {
+  if (multiStateStored == 0 && readConfiguredFallbackObject(
+                                 session,
+                                 bacnetDemoFallbackMultiStateObject(
+                                   BACNET_FALLBACK_MULTISTATE_OBJECT_INSTANCE),
+                                 fallbackScanBuffer[2],
+                                 multiStateValues,
+                                 kBacnetMaxFoundObjectsToDisplay)) {
     ++multiStateStored;
     ++loaded;
   }
@@ -1151,7 +1149,8 @@ static void finishValueObjectScan(BacnetDeviceSession& session,
 
   const bool needsConfiguredFallback =
     scan.objectListCountStatus != BacnetDeviceSessionReadStatus::Ack ||
-    scan.stored == 0;
+    scan.stored == 0 || analogStored == 0 || binaryStored == 0 ||
+    multiStateStored == 0;
   size_t fallbackStored = 0;
   if (needsConfiguredFallback) {
     fallbackStored = appendConfiguredFallbackObjects(
@@ -1348,12 +1347,12 @@ static void startBacnetClient() {
 }
 
 static void pollBacnetDiscovery() {
-  if (!bacnetStarted) {
+  if (!bacnetStarted || bacnetDeviceSelected) {
     return;
   }
 
   BacnetIAmDevice device;
-  if (bacnetClient.pollIAm(device) && !bacnetDeviceSelected) {
+  if (bacnetClient.pollIAm(device)) {
     selectBacnetDevice(device);
   }
 
