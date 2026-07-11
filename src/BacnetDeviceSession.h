@@ -384,6 +384,7 @@ private:
 class BacnetDeviceSession {
 public:
   static constexpr uint32_t kDefaultReadTimeoutMs = kBacnetDefaultReadTimeoutMs;
+  static constexpr uint32_t kUseClientClock = UINT32_MAX;
   static constexpr size_t kMaxCachedProperties = ESP_BACNET_PROPERTY_CACHE_SIZE;
 
   BacnetDeviceSession(BacnetClient& client, uint32_t deviceInstance, IPAddress address, uint16_t port = BacnetClient::kDefaultPort);
@@ -493,15 +494,15 @@ public:
                            const BacnetObjectScanOptions& options,
                            BacnetScannedObject* results,
                            size_t resultCapacity,
-                           uint32_t nowMs = millis());
+                           uint32_t nowMs = kUseClientClock);
   void pollObjectListScan(BacnetObjectListScanJob& job,
-                          uint32_t nowMs = millis());
+                          uint32_t nowMs = kUseClientClock);
   void cancelObjectListScan(BacnetObjectListScanJob& job);
   void poll(BacnetPropertySubscription& subscription,
-            uint32_t nowMs = millis());
+            uint32_t nowMs = kUseClientClock);
   void poll(BacnetPropertySubscription* subscriptions,
             size_t count,
-            uint32_t nowMs = millis());
+            uint32_t nowMs = kUseClientClock);
 
 private:
   friend class BacnetPropertySubscription;

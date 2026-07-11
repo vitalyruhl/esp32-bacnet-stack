@@ -260,7 +260,7 @@ BacnetPropertySubscription::BacnetPropertySubscription(
     options_.timeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs;
   }
   if (options_.fallbackPollMs > 0) {
-    nextPollAtMs_ = millis() + options_.fallbackPollMs;
+    nextPollAtMs_ = session_->client().nowMs() + options_.fallbackPollMs;
   }
 }
 
@@ -644,7 +644,7 @@ BacnetPropertyReadStatus BacnetDeviceSession::readPropertyDetailed(
     updatePropertyCache(request,
                         BacnetPropertyReadStatus::Busy,
                         nullptr,
-                        millis());
+                        client_.nowMs());
     return BacnetPropertyReadStatus::Busy;
   }
 
@@ -653,11 +653,11 @@ BacnetPropertyReadStatus BacnetDeviceSession::readPropertyDetailed(
     updatePropertyCache(request,
                         BacnetPropertyReadStatus::SendFailed,
                         nullptr,
-                        millis());
+                        client_.nowMs());
     return BacnetPropertyReadStatus::SendFailed;
   }
 
-  const unsigned long startedAt = millis();
+  const uint32_t startedAt = client_.nowMs();
   while (true) {
     const BacnetReadPropertyPollStatus pollStatus =
       client_.pollReadPropertyStatus(value, invokeId, request, &errorClass, &errorCode);
@@ -665,15 +665,15 @@ BacnetPropertyReadStatus BacnetDeviceSession::readPropertyDetailed(
       const BacnetPropertyReadStatus status = classifyDetailedReadStatus(
         pollStatus, value, errorClass, errorCode, request.arrayIndex);
       updatePropertyCache(
-        request, status, &value, millis(), errorClass, errorCode);
+        request, status, &value, client_.nowMs(), errorClass, errorCode);
       return status;
     }
-    if (millis() - startedAt >= timeoutMs) {
+    if (client_.nowMs() - startedAt >= timeoutMs) {
       client_.logReadPropertyTimeout(invokeId, request);
       updatePropertyCache(request,
                           BacnetPropertyReadStatus::Timeout,
                           nullptr,
-                          millis());
+                          client_.nowMs());
       return BacnetPropertyReadStatus::Timeout;
     }
     yield();
@@ -912,6 +912,9 @@ bool BacnetDeviceSession::beginObjectListScan(
   BacnetScannedObject* results,
   size_t resultCapacity,
   uint32_t nowMs) {
+  if (nowMs == kUseClientClock) {
+    nowMs = client_.nowMs();
+  }
   BacnetLogger& logger = client_.logger();
   if (inFlightObjectListScan_ != nullptr || inFlightSubscription_ != nullptr ||
       job.isActive()) {
@@ -953,6 +956,9 @@ bool BacnetDeviceSession::beginObjectListScan(
 
 void BacnetDeviceSession::pollObjectListScan(BacnetObjectListScanJob& job,
                                              uint32_t nowMs) {
+  if (nowMs == kUseClientClock) {
+    nowMs = client_.nowMs();
+  }
   if (job.session_ != this || !job.isActive()) {
     return;
   }
@@ -1265,6 +1271,9 @@ void BacnetDeviceSession::releaseObjectListScan(BacnetObjectListScanJob& job) {
 
 void BacnetDeviceSession::poll(BacnetPropertySubscription& subscription,
                                uint32_t nowMs) {
+  if (nowMs == kUseClientClock) {
+    nowMs = client_.nowMs();
+  }
   if (subscription.session_ != this) {
     return;
   }
@@ -1280,6 +1289,9 @@ void BacnetDeviceSession::poll(BacnetPropertySubscription& subscription,
 void BacnetDeviceSession::poll(BacnetPropertySubscription* subscriptions,
                                size_t count,
                                uint32_t nowMs) {
+  if (nowMs == kUseClientClock) {
+    nowMs = client_.nowMs();
+  }
   pollInFlightSubscription(nowMs);
   if (inFlightSubscription_ != nullptr || subscriptions == nullptr || count == 0) {
     return;

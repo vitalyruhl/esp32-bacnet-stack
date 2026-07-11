@@ -3,6 +3,7 @@
 #include <BacnetClient.h>
 #include <BacnetDeviceSession.h>
 #include <BacnetRemoteObject.h>
+#include <portable/BacnetProtocol.h>
 #include <BacnetServer.h>
 #include <EspBacnet.h>
 #include <unity.h>
@@ -210,18 +211,18 @@ void test_bacnet_logger_verbose_compile_gate() {
   }
 }
 
-void test_bacnet_client_builds_who_is_request() {
-  uint8_t request[BacnetClient::kWhoIsRequestSize] = {};
+void test_portable_protocol_builds_who_is_request() {
+  uint8_t request[BacnetProtocol::kWhoIsRequestSize] = {};
   const uint8_t expected[] = {0x81, 0x0B, 0x00, 0x08, 0x01, 0x00, 0x10, 0x08};
 
   TEST_ASSERT_EQUAL_UINT32(sizeof(expected),
-                           BacnetClient::buildWhoIsRequest(request,
-                                                           sizeof(request)));
+                           BacnetProtocol::buildWhoIsRequest(request,
+                                                             sizeof(request)));
   TEST_ASSERT_EQUAL_UINT8_ARRAY(expected, request, sizeof(expected));
-  TEST_ASSERT_EQUAL_UINT32(0, BacnetClient::buildWhoIsRequest(nullptr, 0));
+  TEST_ASSERT_EQUAL_UINT32(0, BacnetProtocol::buildWhoIsRequest(nullptr, 0));
 }
 
-void test_bacnet_client_parses_i_am_response() {
+void test_portable_protocol_parses_i_am_response() {
   const uint8_t response[] = {
     0x81,
     0x0A,
@@ -244,10 +245,9 @@ void test_bacnet_client_parses_i_am_response() {
     0x21,
     0xDE,
   };
-  BacnetIAmDevice device;
+  BacnetIAmDeviceInfo device;
 
-  TEST_ASSERT_TRUE(BacnetClient::parseIAmResponse(response, sizeof(response), device));
-  TEST_ASSERT_EQUAL_STRING("0.0.0.0", device.address.toString().c_str());
+  TEST_ASSERT_TRUE(BacnetProtocol::parseIAmResponse(response, sizeof(response), device));
   TEST_ASSERT_EQUAL_UINT32(1234, device.deviceInstance);
   TEST_ASSERT_EQUAL_UINT32(1476, device.maxApduLengthAccepted);
   TEST_ASSERT_EQUAL_UINT8(0, device.segmentationSupported);
@@ -259,6 +259,20 @@ void test_bacnet_client_rejects_non_i_am_response() {
   BacnetIAmDevice device;
 
   TEST_ASSERT_FALSE(BacnetClient::parseIAmResponse(response, sizeof(response), device));
+}
+
+void test_portable_protocol_classifies_reject_and_abort() {
+  const uint8_t reject[] = {0x81, 0x0A, 0x00, 0x08, 0x01, 0x00, 0x60, 0x04};
+  const uint8_t abort[] = {0x81, 0x0A, 0x00, 0x08, 0x01, 0x00, 0x70, 0x04};
+
+  TEST_ASSERT_EQUAL_UINT8(
+    static_cast<uint8_t>(BacnetReadPropertyResponseKind::Reject),
+    static_cast<uint8_t>(BacnetProtocol::classifyReadPropertyResponse(
+      reject, sizeof(reject), 4)));
+  TEST_ASSERT_EQUAL_UINT8(
+    static_cast<uint8_t>(BacnetReadPropertyResponseKind::Abort),
+    static_cast<uint8_t>(BacnetProtocol::classifyReadPropertyResponse(
+      abort, sizeof(abort), 4)));
 }
 
 void test_bacnet_client_builds_read_property_request() {
@@ -285,7 +299,7 @@ void test_bacnet_client_builds_read_property_request() {
 
   TEST_ASSERT_EQUAL_UINT32(
     sizeof(expected),
-    BacnetClient::buildReadPropertyRequest(
+    BacnetProtocol::buildReadPropertyRequest(
       request, sizeof(request), BacnetObjectId{8, 1234}, BacnetPropertyId::ObjectName, 1));
   TEST_ASSERT_EQUAL_UINT8_ARRAY(expected, request, sizeof(expected));
 }
@@ -591,7 +605,7 @@ void test_bacnet_client_parses_read_property_ack() {
   };
   BacnetValue value;
 
-  TEST_ASSERT_TRUE(BacnetClient::parseReadPropertyAck(
+  TEST_ASSERT_TRUE(BacnetProtocol::parseReadPropertyAck(
     response, sizeof(response), 1, BacnetPropertyId::ObjectName, value));
   TEST_ASSERT_EQUAL_STRING("WAGO", value.text);
   TEST_ASSERT_EQUAL_UINT32(4, value.textLength);
@@ -907,10 +921,10 @@ void test_bacnet_client_parses_read_property_error() {
   };
   BacnetValue value;
 
-  TEST_ASSERT_TRUE(BacnetClient::parseReadPropertyError(response,
-                                                        sizeof(response),
-                                                        4,
-                                                        value));
+  TEST_ASSERT_TRUE(BacnetProtocol::parseReadPropertyError(response,
+                                                          sizeof(response),
+                                                          4,
+                                                          value));
   TEST_ASSERT_EQUAL_STRING("error class 2 code 32", value.text);
   TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetValueType::Error),
                           static_cast<uint8_t>(value.type));
@@ -1906,9 +1920,10 @@ void setup() {
   RUN_TEST(test_bacnet_logger_uses_bounded_output_storage);
   RUN_TEST(test_bacnet_logger_ignores_extra_scoped_tags);
   RUN_TEST(test_bacnet_logger_verbose_compile_gate);
-  RUN_TEST(test_bacnet_client_builds_who_is_request);
-  RUN_TEST(test_bacnet_client_parses_i_am_response);
+  RUN_TEST(test_portable_protocol_builds_who_is_request);
+  RUN_TEST(test_portable_protocol_parses_i_am_response);
   RUN_TEST(test_bacnet_client_rejects_non_i_am_response);
+  RUN_TEST(test_portable_protocol_classifies_reject_and_abort);
   RUN_TEST(test_bacnet_client_builds_read_property_request);
   RUN_TEST(test_bacnet_client_builds_ai_present_value_request_with_type_zero);
   RUN_TEST(test_bacnet_property_ids_cover_generic_access_slice);

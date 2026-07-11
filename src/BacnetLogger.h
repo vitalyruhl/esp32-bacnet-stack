@@ -2,11 +2,11 @@
 
 #pragma once
 
-#include <Arduino.h>
-
 #include <cstdarg>
 #include <cstddef>
 #include <cstdint>
+
+#include "portable/BacnetRuntime.h"
 
 #ifndef BACNET_ENABLE_LOGGING
 #define BACNET_ENABLE_LOGGING 1
@@ -110,7 +110,15 @@ public:
   static constexpr size_t kMaxOutputs = BACNET_LOG_MAX_OUTPUTS;
   static constexpr size_t kMaxTagDepth = BACNET_LOG_MAX_TAG_DEPTH;
 
-  BacnetLogger() = default;
+  explicit BacnetLogger(const BacnetMonotonicClock* clock = nullptr)
+      : clock_(clock) {}
+
+  void setClock(const BacnetMonotonicClock* clock) {
+    clock_ = clock;
+  }
+  const BacnetMonotonicClock* clock() const {
+    return clock_;
+  }
 
   void addOutput(BacnetLogOutput& output);
   bool removeOutput(const BacnetLogOutput& output);
@@ -131,7 +139,8 @@ public:
   BacnetScopedLogTag scopedTag(const char* tag);
 
   void emit(const BacnetLogRecord& record);
-  void tick(uint32_t nowMs = millis());
+  void tick(uint32_t nowMs);
+  void tick();
 
   void logTag(BacnetLogLevel level, const char* tag, const char* format, ...);
   void log(BacnetLogLevel level, const char* format, ...);
@@ -158,6 +167,7 @@ private:
   char baseTag_[kMaxTagLength] = {};
   char tagStack_[(kMaxTagDepth > 0) ? kMaxTagDepth : 1][kMaxTagLength] = {};
   size_t tagDepth_ = 0;
+  const BacnetMonotonicClock* clock_ = nullptr;
 };
 
 class BacnetScopedLogTag {
