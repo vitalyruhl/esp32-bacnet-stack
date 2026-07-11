@@ -9,7 +9,10 @@ ConfigManager V4.4.0 stores the Ethernet IP, subnet, gateway, DNS, settings
 password, and system/NTP settings. Address changes take effect after a reboot.
 The tracked first-run default is `192.168.2.127/24`; copy
 `src/secret/secrets.example.h` to `src/secret/secrets.h` to use other local
-defaults.
+defaults. The tracked WAGO test target uses Device instance `1682101` at
+`192.168.2.101:47808`. If the bounded object-list preview fills before a value
+category is stored, the demo probes its configured AV220, BV320, or MV2020
+reference object for that missing category.
 
 ## Build, upload, and monitor
 

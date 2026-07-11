@@ -17,6 +17,9 @@ This changelog is a curated overview.
   local COM6/GPIO0 serial flashing workflow.
 - Kept BACnet UDP port behavior, Who-Is/I-Am discovery, and the existing WiFi
   environments unchanged.
+- Stabilized the shared client demo's BACnet request ownership, aligned the
+  default WAGO Device instance, and retained configured AV/BV/MV reference
+  objects when the bounded object-list preview fills before every category.
 
 ## 0.24.2
 
