@@ -16,6 +16,9 @@ This changelog is a curated overview.
 - Added a CMake portable compile smoke target that builds the protocol modules
   without Arduino or ESP32 headers. This is compile coverage only; native
   Windows transport and CLI support remain planned work.
+- Made the WiFi demo's existing `ESP.h` compatibility wrapper available to
+  external PlatformIO dependencies so the pinned ConfigManager build remains
+  case-sensitive filesystem compatible.
 
 ## 0.25.0
 
