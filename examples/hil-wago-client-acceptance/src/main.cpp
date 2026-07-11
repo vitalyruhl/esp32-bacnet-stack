@@ -4,7 +4,17 @@
 #include <BacnetClient.h>
 #include <BacnetDeviceSession.h>
 #include <EspBacnet.h>
+
+#ifndef EXAMPLE_USE_ETHERNET
+#define EXAMPLE_USE_ETHERNET 0
+#endif
+
+#if EXAMPLE_USE_ETHERNET
+#include <ETH.h>
+#include <ExampleEthernet.h>
+#else
 #include <WiFi.h>
+#endif
 
 #if __has_include("secret/secrets.h")
 #include "secret/secrets.h"
@@ -16,6 +26,10 @@
 
 #ifndef MY_USE_DHCP
 #define MY_USE_DHCP true
+#endif
+
+#if EXAMPLE_USE_ETHERNET && !defined(MY_ETHERNET_IP)
+#define MY_ETHERNET_IP MY_WIFI_IP
 #endif
 
 #ifndef BACNET_TARGET_IP
@@ -216,8 +230,8 @@
 
 namespace {
 
-constexpr uint32_t kWifiConnectTimeoutMs = 30000;
-constexpr uint32_t kWifiRetryDelayMs = 250;
+constexpr uint32_t kNetworkConnectTimeoutMs = 30000;
+constexpr uint32_t kNetworkRetryDelayMs = 250;
 constexpr uint32_t kScanTimeoutMs = 90000;
 constexpr uint32_t kScanReadTimeoutMs = 3000;
 constexpr uint32_t kPollDelayMs = 10;
@@ -435,6 +449,7 @@ void printFinalSummary(const ScenarioSummary& summary,
   printResult(scenarioOutcomeText(finalOutcome), "client acceptance complete");
 }
 
+#if !EXAMPLE_USE_ETHERNET
 bool configureStaticIp() {
 #if MY_USE_DHCP
   return true;
@@ -455,8 +470,27 @@ bool configureStaticIp() {
   return true;
 #endif
 }
+#endif
 
-bool connectWifi() {
+bool connectNetwork() {
+#if EXAMPLE_USE_ETHERNET
+  const bacnet_example::EthernetConfig config{
+    MY_USE_DHCP,
+    MY_ETHERNET_IP,
+    MY_GATEWAY_IP,
+    MY_SUBNET_MASK,
+    MY_DNS_IP,
+  };
+  if (!bacnet_example::EthernetNetwork::begin("bacnet-hil-wago", config) ||
+      !bacnet_example::EthernetNetwork::waitForIp(kNetworkConnectTimeoutMs)) {
+    printResult("FAIL", "Ethernet connection failed");
+    return false;
+  }
+  Serial.print("[HIL] Ethernet IP=");
+  Serial.println(bacnet_example::EthernetNetwork::localIp());
+  printResult("PASS", "Ethernet connected");
+  return true;
+#else
   WiFi.mode(WIFI_STA);
   if (!configureStaticIp()) {
     return false;
@@ -467,8 +501,8 @@ bool connectWifi() {
 
   const uint32_t startedAt = millis();
   while (WiFi.status() != WL_CONNECTED &&
-         millis() - startedAt < kWifiConnectTimeoutMs) {
-    delay(kWifiRetryDelayMs);
+         millis() - startedAt < kNetworkConnectTimeoutMs) {
+    delay(kNetworkRetryDelayMs);
     yield();
   }
 
@@ -479,13 +513,14 @@ bool connectWifi() {
 
   printResult("PASS", "WiFi connected");
   return true;
+#endif
 }
 
 bool ensureRuntimeReady() {
   if (runtimeReady) {
     return true;
   }
-  if (!connectWifi()) {
+  if (!connectNetwork()) {
     return false;
   }
   if (!client.begin()) {

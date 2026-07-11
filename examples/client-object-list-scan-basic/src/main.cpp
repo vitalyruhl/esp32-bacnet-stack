@@ -2,7 +2,17 @@
 
 #include <Arduino.h>
 #include <EspBacnet.h>
+
+#ifndef EXAMPLE_USE_ETHERNET
+#define EXAMPLE_USE_ETHERNET 0
+#endif
+
+#if EXAMPLE_USE_ETHERNET
+#include <ETH.h>
+#include <ExampleEthernet.h>
+#else
 #include <WiFi.h>
+#endif
 
 #include <cstddef>
 #include <cstdint>
@@ -18,11 +28,15 @@
 #endif
 
 #ifndef APP_VERSION
-#define APP_VERSION "0.24.2"
+#define APP_VERSION "0.25.0"
 #endif
 
 #ifndef MY_USE_DHCP
 #define MY_USE_DHCP true
+#endif
+
+#if EXAMPLE_USE_ETHERNET && !defined(MY_ETHERNET_IP)
+#define MY_ETHERNET_IP MY_WIFI_IP
 #endif
 
 #ifndef BACNET_TARGET_DEVICE_INSTANCE
@@ -40,8 +54,8 @@
 namespace {
 
 constexpr uint32_t kSerialBaud = 115200;
-constexpr uint32_t kWifiConnectTimeoutMs = 20000;
-constexpr uint32_t kWifiRetryDelayMs = 250;
+constexpr uint32_t kNetworkConnectTimeoutMs = 20000;
+constexpr uint32_t kNetworkRetryDelayMs = 250;
 constexpr uint32_t kReadTimeoutMs = 3000;
 constexpr uint32_t kMaxObjectListEntries = 600;
 constexpr size_t kMaxScanResults = 10;
@@ -56,6 +70,7 @@ bool parseIp(const char* text, IPAddress& address) {
   return text != nullptr && address.fromString(text);
 }
 
+#if !EXAMPLE_USE_ETHERNET
 bool configureStaticIp() {
 #if MY_USE_DHCP
   return true;
@@ -76,8 +91,25 @@ bool configureStaticIp() {
   return true;
 #endif
 }
+#endif
 
-bool connectWifi() {
+bool connectNetwork() {
+#if EXAMPLE_USE_ETHERNET
+  const bacnet_example::EthernetConfig config{
+    MY_USE_DHCP,
+    MY_ETHERNET_IP,
+    MY_GATEWAY_IP,
+    MY_SUBNET_MASK,
+    MY_DNS_IP,
+  };
+  if (!bacnet_example::EthernetNetwork::begin(APP_NAME, config) ||
+      !bacnet_example::EthernetNetwork::waitForIp(kNetworkConnectTimeoutMs)) {
+    return false;
+  }
+  Serial.print("[I] local Ethernet IP ");
+  Serial.println(bacnet_example::EthernetNetwork::localIp());
+  return true;
+#else
   WiFi.mode(WIFI_STA);
   if (!configureStaticIp()) {
     return false;
@@ -88,8 +120,8 @@ bool connectWifi() {
 
   const uint32_t startedAt = millis();
   while (WiFi.status() != WL_CONNECTED &&
-         millis() - startedAt < kWifiConnectTimeoutMs) {
-    delay(kWifiRetryDelayMs);
+         millis() - startedAt < kNetworkConnectTimeoutMs) {
+    delay(kNetworkRetryDelayMs);
     Serial.print(".");
   }
   Serial.println();
@@ -102,6 +134,7 @@ bool connectWifi() {
   Serial.print("[I] local WiFi IP ");
   Serial.println(WiFi.localIP());
   return true;
+#endif
 }
 
 void printValue(const char* label, BacnetDeviceSessionReadStatus status, const BacnetValue& value) {
@@ -341,7 +374,7 @@ void setup() {
   Serial.print("[I] version ");
   Serial.println(APP_VERSION);
 
-  if (!connectWifi()) {
+  if (!connectNetwork()) {
     return;
   }
   runScan();

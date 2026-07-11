@@ -9,7 +9,7 @@ instead of creating many small one-feature HIL examples.
 ## Scope
 
 - Not required by normal CI.
-- Requires local ESP32 hardware on USB.
+- Requires local ESP32 hardware through WiFi or WT32-ETH01 Ethernet.
 - Requires reachable WAGO BACnet/IP target.
 - Requires local secrets in `src/secret/secrets.h`.
 
@@ -59,14 +59,20 @@ Build without upload:
 
 ```sh
 pio run -d examples/hil-wago-client-acceptance -e usb
+pio run -d examples/hil-wago-client-acceptance -e eth
 ```
 
 Run locally:
 
 ```sh
 pio run -d examples/hil-wago-client-acceptance -e usb -t upload
-pio device monitor -d examples/hil-wago-client-acceptance -e usb
+pio device monitor -b 115200
 ```
+
+For the current WT32-ETH01/AZ-Delivery adapter setup, use `-e eth-com6` for
+upload and monitor COM6 at 115200 baud. Other systems must select their actual
+port. Hold GPIO0 low during reset for the bootloader and provide enough current
+for both the ESP32 and Ethernet PHY.
 
 ## Output Contract
 

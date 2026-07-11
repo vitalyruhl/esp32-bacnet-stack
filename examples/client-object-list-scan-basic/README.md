@@ -6,7 +6,7 @@ perform BACnet writes.
 
 The sketch demonstrates:
 
-- WiFi startup with optional static IP settings
+- WiFi or WT32-ETH01 Ethernet startup with optional static IP settings
 - BACnet/IP client startup
 - known-target `BacnetDeviceSession::fromEndpoint()` creation
 - one simple Device `object-name` read through `BacnetProperty`
@@ -28,7 +28,9 @@ cp examples/client-object-list-scan-basic/src/secret/secrets.example.h \
 ```
 
 Set WiFi credentials, optional static IP values, and the known BACnet/IP target
-in `src/secret/secrets.h`. Do not commit real secrets.
+in `src/secret/secrets.h`. The Ethernet environment reuses the tracked
+`MY_WIFI_IP` value as its local wired address unless `MY_ETHERNET_IP` is defined
+in the ignored local file. Do not commit real secrets.
 
 The template uses documentation-range IP addresses and a placeholder device
 instance. Replace them only in the ignored local `secrets.h` file.
@@ -37,7 +39,9 @@ instance. Replace them only in the ignored local `secrets.h` file.
 
 ```sh
 pio run -d examples/client-object-list-scan-basic -e usb
+pio run -d examples/client-object-list-scan-basic -e eth
 ```
 
-Upload and serial monitor are local hardware actions and should be run only
-when explicitly intended.
+The optional `eth-com6` environment adds the current local upload/monitor port.
+COM6 is not assumed on other systems. Hold GPIO0 low during reset to enter the
+WT32-ETH01 bootloader and use a stable supply for the ESP32 and Ethernet PHY.

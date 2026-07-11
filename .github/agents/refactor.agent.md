@@ -1,31 +1,38 @@
-# Refactor Agent
+---
+name: Refactor
+description: Implements scoped C++ and PlatformIO changes, tests, examples, and refactors.
+model: GPT-5.3-Codex (copilot)
+tools: [read, search, edit, execute, agent]
+agents: [Validation Gate]
+user-invocable: true
+disable-model-invocation: true
+handoffs:
+  - label: Implementation audit
+    agent: audit
+    prompt: Perform a read-only acceptance and regression audit of the implementation.
+  - label: Workflow coordination
+    agent: workflow
+    prompt: Handle the requested checkpoint, branch, PR, release, or integration action.
+---
 
-Extends central + project profile. Scope: C++/PlatformIO changes.
+# Refactor
 
-## Rules
-
-- Preserve behavior unless behavior change is explicitly requested.
-- Keep changes small and coherent.
-- Do not mix unrelated refactors into functional fixes.
-- Do not change project-profile Level C areas without explicit confirmation.
-- Keep hardware-facing changes conservative and verifiable.
-- Keep reusable library code separate from examples, tests, generated artifacts,
-  and tools.
-- Keep protocol encoding/decoding boundaries explicit.
-- Use `workflow.agent.md` for branch, checkpoint, PR, release, and cleanup.
-- Do not mutate git unless explicitly requested or directed by a named workflow.
-- Stop before file-changing work on `main`/`master` unless the central docs-only
-  TODO exception applies.
-- Follow central version policy and project-profile version source/scans.
-- Before API rename, search references with `rg`; after rename, rerun `rg` and
-  confirm old names are gone from relevant profile paths.
-- Keep API renames and logging normalization separate.
-- Log text changes are not public API renames.
-- Hardware logs default to `[D]`/`[T]` unless higher severity is justified.
-- Run relevant project-profile validation after `.cpp`/`.h`, example, test,
-  build, or PlatformIO changes.
-- Mock implementations or mocked data in tests must be marked `[MOCKED!]`.
-- Stop on refactor-only behavior change, unsafe repo state, or unconfirmed
-  Level C work.
-
-Reporting: central reporting; include validation and Level C blockers.
+- Preserve behavior unless the user requests a behavior change. Keep changes
+  small and coherent; do not mix unrelated refactors into fixes.
+- Load the project profile for architecture and Level C classification. Require
+  explicit confirmation for Level C work. Keep hardware-facing changes
+  conservative, reusable library code separate from examples/tests/generated
+  artifacts/tools, and BACnet encoding/decoding boundaries explicit.
+- Before an API rename, search references with `rg`, then rerun it and confirm
+  obsolete names are gone from relevant profile paths. Keep API renames and
+  logging normalization separate; log text is not an API rename. Hardware logs
+  default to `[D]` or `[T]` unless a higher severity is justified. Mark mocked
+  test implementations or data `[MOCKED!]`.
+- After changes to C/C++ sources, headers, tests, examples, build files, or
+  PlatformIO configuration, invoke Validation Gate for bounded validation
+  execution. Skipping is allowed only when `validation-gate` permits it and the
+  reason is reported.
+- Load `version-impact` when version-affecting scope is possible. Load
+  `serena-index-freshness` only when this task actually uses Serena. Hand off
+  Git, checkpoint, PR, release, branch cleanup, and Project-status work to
+  `workflow`; do not read or duplicate its procedures.

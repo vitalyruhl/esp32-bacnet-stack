@@ -40,7 +40,8 @@ advanced discovery, write flows, and server MVP remain future work.
 | Writes | PresentValue priority write helpers | ⏳ Planned | Future client capability, not currently implemented. |
 | Writes | Hardware writes | 🚫 Not implemented | Disabled by default; future explicit opt-in only. |
 | Examples / validation | `examples/client-object-list-scan-basic` | ✅ Implemented | Canonical serial-only basic client example for known-target property read, object-list scan, and fallback polling. |
-| Examples / validation | `examples/client-demo` | ✅ Implemented | End-to-end client demo with discovery, scan, process-value updates, a read-only value/status browser view, and a watched Analog Value card. |
+| Examples / validation | `examples/client-demo-wifi` | ✅ Implemented | Preserved WiFi client demo with discovery, scan, process-value updates, a read-only value/status browser view, and a watched Analog Value card. |
+| Examples / validation | `examples/client-demo-ETH` | ✅ Implemented | WT32-ETH01 V1.4 Ethernet variant of the full client demo with ConfigManager V4.4.0. |
 | Examples / validation | `examples/hil-wago-client-acceptance` | 🧪 Local HIL validated | Local hardware acceptance runner for client scenarios. |
 | Examples / validation | HIL scenario S01 non-blocking object-list scan | 🧪 Local HIL validated | Validated on local ESP32/BACnet-IP target setup. |
 | Examples / validation | HIL scenario S02 common process present-value reads | 🧪 Local HIL validated | Validated on local ESP32/WAGO BACnet-IP target setup. |
@@ -63,7 +64,8 @@ Additional status notes:
 
 - A reusable BACnet logging layer is available with application-owned outputs.
 - BACnet/IP is the first target.
-- ESP32 Configuration Manager is not a core dependency. It is used only by explicitly optional demo examples.
+- ESP32 Configuration Manager is not a core dependency. V4.4.0 is pinned only
+  by the two explicitly optional client-demo projects.
 
 ## Goals
 
@@ -79,6 +81,28 @@ Additional status notes:
 - PlatformIO with the Arduino framework.
 - C++17 enabled through `-std=gnu++17`.
 
+## WiFi And Ethernet Examples
+
+The richer client demo is split deliberately:
+
+- `examples/client-demo-wifi` preserves the existing ConfigManager-driven WiFi
+  behavior.
+- `examples/client-demo-ETH` targets the Wireless-Tag WT32-ETH01 V1.4
+  (WT32-S1/LAN8720) and compiles ConfigManager WiFi support out.
+
+The basic client, WAGO HIL runner, and server demo also provide an `eth`
+environment alongside their existing `usb` environment. For fixed BACnet/IP
+installations, wired Ethernet is generally the more stable and appropriate
+transport; WiFi remains useful where cabling is unavailable.
+
+The WT32 examples use a generic `eth` build environment and a local
+`eth-com6` convenience environment. COM6 matches the current AZ-Delivery
+USB-to-serial test adapter but is not a portable assumption. To flash, use
+3.3 V UART levels, connect UART0 TX/RX and common ground, hold GPIO0 low while
+resetting to enter the bootloader, and provide a stable supply for the ESP32
+and Ethernet PHY. See the Ethernet client demo README for exact commands and
+wiring.
+
 ## screenshots
 
 ![Screenshot V0.24.1](docs/screenshots/bnm-V0.24.1.jpg)
@@ -88,7 +112,9 @@ Additional status notes:
 | Path | Purpose |
 | --- | --- |
 | `src/` | Library headers and implementation |
-| `examples/client-demo/` | Optional GUI client demo with discovery, scan, and fallback-polled value updates |
+| `examples/client-demo-wifi/` | Optional WiFi GUI client demo with discovery, scan, and fallback-polled value updates |
+| `examples/client-demo-ETH/` | Optional WT32-ETH01 V1.4 Ethernet GUI client demo |
+| `examples/common/` | Shared example-only Ethernet and client-demo implementation helpers |
 | `examples/client-object-list-scan-basic/` | Canonical serial-only basic BACnet/IP client example |
 | `examples/hil-wago-client-acceptance/` | Local ESP32/WAGO client acceptance HIL runner |
 | `examples/server-demo/` | Minimal BACnet server role demo |
@@ -180,6 +206,12 @@ Optional compile-time write feature gates:
 - `ESP_BACNET_ENABLE_PRIORITY_WRITE` (default `0`, requires write-property flag)
 
 Build changed or directly affected examples when needed. See [Client Examples](docs/client/examples.md) for example roles and [docs/repository-settings.md](docs/repository-settings.md) for repository setup notes.
+
+WT32-ETH01 V1.4 client demo build:
+
+```sh
+pio run -d examples/client-demo-ETH -e eth
+```
 
 ## Dependency Maintenance
 
