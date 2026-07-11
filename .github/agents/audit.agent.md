@@ -5,7 +5,7 @@ model: GPT-5.3-Codex (copilot)
 tools: [read, search, execute]
 agents: []
 user-invocable: true
-disable-model-invocation: true
+disable-model-invocation: false
 ---
 
 # Audit

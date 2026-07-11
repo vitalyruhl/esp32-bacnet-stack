@@ -96,9 +96,11 @@ Perform narrow documentation synchronization only. Handoff implementation to
 
 Remain strictly read-only. Select and directly invoke Audit for implementation
 audits, or Architecture Audit for architecture, dependency-boundary, Level C, or
-repository-wide audits. Preserve handoffs when routing is requested. Stop
-follow-up merge, cleanup, or release actions until reported audit blockers are
-resolved or explicitly dispositioned.
+repository-wide audits. Preserve handoffs when routing is requested; prefer the
+Architecture Audit handoff for architecture-class audits so the user can
+explicitly choose High runtime reasoning. Do not claim High reasoning when it
+cannot be verified. Stop follow-up merge, cleanup, or release actions until
+reported audit blockers are resolved or explicitly dispositioned.
 
 ### `workflow.ship`
 
@@ -118,10 +120,14 @@ Act as the Terra coordinator in this order:
 1. Inspect branch, status, scope, PR, and issue context.
 2. Classify version impact using `version-impact`.
 3. Invoke Validation Gate using `validation-gate` for the final file state.
-  The project-profile mandatory test command is required for every
-  `workflow.toMain` final file state unless validly reused.
+  Product-code, build, API, dependency, example-build-output, and metadata
+  changes require the project-profile mandatory test command for the final file
+  state unless validly reused.
+  Governance-only and documentation-only changes skip PlatformIO according to
+  `validation-gate` and must report the reason.
   It must not be skipped silently.
-  When C/C++ sources or headers changed, cppcheck through the configured pre-commit path is mandatory.
+  When C/C++ sources or headers changed, cppcheck through the configured
+  pre-commit path is mandatory.
 4. Invoke Docs Gate using `docs-gate`; findings must be fixed or explicitly
    dispositioned before completion.
 5. Make PR, merge, conflict, branch-protection, and bypass decisions here.
@@ -134,6 +140,18 @@ PR integration is the default unless explicit `ff` is authorized. A required
 version bump blocks readiness when absent. Required checks remain mandatory
 unless separately and explicitly authorized for bypass with a reported reason.
 Missing, failed, or invalidly reused required validation blocks merge readiness.
+
+## Helper Input Contract
+
+- Validation Gate receives selected commands, baseline status, and affected
+  scope.
+- Docs Gate receives changed paths and behavior/API/build/version summary.
+- Issue Project Sync receives grounded references and the coordinator's
+  authorized target.
+- Branch Cleanup receives integration evidence and protected/preserved branches.
+- Audit receives acceptance criteria, changed paths, and validation evidence.
+- Helpers must not rediscover broad repository context when the coordinator
+  already has the required evidence.
 
 ### `workflow.cleanBranches` / `.cleanBranches`
 

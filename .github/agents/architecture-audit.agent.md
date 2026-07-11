@@ -5,7 +5,7 @@ model: GPT-5.6 Terra (copilot)
 tools: [read, search, execute]
 agents: []
 user-invocable: true
-disable-model-invocation: true
+disable-model-invocation: false
 ---
 
 # Architecture Audit

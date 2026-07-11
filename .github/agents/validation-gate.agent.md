@@ -5,7 +5,7 @@ model: GPT-5.6 Luna (copilot)
 tools: [read, search, execute]
 agents: []
 user-invocable: false
-disable-model-invocation: true
+disable-model-invocation: false
 ---
 
 # Validation Gate

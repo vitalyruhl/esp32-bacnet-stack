@@ -5,7 +5,7 @@ model: GPT-5.3-Codex (copilot)
 tools: [read, search]
 agents: []
 user-invocable: false
-disable-model-invocation: true
+disable-model-invocation: false
 ---
 
 # Docs Gate
