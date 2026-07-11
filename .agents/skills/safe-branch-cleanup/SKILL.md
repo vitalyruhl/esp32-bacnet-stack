@@ -1,6 +1,7 @@
 ---
 name: safe-branch-cleanup
 description: Canonical local, remote, and tracking-branch cleanup procedure with preservation guards.
+user-invocable: false
 ---
 
 # Safe Branch Cleanup

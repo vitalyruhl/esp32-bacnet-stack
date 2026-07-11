@@ -1,6 +1,7 @@
 ---
 name: issue-project-sync
 description: Canonical explicit GitHub Issue and Project synchronization procedure with read-back verification.
+user-invocable: false
 ---
 
 # Issue Project Sync

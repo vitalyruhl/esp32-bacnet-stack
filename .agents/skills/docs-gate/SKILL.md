@@ -1,6 +1,7 @@
 ---
 name: docs-gate
 description: Canonical read-only semantic documentation consistency gate for pending changes.
+user-invocable: false
 ---
 
 # Docs Gate

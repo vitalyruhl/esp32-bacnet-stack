@@ -1,6 +1,7 @@
 ---
 name: validation-gate
 description: Canonical validation ordering, autofix handling, working-tree checks, and reuse rules.
+user-invocable: false
 ---
 
 # Validation Gate

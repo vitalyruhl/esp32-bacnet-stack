@@ -3,7 +3,7 @@ name: Workflow
 description: Coordinates branches, checkpoints, PRs, merges, releases, cleanup, and final repository decisions.
 model: GPT-5.6 Terra (copilot)
 tools: [read, search, edit, execute, agent]
-agents: [Validation Gate, Docs Gate, Issue Project Sync, Branch Cleanup]
+agents: [Validation Gate, Docs Gate, Issue Project Sync, Branch Cleanup, Audit, Architecture Audit]
 user-invocable: true
 disable-model-invocation: true
 handoffs:
@@ -29,11 +29,12 @@ success or failure. Owner/admin bypass is explicit for the current action only.
 Required checks are never bypassed without separate explicit authorization and a
 reported reason.
 
-Use only these nested helpers: Validation Gate, Docs Gate, Issue Project Sync,
-and Branch Cleanup. Handoff normal implementation audit to `audit`; handoff
-architecture, dependency-boundary, Level C, or repository-wide audit to
-`architecture-audit`. Both audits remain read-only. Do not read or duplicate
-`refactor` procedures.
+Use only these nested subagents: Validation Gate, Docs Gate, Issue Project
+Sync, Branch Cleanup, Audit, and Architecture Audit. The first four are
+operational helpers. Audit and Architecture Audit are read-only subagents.
+Preserve handoffs for external routing, but `workflow.audit` may directly invoke
+the selected read-only audit subagent. Do not read or duplicate `refactor`
+procedures.
 
 ## Workflow Rules
 
@@ -51,6 +52,10 @@ architecture, dependency-boundary, Level C, or repository-wide audit to
 - Keep one side branch active. If a branch name mismatches the task, warn and
   propose a short English lowercase hyphenated name, normally `feature/`, rather
   than switching. Preserve exact user-supplied names and quoted literals.
+- Do not prepend `Set-Location` to Git commands; use the configured working
+  directory.
+- Verify quoted path casing against repository state.
+- Distinguish command failure, no matches, missing files, and missing tools.
 - Use `gh` when authenticated. Maintainer-owned PRs need no external review by
   governance; external-contributor PRs require review. A branch-protection
   blocker is reported, never bypassed. Keep PRs coherent and scoped.
@@ -89,10 +94,11 @@ Perform narrow documentation synchronization only. Handoff implementation to
 
 ### `workflow.audit` / `.audit`
 
-Remain strictly read-only. Handoff implementation audit to `audit`; use
-`architecture-audit` for architecture, dependency-boundary, Level C, or
-repository-wide scope. Stop follow-up merge, cleanup, or release actions until
-reported audit blockers are resolved or explicitly dispositioned.
+Remain strictly read-only. Select and directly invoke Audit for implementation
+audits, or Architecture Audit for architecture, dependency-boundary, Level C, or
+repository-wide audits. Preserve handoffs when routing is requested. Stop
+follow-up merge, cleanup, or release actions until reported audit blockers are
+resolved or explicitly dispositioned.
 
 ### `workflow.ship`
 
@@ -111,8 +117,11 @@ Act as the Terra coordinator in this order:
 
 1. Inspect branch, status, scope, PR, and issue context.
 2. Classify version impact using `version-impact`.
-3. Invoke Validation Gate using `validation-gate`; mandatory profile tests and
-   C/C++ cppcheck-through-pre-commit are requested where applicable.
+3. Invoke Validation Gate using `validation-gate` for the final file state.
+  The project-profile mandatory test command is required for every
+  `workflow.toMain` final file state unless validly reused.
+  It must not be skipped silently.
+  When C/C++ sources or headers changed, cppcheck through the configured pre-commit path is mandatory.
 4. Invoke Docs Gate using `docs-gate`; findings must be fixed or explicitly
    dispositioned before completion.
 5. Make PR, merge, conflict, branch-protection, and bypass decisions here.
@@ -124,6 +133,7 @@ Act as the Terra coordinator in this order:
 PR integration is the default unless explicit `ff` is authorized. A required
 version bump blocks readiness when absent. Required checks remain mandatory
 unless separately and explicitly authorized for bypass with a reported reason.
+Missing, failed, or invalidly reused required validation blocks merge readiness.
 
 ### `workflow.cleanBranches` / `.cleanBranches`
 

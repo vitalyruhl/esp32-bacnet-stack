@@ -8,7 +8,31 @@ $outputPath = Join-Path $outputDir "all-agents-combined.md"
 function Get-RepositoryRelativePath {
     param([Parameter(Mandatory)][string]$Path)
 
-    $relativePath = [System.IO.Path]::GetRelativePath($repoRoot, $Path)
+    $relativePath = $null
+    $method = [System.IO.Path].GetMethod(
+        "GetRelativePath",
+        [Type[]]@([string], [string])
+    )
+
+    if ($null -ne $method) {
+        $relativePath = [System.IO.Path]::GetRelativePath($repoRoot, $Path)
+    }
+    else {
+        # Windows PowerShell 5.1 / .NET Framework fallback.
+        $basePath = [System.IO.Path]::GetFullPath($repoRoot)
+        $targetPath = [System.IO.Path]::GetFullPath($Path)
+
+        if (-not $basePath.EndsWith([System.IO.Path]::DirectorySeparatorChar)) {
+            $basePath += [System.IO.Path]::DirectorySeparatorChar
+        }
+
+        $baseUri = New-Object System.Uri($basePath)
+        $targetUri = New-Object System.Uri($targetPath)
+        $relativePath = [System.Uri]::UnescapeDataString(
+            $baseUri.MakeRelativeUri($targetUri).ToString()
+        )
+    }
+
     return $relativePath.Replace("\", "/")
 }
 
@@ -61,7 +85,7 @@ $includedFiles = @($requiredRoots) + @($customAgents) + @($skills) + @($optional
 
 New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
 
-$content = [System.Text.StringBuilder]::new()
+$content = New-Object System.Text.StringBuilder
 [void]$content.AppendLine("# Combined Agent Governance")
 [void]$content.AppendLine()
 [void]$content.AppendLine("Generated file. Do not edit; run tools/combine.agent.md.ps1 to regenerate it.")

@@ -28,7 +28,11 @@ handoffs:
   logging normalization separate; log text is not an API rename. Hardware logs
   default to `[D]` or `[T]` unless a higher severity is justified. Mark mocked
   test implementations or data `[MOCKED!]`.
-- Invoke only Validation Gate for bounded validation execution. Load
-  `version-impact` when version-affecting scope is possible. Hand off Git,
-  checkpoint, PR, release, branch cleanup, and Project-status work to
+- After changes to C/C++ sources, headers, tests, examples, build files, or
+  PlatformIO configuration, invoke Validation Gate for bounded validation
+  execution. Skipping is allowed only when `validation-gate` permits it and the
+  reason is reported.
+- Load `version-impact` when version-affecting scope is possible. Load
+  `serena-index-freshness` only when this task actually uses Serena. Hand off
+  Git, checkpoint, PR, release, branch cleanup, and Project-status work to
   `workflow`; do not read or duplicate its procedures.

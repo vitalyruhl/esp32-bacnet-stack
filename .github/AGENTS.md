@@ -48,6 +48,8 @@ The root `AGENTS.md` owns universal safety, language, and loading rules.
   governance, docs, GitHub, or workflow-only tasks, skip Serena indexing unless
   explicitly needed. For C++ work, refresh it only after relevant source/build
   changes or clear evidence it is stale.
+- For plan, refactor, audit, and architecture-audit tasks that actually use
+  Serena, load `serena-index-freshness`.
 - Prefer `rg`/`fd` for exact audits, `gh` for authenticated GitHub operations,
   `jq` for JSON, and `dasel` for structured YAML/TOML/JSON/XML when safe. On
   Windows, prefer PowerShell-native commands. Do not install or upgrade tools
@@ -69,6 +71,7 @@ The root `AGENTS.md` owns universal safety, language, and loading rules.
 - `safe-branch-cleanup`: protected branch preservation and cleanup checks.
 - `final-repository-sync`: post-integration repository synchronization.
 - `docs-gate`: semantic documentation consistency review.
+- `serena-index-freshness`: precise Serena index refresh and reuse criteria.
 
 Agent and skill instructions may add role-specific rules but must not weaken
 this kernel or the root governance.

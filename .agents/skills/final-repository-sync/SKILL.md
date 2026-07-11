@@ -1,6 +1,7 @@
 ---
 name: final-repository-sync
 description: Canonical post-integration repository synchronization and compact reporting checks.
+user-invocable: false
 ---
 
 # Final Repository Sync

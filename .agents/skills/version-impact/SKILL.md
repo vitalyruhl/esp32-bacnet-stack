@@ -1,6 +1,7 @@
 ---
 name: version-impact
 description: Canonical version-impact classification, bump policy, scans, and synchronization requirements.
+user-invocable: false
 ---
 
 # Version Impact
