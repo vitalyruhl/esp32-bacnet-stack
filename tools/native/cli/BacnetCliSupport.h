@@ -11,6 +11,9 @@ enum class BacnetCliExitCode : int {
   RuntimeFailure = 1,
   Timeout = 2,
   InvalidArguments = 3,
+  Reject = 4,
+  Abort = 5,
+  DecodeError = 6,
 };
 
 bool bacnetCliParseUnsigned(const char* text, uint32_t& value);

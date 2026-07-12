@@ -68,6 +68,12 @@ const char* bacnetCliExitCodeText(BacnetCliExitCode code) {
       return "timeout";
     case BacnetCliExitCode::InvalidArguments:
       return "invalid arguments";
+    case BacnetCliExitCode::Reject:
+      return "reject";
+    case BacnetCliExitCode::Abort:
+      return "abort";
+    case BacnetCliExitCode::DecodeError:
+      return "decode error";
   }
   return "unknown";
 }
