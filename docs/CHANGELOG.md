@@ -2,6 +2,13 @@
 
 This changelog is a curated overview.
 
+## 0.30.0
+
+- Added client-side SubscribeCOV registration, renewal, and notification routing
+  through the existing property subscription cache and callback path.
+- Retained source-compatible polling subscriptions and automatically falls back
+  to polling when SubscribeCOV fails, is rejected, aborts, or times out.
+
 ## 0.29.0
 
 - Added the productive native Windows `bacnet-discover` and `bacnet-client`

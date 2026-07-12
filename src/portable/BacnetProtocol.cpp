@@ -19,6 +19,8 @@ constexpr uint8_t kApduAbort = 0x70;
 constexpr uint8_t kApduUnconfirmedRequest = 0x10;
 constexpr uint8_t kServiceIAm = 0x00;
 constexpr uint8_t kServiceWhoIs = 0x08;
+constexpr uint8_t kServiceSubscribeCov = 0x05;
+constexpr uint8_t kServiceUnconfirmedCovNotification = 0x02;
 constexpr uint8_t kServiceReadProperty = 0x0C;
 constexpr uint16_t kDeviceObjectType = 8;
 constexpr uint32_t kObjectInstanceMask = 0x003FFFFF;
@@ -795,6 +797,94 @@ size_t BacnetProtocol::buildWhoIsRequest(uint8_t* buffer, size_t bufferSize) {
   buffer[7] = kServiceWhoIs;
 
   return kWhoIsRequestSize;
+}
+
+size_t BacnetProtocol::buildSubscribeCovRequest(uint8_t* buffer,
+                                                size_t bufferSize,
+                                                uint32_t processId,
+                                                BacnetObjectId object,
+                                                uint32_t lifetimeSeconds) {
+  if (buffer == nullptr || bufferSize < kMaxSubscribeCovRequestSize ||
+      object.instance > kObjectInstanceMask)
+    return 0;
+  size_t offset = 0;
+  buffer[offset++] = kBvlcTypeBacnetIp;
+  buffer[offset++] = kBvlcOriginalUnicastNpdu;
+  buffer[offset++] = 0;
+  buffer[offset++] = 0;
+  buffer[offset++] = kNpduVersion;
+  buffer[offset++] = kNpduExpectingReply;
+  buffer[offset++] = kApduConfirmedRequest;
+  buffer[offset++] = 0x05;
+  buffer[offset++] = 0;
+  buffer[offset++] = kServiceSubscribeCov;
+  offset = writeContextUnsigned(buffer, offset, 0, processId);
+  offset = writeContextObjectIdentifier(buffer, offset, 1, object);
+  buffer[offset++] = 0x29;
+  offset = writeContextUnsigned(buffer, offset, 3, lifetimeSeconds);
+  buffer[2] = static_cast<uint8_t>(offset >> 8);
+  buffer[3] = static_cast<uint8_t>(offset);
+  return offset;
+}
+
+BacnetSubscribeCovResponseKind BacnetProtocol::classifySubscribeCovResponse(
+  const uint8_t* buffer, size_t length, uint8_t expectedInvokeId) {
+  if (buffer == nullptr || length < 8 || buffer[0] != kBvlcTypeBacnetIp ||
+      buffer[1] != kBvlcOriginalUnicastNpdu || readUint16(&buffer[2]) != length)
+    return BacnetSubscribeCovResponseKind::None;
+  size_t offset = 4;
+  if (!readNpduHeader(buffer, length, offset) || offset + 2 > length || buffer[offset + 1] != expectedInvokeId)
+    return BacnetSubscribeCovResponseKind::None;
+  const uint8_t apduType = buffer[offset] & 0xF0;
+  if (apduType == 0x20 && offset + 3 <= length && buffer[offset + 2] == kServiceSubscribeCov)
+    return BacnetSubscribeCovResponseKind::Ack;
+  if (apduType == kApduError && offset + 3 <= length && buffer[offset + 2] == kServiceSubscribeCov)
+    return BacnetSubscribeCovResponseKind::Error;
+  if (apduType == kApduReject)
+    return BacnetSubscribeCovResponseKind::Reject;
+  if (apduType == kApduAbort)
+    return BacnetSubscribeCovResponseKind::Abort;
+  return BacnetSubscribeCovResponseKind::None;
+}
+
+bool BacnetProtocol::parseCovNotification(const uint8_t* buffer,
+                                          size_t length,
+                                          BacnetCovNotification& notification) {
+  notification = BacnetCovNotification{};
+  if (buffer == nullptr || length < 20 || buffer[0] != kBvlcTypeBacnetIp ||
+      (buffer[1] != kBvlcOriginalUnicastNpdu && buffer[1] != kBvlcOriginalBroadcastNpdu) ||
+      readUint16(&buffer[2]) != length)
+    return false;
+  size_t offset = 4;
+  if (!readNpduHeader(buffer, length, offset) || offset + 2 > length ||
+      buffer[offset++] != kApduUnconfirmedRequest ||
+      buffer[offset++] != kServiceUnconfirmedCovNotification)
+    return false;
+  uint32_t processId = 0;
+  uint32_t initiatingDevice = 0;
+  uint32_t monitoredObject = 0;
+  if (!readContextValue(buffer, length, offset, 0, processId) ||
+      !readContextValue(buffer, length, offset, 1, initiatingDevice) ||
+      !readContextValue(buffer, length, offset, 2, monitoredObject) ||
+      offset >= length || buffer[offset++] != 0x3E || offset >= length ||
+      buffer[offset++] != 0x0E)
+    return false;
+  uint32_t property = 0;
+  if (!readContextValue(buffer, length, offset, 0, property))
+    return false;
+  uint32_t arrayIndex = kBacnetNoArrayIndex;
+  if (offset < length && (buffer[offset] >> 4) == 1 && (buffer[offset] & 0x08) != 0 &&
+      !readContextValue(buffer, length, offset, 1, arrayIndex))
+    return false;
+  if (offset >= length || buffer[offset++] != 0x2E)
+    return false;
+  notification.processId = processId;
+  notification.object = BacnetObjectId{static_cast<uint16_t>(monitoredObject >> 22), monitoredObject & kObjectInstanceMask};
+  notification.property = static_cast<BacnetPropertyId>(property);
+  notification.arrayIndex = arrayIndex;
+  if (!parseReadPropertyApplicationValue(buffer, length, offset, notification.property, notification.value, arrayIndex))
+    return false;
+  return offset + 2 < length && buffer[offset++] == 0x2F && buffer[offset++] == 0x0F;
 }
 
 bool BacnetProtocol::parseIAmResponse(const uint8_t* buffer, size_t length, BacnetIAmDeviceInfo& device) {

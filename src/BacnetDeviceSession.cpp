@@ -362,6 +362,9 @@ bool BacnetPropertySubscription::isDue(uint32_t nowMs) const {
   if (!active_ || inFlight_) {
     return false;
   }
+  if (covActive_) {
+    return static_cast<int32_t>(nowMs - covRenewAtMs_) >= 0;
+  }
   if (refreshRequested_ || initialReadPending_) {
     return true;
   }
@@ -384,6 +387,7 @@ void BacnetPropertySubscription::clearInFlightState() {
   inFlightInvokeId_ = 0;
   inFlightStartedAt_ = 0;
   inFlightTrigger_ = PollTrigger::None;
+  inFlightOperation_ = Operation::None;
 }
 
 void BacnetPropertySubscription::moveFrom(BacnetPropertySubscription& other) {
@@ -408,6 +412,10 @@ void BacnetPropertySubscription::moveFrom(BacnetPropertySubscription& other) {
   inFlightInvokeId_ = other.inFlightInvokeId_;
   inFlightStartedAt_ = other.inFlightStartedAt_;
   inFlightTrigger_ = other.inFlightTrigger_;
+  inFlightOperation_ = other.inFlightOperation_;
+  covActive_ = other.covActive_;
+  covFallback_ = other.covFallback_;
+  covRenewAtMs_ = other.covRenewAtMs_;
 
   if (session_ != nullptr && session_->inFlightSubscription_ == &other) {
     session_->inFlightSubscription_ = this;
@@ -424,6 +432,9 @@ void BacnetPropertySubscription::moveFrom(BacnetPropertySubscription& other) {
   other.lastUpdateMs_ = 0;
   other.nextPollAtMs_ = 0;
   other.lastNotificationReason_ = BacnetSubscriptionNotificationReason::None;
+  other.covActive_ = false;
+  other.covFallback_ = false;
+  other.covRenewAtMs_ = 0;
   other.callback_ = nullptr;
   other.userData_ = nullptr;
 }
@@ -1282,7 +1293,21 @@ void BacnetDeviceSession::poll(BacnetPropertySubscription& subscription,
     return;
   }
 
-  tryStartSubscriptionPoll(subscription, nowMs);
+  if (subscription.covActive_) {
+    BacnetCovNotification notification;
+    if (client_.pollCovNotification(notification) &&
+        notification.object.type == subscription.objectId_.type &&
+        notification.object.instance == subscription.objectId_.instance &&
+        notification.property == subscription.propertyId_ &&
+        notification.arrayIndex == subscription.arrayIndex_) {
+      finishSubscriptionPoll(subscription, BacnetDeviceSessionReadStatus::Ack, &notification.value, nowMs, BacnetPropertyReadStatus::Ack);
+      subscription.covActive_ = true;
+    }
+  }
+
+  if (!tryStartCovSubscription(subscription, nowMs)) {
+    tryStartSubscriptionPoll(subscription, nowMs);
+  }
 }
 
 void BacnetDeviceSession::poll(BacnetPropertySubscription* subscriptions,
@@ -1308,7 +1333,9 @@ void BacnetDeviceSession::poll(BacnetPropertySubscription* subscriptions,
     }
 
     roundRobinSubscriptionIndex_ = (index + 1) % count;
-    tryStartSubscriptionPoll(subscription, nowMs);
+    if (!tryStartCovSubscription(subscription, nowMs)) {
+      tryStartSubscriptionPoll(subscription, nowMs);
+    }
     return;
   }
 }
@@ -1441,6 +1468,34 @@ void BacnetDeviceSession::pollInFlightSubscription(uint32_t nowMs) {
     return;
   }
 
+  if (subscription.inFlightOperation_ ==
+      BacnetPropertySubscription::Operation::SubscribeCov) {
+    const BacnetSubscribeCovResponseKind covStatus =
+      client_.pollSubscribeCov(subscription.inFlightInvokeId_);
+    if (covStatus == BacnetSubscribeCovResponseKind::Ack) {
+      const uint32_t renewBefore = subscription.options_.covRenewBeforeSeconds;
+      const uint32_t lifetime = subscription.options_.covLifetimeSeconds;
+      subscription.covActive_ = true;
+      subscription.covFallback_ = false;
+      subscription.covRenewAtMs_ = nowMs +
+                                   (lifetime > renewBefore ? lifetime - renewBefore : lifetime) * 1000UL;
+      subscription.clearInFlightState();
+      inFlightSubscription_ = nullptr;
+      client_.logger().info("BACnet/COV", "SubscribeCOV active %s,%lu", bacnetObjectTypeText(subscription.objectId_.type), static_cast<unsigned long>(subscription.objectId_.instance));
+      return;
+    }
+    if (covStatus != BacnetSubscribeCovResponseKind::None ||
+        nowMs - subscription.inFlightStartedAt_ >= subscription.options_.timeoutMs) {
+      subscription.covActive_ = false;
+      subscription.covFallback_ = true;
+      subscription.initialReadPending_ = true;
+      subscription.clearInFlightState();
+      inFlightSubscription_ = nullptr;
+      client_.logger().warn("BACnet/COV", "SubscribeCOV fallback to polling %s,%lu reason=%u", bacnetObjectTypeText(subscription.objectId_.type), static_cast<unsigned long>(subscription.objectId_.instance), static_cast<unsigned>(covStatus));
+    }
+    return;
+  }
+
   const BacnetPropertyRequest request{subscription.objectId_,
                                       subscription.propertyId_,
                                       subscription.arrayIndex_};
@@ -1511,8 +1566,32 @@ void BacnetDeviceSession::tryStartSubscriptionPoll(
   subscription.inFlightInvokeId_ = invokeId;
   subscription.inFlightStartedAt_ = nowMs;
   subscription.inFlightTrigger_ = trigger;
+  subscription.inFlightOperation_ = BacnetPropertySubscription::Operation::Poll;
   subscription.refreshRequested_ = false;
   inFlightSubscription_ = &subscription;
+}
+
+bool BacnetDeviceSession::tryStartCovSubscription(
+  BacnetPropertySubscription& subscription, uint32_t nowMs) {
+  if (!subscription.active_ || subscription.inFlight_ ||
+      !subscription.options_.preferCov || subscription.covFallback_ ||
+      (subscription.covActive_ &&
+       static_cast<int32_t>(nowMs - subscription.covRenewAtMs_) < 0)) {
+    return false;
+  }
+  const uint8_t invokeId = allocateInvokeId();
+  if (!client_.sendSubscribeCov(endpoint_, invokeId, subscription.objectId_, subscription.options_.covLifetimeSeconds, invokeId)) {
+    subscription.covFallback_ = true;
+    client_.logger().warn("BACnet/COV", "SubscribeCOV send failed; polling fallback");
+    return false;
+  }
+  subscription.inFlight_ = true;
+  subscription.inFlightInvokeId_ = invokeId;
+  subscription.inFlightStartedAt_ = nowMs;
+  subscription.inFlightOperation_ = BacnetPropertySubscription::Operation::SubscribeCov;
+  inFlightSubscription_ = &subscription;
+  client_.logger().info("BACnet/COV", "SubscribeCOV start %s,%lu", bacnetObjectTypeText(subscription.objectId_.type), static_cast<unsigned long>(subscription.objectId_.instance));
+  return true;
 }
 
 void BacnetDeviceSession::finishSubscriptionPoll(

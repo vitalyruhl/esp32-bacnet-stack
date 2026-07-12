@@ -293,6 +293,17 @@ uses the same `0`-`3` convention. `read` additionally returns `4` for Reject,
 
 Optional compile-time write feature gates:
 
+## Property Subscriptions
+
+`BacnetSubscribeOptions` remains source-compatible with polling subscriptions.
+Set `preferCov` to request real BACnet SubscribeCOV. A successful registration
+suppresses fallback polling, renews before its configured lifetime ends, and
+routes matching COV notifications through the existing property cache and
+callback path. Send failures, BACnet Error, Reject, Abort, and registration
+timeouts are logged with the COV tag and switch the subscription to its existing
+polling fallback. No hardware COV interoperability claim is made without a
+separate real-device validation.
+
 - `ESP_BACNET_ENABLE_WRITE_PROPERTY` (default `0`)
 - `ESP_BACNET_ENABLE_PRIORITY_WRITE` (default `0`, requires write-property flag)
 

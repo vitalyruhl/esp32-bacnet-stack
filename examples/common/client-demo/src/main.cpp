@@ -43,7 +43,7 @@
 #endif
 
 #ifndef APP_VERSION
-#define APP_VERSION "0.29.0"
+#define APP_VERSION "0.30.0"
 #endif
 #ifndef APP_NAME
 #if BACNET_DEMO_USE_ETHERNET

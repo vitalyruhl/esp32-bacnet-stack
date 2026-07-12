@@ -221,6 +221,9 @@ static constexpr uint32_t kBacnetDefaultReadTimeoutMs = 1000;
 struct BacnetSubscribeOptions {
   uint32_t fallbackPollMs = 10000;
   uint32_t timeoutMs = kBacnetDefaultReadTimeoutMs;
+  uint32_t covLifetimeSeconds = 60;
+  uint32_t covRenewBeforeSeconds = 5;
+  bool preferCov = false;
   bool immediateFirstRead = true;
   bool notifyOnStatusChange = true;
 };
@@ -350,6 +353,10 @@ private:
     Refresh,
   };
 
+  enum class Operation : uint8_t { None,
+                                   Poll,
+                                   SubscribeCov };
+
   bool isDue(uint32_t nowMs) const;
   void scheduleNextPoll(uint32_t nowMs);
   void clearInFlightState();
@@ -379,6 +386,10 @@ private:
   uint8_t inFlightInvokeId_ = 0;
   unsigned long inFlightStartedAt_ = 0;
   PollTrigger inFlightTrigger_ = PollTrigger::None;
+  Operation inFlightOperation_ = Operation::None;
+  bool covActive_ = false;
+  bool covFallback_ = false;
+  uint32_t covRenewAtMs_ = 0;
 };
 
 class BacnetDeviceSession {
@@ -547,6 +558,8 @@ private:
                           BacnetDeviceSessionReadStatus status);
   void releaseObjectListScan(BacnetObjectListScanJob& job);
   void pollInFlightSubscription(uint32_t nowMs);
+  bool tryStartCovSubscription(BacnetPropertySubscription& subscription,
+                               uint32_t nowMs);
   void tryStartSubscriptionPoll(BacnetPropertySubscription& subscription,
                                 uint32_t nowMs);
   void finishSubscriptionPoll(BacnetPropertySubscription& subscription,
