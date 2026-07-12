@@ -542,6 +542,17 @@ BacnetDeviceSessionReadStatus BacnetDeviceSession::readProperty(
   return deviceReadStatusFromPropertyStatus(status);
 }
 
+BacnetPropertyReadStatus BacnetDeviceSession::readPropertyStatus(
+  BacnetObjectId objectId, BacnetPropertyId property, BacnetValue& value, uint32_t timeoutMs, uint32_t arrayIndex) {
+  uint32_t errorClass = 0;
+  uint32_t errorCode = 0;
+  return readPropertyDetailed(BacnetPropertyRequest{objectId, property, arrayIndex},
+                              value,
+                              timeoutMs,
+                              errorClass,
+                              errorCode);
+}
+
 BacnetDeviceSessionReadStatus BacnetDeviceSession::readProperty(
   BacnetObjectType objectType, uint32_t objectInstance, BacnetPropertyId property, BacnetValue& value, uint32_t timeoutMs, uint32_t arrayIndex) {
   return readProperty(
@@ -582,6 +593,8 @@ BacnetDeviceSessionWriteStatus BacnetDeviceSession::writeProperty(
         return BacnetDeviceSessionWriteStatus::Ack;
       case BacnetWritePropertyPollStatus::Error:
         return BacnetDeviceSessionWriteStatus::Error;
+      case BacnetWritePropertyPollStatus::NotCommandable:
+        return BacnetDeviceSessionWriteStatus::NotCommandable;
       case BacnetWritePropertyPollStatus::Reject:
         return BacnetDeviceSessionWriteStatus::Reject;
       case BacnetWritePropertyPollStatus::Abort:
@@ -635,6 +648,8 @@ BacnetDeviceSessionWriteStatus BacnetDeviceSession::writeProperty(
       return BacnetDeviceSessionWriteStatus::Ack;
     if (status == BacnetWritePropertyPollStatus::Error)
       return BacnetDeviceSessionWriteStatus::Error;
+    if (status == BacnetWritePropertyPollStatus::NotCommandable)
+      return BacnetDeviceSessionWriteStatus::NotCommandable;
     if (status == BacnetWritePropertyPollStatus::Reject)
       return BacnetDeviceSessionWriteStatus::Reject;
     if (status == BacnetWritePropertyPollStatus::Abort)

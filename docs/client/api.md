@@ -33,6 +33,10 @@ Current public responsibilities:
 - explicitly write one typed property through `writeProperty()` when enabled
   and optionally provide `BacnetWritePropertyOptions` for an array index and a
   BACnet priority from `1` through `16`
+- read `priority-array` and `relinquish-default` through the detailed
+  `BacnetPropertyReadStatus` convenience helpers; write or relinquish
+  `present-value` explicitly through `writePresentValue()` and
+  `relinquishPresentValue()`
 - read compact object health through `readObjectStatus()`
 - collect a property's advertised property list through `readPropertyList()`
 - safely attempt all collected properties through `readAllProperties()`

@@ -91,6 +91,7 @@ enum class BacnetDeviceSessionReadStatus : uint8_t {
 enum class BacnetDeviceSessionWriteStatus : uint8_t {
   Ack,
   Error,
+  NotCommandable,
   Reject,
   Abort,
   Timeout,
@@ -445,6 +446,8 @@ public:
     BacnetObjectId object, BacnetPropertyId property, BacnetValue& value, uint32_t timeoutMs = kDefaultReadTimeoutMs, uint32_t arrayIndex = kBacnetNoArrayIndex);
   BacnetDeviceSessionReadStatus readProperty(
     BacnetObjectType objectType, uint32_t objectInstance, BacnetPropertyId property, BacnetValue& value, uint32_t timeoutMs = kDefaultReadTimeoutMs, uint32_t arrayIndex = kBacnetNoArrayIndex);
+  BacnetPropertyReadStatus readPropertyStatus(
+    BacnetObjectId object, BacnetPropertyId property, BacnetValue& value, uint32_t timeoutMs = kDefaultReadTimeoutMs, uint32_t arrayIndex = kBacnetNoArrayIndex);
   BacnetDeviceSessionWriteStatus writeProperty(
     BacnetObjectId object, BacnetPropertyId property, const BacnetValue& value, uint32_t timeoutMs = kDefaultReadTimeoutMs, uint32_t arrayIndex = kBacnetNoArrayIndex);
   BacnetDeviceSessionWriteStatus writeProperty(

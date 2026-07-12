@@ -109,6 +109,7 @@ enum class BacnetValueType : uint8_t {
   ObjectIdentifier,
   ObjectIdentifierList,
   Error,
+  NotCommandable,
   Unsupported,
 };
 
@@ -148,6 +149,7 @@ enum class BacnetWritePropertyPollStatus : uint8_t {
   None,
   Ack,
   Error,
+  NotCommandable,
   Reject,
   Abort,
   DecodeError,

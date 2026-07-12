@@ -120,6 +120,9 @@ bool testRequestAndResponses() {
   const uint8_t error[] = {0x81,0x0A,0x00,0x0A,0x01,0x00,0x50,0x09,0x0F,0x0F};
   std::memcpy(transport.response, error, sizeof(error)); transport.responseSize = sizeof(error);
   if (!expect(client.pollWriteProperty(9) == BacnetWritePropertyPollStatus::Error, "write error")) return false;
+  const uint8_t notCommandable[] = {0x81,0x0A,0x00,0x0D,0x01,0x00,0x50,0x09,0x0F,0x91,0x02,0x91,40};
+  std::memcpy(transport.response, notCommandable, sizeof(notCommandable)); transport.responseSize = sizeof(notCommandable);
+  if (!expect(client.pollWriteProperty(9) == BacnetWritePropertyPollStatus::NotCommandable, "write access denied")) return false;
   const uint8_t reject[] = {0x81,0x0A,0x00,0x08,0x01,0x00,0x60,0x09};
   std::memcpy(transport.response, reject, sizeof(reject)); transport.responseSize = sizeof(reject);
   if (!expect(client.pollWriteProperty(9) == BacnetWritePropertyPollStatus::Reject, "write reject")) return false;

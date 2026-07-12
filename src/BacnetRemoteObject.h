@@ -54,6 +54,18 @@ public:
   BacnetDeviceSessionReadStatus readPresentValue(
     BacnetValue& value,
     uint32_t timeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs) const;
+  BacnetPropertyReadStatus readPriorityArray(
+    BacnetValue& value,
+    uint32_t timeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs,
+    uint32_t arrayIndex = kBacnetNoArrayIndex) const;
+  BacnetPropertyReadStatus readRelinquishDefault(
+    BacnetValue& value,
+    uint32_t timeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs) const;
+  BacnetDeviceSessionWriteStatus writePresentValue(
+    const BacnetValue& value, uint8_t priority, uint32_t timeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs) const;
+  BacnetDeviceSessionWriteStatus relinquishPresentValue(
+    uint8_t priority,
+    uint32_t timeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs) const;
   BacnetDeviceSessionReadStatus readPropertyList(
     BacnetValue& value,
     uint32_t timeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs) const;

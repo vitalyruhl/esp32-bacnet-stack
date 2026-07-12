@@ -255,6 +255,10 @@ BacnetWritePropertyPollStatus BacnetClient::pollWriteProperty(
     case BacnetWritePropertyResponseKind::Ack:
       return BacnetWritePropertyPollStatus::Ack;
     case BacnetWritePropertyResponseKind::Error:
+      if (bytesRead >= 13 && packet[9] == 0x91 && packet[10] == 0x02 &&
+          packet[11] == 0x91 && packet[12] == 40) {
+        return BacnetWritePropertyPollStatus::NotCommandable;
+      }
       return BacnetWritePropertyPollStatus::Error;
     case BacnetWritePropertyResponseKind::Reject:
       return BacnetWritePropertyPollStatus::Reject;
