@@ -1,8 +1,26 @@
 cmake_minimum_required(VERSION 3.16)
-project(esp_bacnet_portable_smoke LANGUAGES CXX)
+project(esp_bacnet_native LANGUAGES CXX)
+
+include(CTest)
+
+add_library(bacnet_portable STATIC
+  ${CMAKE_CURRENT_LIST_DIR}/../../src/portable/BacnetProtocol.cpp)
+target_compile_features(bacnet_portable PUBLIC cxx_std_17)
+target_include_directories(bacnet_portable PUBLIC
+  ${CMAKE_CURRENT_LIST_DIR}/../../src)
+
+add_library(bacnet_client STATIC
+  ${CMAKE_CURRENT_LIST_DIR}/../../src/BacnetClient.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/../../src/BacnetLogger.cpp)
+target_compile_features(bacnet_client PUBLIC cxx_std_17)
+target_include_directories(bacnet_client PUBLIC
+  ${CMAKE_CURRENT_LIST_DIR}/../../src)
+target_link_libraries(bacnet_client PUBLIC bacnet_portable)
 
 add_executable(portable_smoke portable_smoke.cpp)
 target_compile_features(portable_smoke PRIVATE cxx_std_17)
-target_include_directories(portable_smoke PRIVATE ${CMAKE_CURRENT_LIST_DIR}/../../src)
-target_sources(portable_smoke PRIVATE
-  ${CMAKE_CURRENT_LIST_DIR}/../../src/portable/BacnetProtocol.cpp)
+target_link_libraries(portable_smoke PRIVATE bacnet_portable)
+
+if(WIN32)
+  add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../native native)
+endif()
