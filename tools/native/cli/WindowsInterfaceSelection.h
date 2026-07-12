@@ -6,7 +6,7 @@
 #include <cstddef>
 
 struct WindowsIpv4Interface {
-  const char* name = nullptr;
+  char name[128] = {};
   BacnetIpEndpoint address;
   BacnetIpEndpoint netmask;
 };

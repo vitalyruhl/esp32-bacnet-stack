@@ -256,6 +256,17 @@ To validate a real BACnet/IP network, supply the local interface and its
 broadcast address at runtime; do not store site-specific addresses in the
 repository:
 
+`bacnet-discover` can also be run without network arguments. It sequentially
+tries suitable active IPv4 interfaces and writes each selected bind/broadcast
+pair to stderr; discovered devices remain on stdout. Use `--bind <local-ip>`
+to restrict the run to one interface, and optionally provide `--broadcast`.
+
+Build the productive Windows binaries with:
+
+```cmd
+tools\compile-windows-binaries.cmd Release
+```
+
 ```powershell
 .\build\native-windows\native\Debug\bacnet-discover.exe `
   --bind <local-ip> --broadcast <broadcast-ip> --timeout-ms 5000
