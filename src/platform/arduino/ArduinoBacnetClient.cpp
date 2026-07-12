@@ -17,8 +17,7 @@ void ArduinoUdpDatagramTransport::end() {
 bool ArduinoUdpDatagramTransport::send(const BacnetIpEndpoint& destination,
                                        const uint8_t* data,
                                        size_t length) {
-  const IPAddress address(destination.address[0], destination.address[1],
-                          destination.address[2], destination.address[3]);
+  const IPAddress address(destination.address[0], destination.address[1], destination.address[2], destination.address[3]);
   if (udp_.beginPacket(address, destination.port) != 1) {
     return false;
   }
@@ -53,11 +52,10 @@ void ArduinoSerialLogOutput::log(const BacnetLogRecord& record) {
 }
 
 BacnetIpEndpoint bacnetIpEndpointFromArduino(const IPAddress& address,
-                                              uint16_t port) {
+                                             uint16_t port) {
   return BacnetIpEndpoint(address[0], address[1], address[2], address[3], port);
 }
 
 IPAddress bacnetIpAddressFromEndpoint(const BacnetIpEndpoint& endpoint) {
-  return IPAddress(endpoint.address[0], endpoint.address[1], endpoint.address[2],
-                   endpoint.address[3]);
+  return IPAddress(endpoint.address[0], endpoint.address[1], endpoint.address[2], endpoint.address[3]);
 }

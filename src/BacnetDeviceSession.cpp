@@ -444,9 +444,9 @@ BacnetDeviceSession BacnetDeviceSession::fromEndpoint(BacnetClient& client,
 BacnetDeviceSession BacnetDeviceSession::fromIAm(BacnetClient& client,
                                                  const BacnetIAmDevice& device,
                                                  uint16_t port) {
-  BacnetIpEndpoint endpoint = device.endpoint;
-  endpoint.port = port;
-  return fromEndpoint(client, device.deviceInstance, endpoint);
+  BacnetIpEndpoint discoveredEndpoint = device.endpoint;
+  discoveredEndpoint.port = port;
+  return fromEndpoint(client, device.deviceInstance, discoveredEndpoint);
 }
 
 BacnetClient& BacnetDeviceSession::client() {

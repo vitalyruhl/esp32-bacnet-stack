@@ -41,5 +41,5 @@ private:
 };
 
 BacnetIpEndpoint bacnetIpEndpointFromArduino(const IPAddress& address,
-                                              uint16_t port = BacnetClient::kDefaultPort);
+                                             uint16_t port = BacnetClient::kDefaultPort);
 IPAddress bacnetIpAddressFromEndpoint(const BacnetIpEndpoint& endpoint);
