@@ -22,6 +22,7 @@ constexpr uint8_t kServiceWhoIs = 0x08;
 constexpr uint8_t kServiceSubscribeCov = 0x05;
 constexpr uint8_t kServiceUnconfirmedCovNotification = 0x02;
 constexpr uint8_t kServiceReadProperty = 0x0C;
+constexpr uint8_t kServiceWriteProperty = 0x0F;
 constexpr uint16_t kDeviceObjectType = 8;
 constexpr uint32_t kObjectInstanceMask = 0x003FFFFF;
 constexpr uint8_t kApplicationTagNull = 0;
@@ -782,6 +783,35 @@ BacnetReadPropertyResponseKind BacnetProtocol::classifyReadPropertyResponse(
   return BacnetReadPropertyResponseKind::Unrelated;
 }
 
+BacnetWritePropertyResponseKind BacnetProtocol::classifyWritePropertyResponse(
+  const uint8_t* buffer, size_t length, uint8_t expectedInvokeId) {
+  if (buffer == nullptr || length < 8 || buffer[0] != kBvlcTypeBacnetIp ||
+      (buffer[1] != kBvlcOriginalUnicastNpdu &&
+       buffer[1] != kBvlcOriginalBroadcastNpdu) ||
+      readUint16(&buffer[2]) != length) {
+    return BacnetWritePropertyResponseKind::Unrelated;
+  }
+  size_t offset = 4;
+  if (!readNpduHeader(buffer, length, offset) || offset >= length) {
+    return BacnetWritePropertyResponseKind::Unrelated;
+  }
+  const uint8_t apduType = buffer[offset] & 0xF0;
+  if (apduType == 0x20 || apduType == kApduError) {
+    if (offset + 3 > length || buffer[offset + 1] != expectedInvokeId ||
+        buffer[offset + 2] != kServiceWriteProperty) {
+      return BacnetWritePropertyResponseKind::Unrelated;
+    }
+    return apduType == 0x20 ? BacnetWritePropertyResponseKind::Ack
+                            : BacnetWritePropertyResponseKind::Error;
+  }
+  if ((apduType == kApduReject || apduType == kApduAbort) &&
+      offset + 2 <= length && buffer[offset + 1] == expectedInvokeId) {
+    return apduType == kApduReject ? BacnetWritePropertyResponseKind::Reject
+                                   : BacnetWritePropertyResponseKind::Abort;
+  }
+  return BacnetWritePropertyResponseKind::Unrelated;
+}
+
 size_t BacnetProtocol::buildWhoIsRequest(uint8_t* buffer, size_t bufferSize) {
   if (buffer == nullptr || bufferSize < kWhoIsRequestSize) {
     return 0;
@@ -797,6 +827,109 @@ size_t BacnetProtocol::buildWhoIsRequest(uint8_t* buffer, size_t bufferSize) {
   buffer[7] = kServiceWhoIs;
 
   return kWhoIsRequestSize;
+}
+
+size_t BacnetProtocol::encodeApplicationValue(uint8_t* buffer, size_t bufferSize, const BacnetValue& value) {
+  if (buffer == nullptr || bufferSize == 0) {
+    return 0;
+  }
+
+  const auto writeUnsigned = [&](uint8_t tag, uint32_t raw) -> size_t {
+    const uint8_t length = raw <= 0xFFU ? 1 : raw <= 0xFFFFU   ? 2
+                                            : raw <= 0xFFFFFFU ? 3
+                                                               : 4;
+    if (bufferSize < static_cast<size_t>(length + 1)) {
+      return 0;
+    }
+    buffer[0] = static_cast<uint8_t>((tag << 4) | length);
+    for (uint8_t index = 0; index < length; ++index) {
+      buffer[1 + index] = static_cast<uint8_t>(raw >> ((length - index - 1) * 8));
+    }
+    return length + 1;
+  };
+
+  const auto writeSigned = [&](int32_t raw) -> size_t {
+    uint8_t length = 4;
+    if (raw >= -128 && raw <= 127) {
+      length = 1;
+    } else if (raw >= -32768 && raw <= 32767) {
+      length = 2;
+    } else if (raw >= -8388608 && raw <= 8388607) {
+      length = 3;
+    }
+    if (bufferSize < static_cast<size_t>(length + 1)) {
+      return 0;
+    }
+    buffer[0] = static_cast<uint8_t>((kApplicationTagSigned << 4) | length);
+    const uint32_t bits = static_cast<uint32_t>(raw);
+    for (uint8_t index = 0; index < length; ++index) {
+      buffer[1 + index] = static_cast<uint8_t>(bits >> ((length - index - 1) * 8));
+    }
+    return length + 1;
+  };
+
+  switch (value.type) {
+    case BacnetValueType::Null:
+      buffer[0] = 0x00;
+      return 1;
+    case BacnetValueType::Boolean:
+      buffer[0] = static_cast<uint8_t>(0x10 | (value.booleanValue ? 1 : 0));
+      return 1;
+    case BacnetValueType::Unsigned:
+      return writeUnsigned(kApplicationTagUnsigned, value.unsignedValue);
+    case BacnetValueType::Signed:
+      return writeSigned(value.signedValue);
+    case BacnetValueType::Enumerated:
+      return writeUnsigned(kApplicationTagEnumerated, value.unsignedValue);
+    case BacnetValueType::Real: {
+      if (bufferSize < 5) {
+        return 0;
+      }
+      uint32_t raw = 0;
+      std::memcpy(&raw, &value.realValue, sizeof(raw));
+      buffer[0] = 0x44;
+      buffer[1] = static_cast<uint8_t>(raw >> 24);
+      buffer[2] = static_cast<uint8_t>(raw >> 16);
+      buffer[3] = static_cast<uint8_t>(raw >> 8);
+      buffer[4] = static_cast<uint8_t>(raw);
+      return 5;
+    }
+    case BacnetValueType::CharacterString: {
+      if (value.textLength >= BacnetValue::kMaxTextLength ||
+          value.textLength > 253) {
+        return 0;
+      }
+      const size_t payloadLength = value.textLength + 1;
+      const size_t headerLength = payloadLength <= 4 ? 1 : 2;
+      if (bufferSize < headerLength + payloadLength) {
+        return 0;
+      }
+      buffer[0] = static_cast<uint8_t>((kApplicationTagCharacterString << 4) |
+                                       (payloadLength <= 4 ? payloadLength : 5));
+      size_t offset = 1;
+      if (payloadLength > 4) {
+        buffer[offset++] = static_cast<uint8_t>(payloadLength);
+      }
+      buffer[offset++] = 0; // ANSI X3.4 / UTF-8 compatible character set.
+      std::memcpy(buffer + offset, value.text, value.textLength);
+      return offset + value.textLength;
+    }
+    case BacnetValueType::ObjectIdentifier: {
+      if (value.objectValue.type > 1023 ||
+          value.objectValue.instance > kObjectInstanceMask || bufferSize < 5) {
+        return 0;
+      }
+      const uint32_t object = encodeObjectId(value.objectValue);
+      buffer[0] = 0xC4;
+      buffer[1] = static_cast<uint8_t>(object >> 24);
+      buffer[2] = static_cast<uint8_t>(object >> 16);
+      buffer[3] = static_cast<uint8_t>(object >> 8);
+      buffer[4] = static_cast<uint8_t>(object);
+      return 5;
+    }
+    default:
+      return 0;
+  }
 }
 
 size_t BacnetProtocol::buildSubscribeCovRequest(uint8_t* buffer,
@@ -971,6 +1104,45 @@ size_t BacnetProtocol::buildReadPropertyRequest(uint8_t* buffer,
     offset = writeContextUnsigned(buffer, offset, 2, request.arrayIndex);
   }
 
+  buffer[2] = static_cast<uint8_t>(offset >> 8);
+  buffer[3] = static_cast<uint8_t>(offset);
+  return offset;
+}
+
+size_t BacnetProtocol::buildWritePropertyRequest(
+  uint8_t* buffer, size_t bufferSize, const BacnetPropertyRequest& request, const BacnetValue& value, uint8_t invokeId) {
+  if (buffer == nullptr || bufferSize < 24 || request.object.type > 1023 ||
+      request.object.instance > kObjectInstanceMask) {
+    return 0;
+  }
+  size_t offset = 0;
+  buffer[offset++] = kBvlcTypeBacnetIp;
+  buffer[offset++] = kBvlcOriginalUnicastNpdu;
+  buffer[offset++] = 0;
+  buffer[offset++] = 0;
+  buffer[offset++] = kNpduVersion;
+  buffer[offset++] = kNpduExpectingReply;
+  buffer[offset++] = kApduConfirmedRequest;
+  buffer[offset++] = 0x05;
+  buffer[offset++] = invokeId;
+  buffer[offset++] = kServiceWriteProperty;
+  offset = writeContextObjectIdentifier(buffer, offset, 0, request.object);
+  offset = writeContextUnsigned(buffer, offset, 1, static_cast<uint32_t>(request.property));
+  if (request.arrayIndex != kBacnetNoArrayIndex) {
+    offset = writeContextUnsigned(buffer, offset, 2, request.arrayIndex);
+  }
+  if (offset + 2 > bufferSize) {
+    return 0;
+  }
+  buffer[offset++] = 0x3E;
+  const size_t valueLength = encodeApplicationValue(buffer + offset,
+                                                    bufferSize - offset - 1,
+                                                    value);
+  if (valueLength == 0 || offset + valueLength + 1 > bufferSize) {
+    return 0;
+  }
+  offset += valueLength;
+  buffer[offset++] = 0x3F;
   buffer[2] = static_cast<uint8_t>(offset >> 8);
   buffer[3] = static_cast<uint8_t>(offset);
   return offset;

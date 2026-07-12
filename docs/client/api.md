@@ -16,7 +16,11 @@ Current public responsibilities:
 - Who-Is sending through `sendWhoIs()`
 - I-Am polling through `pollIAm()`
 - ReadProperty send/poll helpers through `sendReadProperty()`, `pollReadProperty()`, and `pollReadPropertyStatus()`
-- request/response encoding and decoding helpers such as `buildWhoIsRequest()`, `buildReadPropertyRequest()`, `parseIAmResponse()`, and `parseReadPropertyAck()`
+- explicit WriteProperty send/poll helpers through `sendWriteProperty()` and
+  `pollWriteProperty()` when `ESP_BACNET_ENABLE_WRITE_PROPERTY=1`
+- request/response encoding and decoding helpers such as `buildWhoIsRequest()`,
+  `buildReadPropertyRequest()`, `buildWritePropertyRequest()`,
+  `parseIAmResponse()`, and `parseReadPropertyAck()`
 
 ### `BacnetDeviceSession`
 
@@ -26,6 +30,7 @@ Current public responsibilities:
 - create a session from known endpoint data through `fromEndpoint()`
 - create a session from discovered I-Am metadata through `fromIAm()`
 - read one property through `readProperty()`
+- explicitly write one typed property through `writeProperty()` when enabled
 - read compact object health through `readObjectStatus()`
 - collect a property's advertised property list through `readPropertyList()`
 - safely attempt all collected properties through `readAllProperties()`
@@ -61,6 +66,8 @@ Current public responsibilities:
 ## Common Result Types
 
 - `BacnetValue`: typed value holder used by ReadProperty and scan helpers
+- `BacnetDeviceSessionWriteStatus` and `BacnetWritePropertyPollStatus`: typed
+  WriteProperty result states
 - `BacnetDeviceSessionReadStatus`: session-level read result status
 - `BacnetPropertyReadStatus`: per-property result status for read-all flows
 - `BacnetObjectStatus` and `BacnetObjectHealthState`: compact object health view
@@ -74,8 +81,6 @@ Current public responsibilities:
 
 The following are planned or intentionally absent from the current public client runtime:
 
-- real SubscribeCOV client support
-- WriteProperty
 - priority write helpers
 - automatic background polling tasks
 - global discovery cache or mandatory object browser state

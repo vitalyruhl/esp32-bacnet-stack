@@ -1,7 +1,9 @@
 # ESP32 BACnet Stack
 
-ESP32 BACnet Stack is an early-stage Arduino/PlatformIO library for BACnet/IP
-client and server experiments on ESP32 boards.
+ESP32 BACnet Stack provides a portable BACnet/IP protocol core and public
+client/server roles for native and embedded applications. Arduino/PlatformIO
+on ESP32 and native Windows applications use the same platform-independent
+core through dedicated platform adapters.
 
 The project is published as open-source work in progress. APIs and protocol
 coverage are still evolving.
@@ -11,13 +13,19 @@ coverage are still evolving.
 BACnet/IP client APIs are already usable for common read-oriented use cases,
 including common process object present-value reads, cached-property access,
 read-only process-object helpers, and Analog Value metadata reads, while
-advanced discovery, write flows, and server MVP remain future work.
+advanced discovery workflows, priority writes, hardware-write validation, and
+the server MVP remain future work.
 
 ## Implementation Matrix
 
 | Area | Capability | Status | Notes |
 | --- | --- | --- | --- |
 | Client discovery | Who-Is / I-Am discovery | ✅ Implemented | Core discovery flow available through `BacnetClient`. |
+| Windows CLI | Device discovery | ✅ Implemented | `bacnet-discover.exe` performs native BACnet/IP discovery. |
+| Windows CLI | Object listing | ✅ Implemented | `bacnet-client.exe list` reads and lists Device Object List entries. |
+| Windows CLI | Property read | ✅ Implemented | `bacnet-client.exe read` reads one selected property. |
+| Windows platform | UDP/Winsock transport | ✅ Implemented | Native UDP transport, monotonic clock, and console logging adapter. |
+| Windows platform | CMake/MSVC builds | ✅ Implemented | Native CMake targets and CTest coverage build with MSVC. |
 | Client discovery | Known-device session with `BacnetDeviceSession` | ✅ Implemented | Session keeps target identity, drives device-scoped calls, and can be created from a known endpoint or discovered `I-Am` metadata. |
 | ReadProperty / values | Generic ReadProperty model | ✅ Implemented | Object + property + optional array index request model is available. |
 | ReadProperty / values | Reading known device/object properties | ✅ Implemented | Works for selected known properties and known object IDs. |
@@ -35,8 +43,8 @@ advanced discovery, write flows, and server MVP remain future work.
 | Object discovery | Optional `object-name`, `description`, `present-value` reads during object-list scan | ✅ Implemented | Optional reads are supported during object-list scan flow. |
 | Object discovery | BACnet `property-list` discovery / safe read-all | ✅ Implemented | Caller-buffered APIs discover advertised properties where available and safely attempt each property with per-property status results. |
 | Subscriptions | Property subscription abstraction with fallback polling | 🟢 Use-case ready | Practical for cyclic update use cases without SubscribeCOV. |
-| Subscriptions | Real SubscribeCOV | ⏳ Planned | Not implemented yet. |
-| Writes | WriteProperty | 🚫 Not implemented | No write API shipped in current client runtime. |
+| Subscriptions | Real SubscribeCOV | ✅ Implemented | Registration, renewal, notification routing, and polling fallback are available. |
+| Writes | WriteProperty | ⚠️ Explicit opt-in | Typed client/session API; disabled by default at compile time. |
 | Writes | PresentValue priority write helpers | ⏳ Planned | Future client capability, not currently implemented. |
 | Writes | Hardware writes | 🚫 Not implemented | Disabled by default; future explicit opt-in only. |
 | Examples / validation | `examples/client-object-list-scan-basic` | ✅ Implemented | Canonical serial-only basic client example for known-target property read, object-list scan, and fallback polling. |
@@ -69,17 +77,39 @@ Additional status notes:
 
 ## Goals
 
-- Provide one public `BacnetClient` role for BACnet/IP client workflows.
-- Provide one public `BacnetServer` role for BACnet/IP server workflows.
-- Keep the core library usable from Arduino and PlatformIO projects.
+- Provide one portable public `BacnetClient` role for BACnet/IP client workflows.
+- Provide one portable public `BacnetServer` role for BACnet/IP server workflows.
+- Keep the BACnet protocol core independent from Arduino, ESP32, Windows, and
+  transport-specific APIs.
+- Support Arduino/PlatformIO through dedicated ESP32 adapters.
+- Support native Windows applications and CLI tools through dedicated Windows
+  adapters.
 - Keep BACnet protocol implementation work compatible with
   `GPL-2.0-or-later WITH GCC-exception-2.0`.
 
 ## Requirements
 
-- ESP32 board supported by PlatformIO.
+### Portable / native core
+
+- C++17-compatible compiler.
+- No Arduino, ESP32, PlatformIO, or Windows dependency in portable modules.
+- CMake for native builds and tests.
+
+### ESP32 / Arduino
+
+- Supported ESP32 board.
 - PlatformIO with the Arduino framework.
 - C++17 enabled through `-std=gnu++17`.
+
+### Windows
+
+- Windows with a C++17-capable MSVC toolchain.
+- CMake.
+- Winsock2, provided by the Windows SDK.
+
+The BACnet protocol code is not separately implemented for Windows and ESP32.
+Both platforms use the same portable core; transport, clock, logging, and
+platform integration are isolated in platform adapters.
 
 ## WiFi And Ethernet Examples
 
@@ -303,6 +333,13 @@ uses the same `0`-`3` convention. `read` additionally returns `4` for Reject,
 `5` for Abort, and `6` for decode or unsupported-value errors.
 
 Optional compile-time write feature gates:
+
+`BacnetDeviceSession::writeProperty()` and the lower-level
+`BacnetClient::sendWriteProperty()`/`pollWriteProperty()` encode supported
+`BacnetValue` types through the shared portable application-value codec. The
+write feature is disabled by default; a disabled build returns an explicit
+`Disabled` status and sends no datagram. Priority, priority-array handling, and
+automatic writes are not implemented.
 
 ## Property Subscriptions
 
