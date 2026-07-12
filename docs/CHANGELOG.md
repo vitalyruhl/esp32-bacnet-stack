@@ -2,6 +2,11 @@
 
 This changelog is a curated overview.
 
+## 0.31.0
+
+- Added sequential multi-interface auto-discovery for the native Windows
+  discovery CLI and a `compile-windows-binaries.cmd` Release/Debug helper.
+
 ## 0.30.0
 
 - Added client-side SubscribeCOV registration, renewal, and notification routing

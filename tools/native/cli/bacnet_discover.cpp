@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later WITH GCC-exception-2.0
 
 #include "BacnetNativeCli.h"
+#include "WindowsInterfaceSelection.h"
 #include "platform/windows/WindowsBacnetDatagramTransport.h"
 #include "platform/windows/WindowsMonotonicClock.h"
 #include "platform/windows/WindowsSocketRuntime.h"
@@ -25,7 +26,38 @@ bool parseArguments(int argc, char* argv[], BacnetNativeCliOptions& options) {
   }
   options.bindEndpoint.port = BacnetClient::kDefaultPort;
   options.broadcastEndpoint.port = BacnetClient::kDefaultPort;
-  return options.hasBind && options.hasBroadcast;
+  return !options.hasBroadcast || options.hasBind;
+}
+
+void printEndpoint(FILE* output, const BacnetIpEndpoint& endpoint) {
+  std::fprintf(output, "%u.%u.%u.%u", static_cast<unsigned>(endpoint.address[0]), static_cast<unsigned>(endpoint.address[1]), static_cast<unsigned>(endpoint.address[2]), static_cast<unsigned>(endpoint.address[3]));
+}
+
+bool resolveInterface(BacnetNativeCliOptions& options) {
+  if (options.hasBroadcast) return true;
+  WindowsIpv4Interface selected;
+  WindowsIpv4Interface candidates[16] = {};
+  size_t candidateCount = 0;
+  const WindowsInterfaceSelectionStatus status = windowsDiscoverIpv4Interface(
+    options.hasBind ? &options.bindEndpoint : nullptr, selected, candidates,
+    sizeof(candidates) / sizeof(candidates[0]), candidateCount);
+  if (status != WindowsInterfaceSelectionStatus::Selected) {
+    if (status == WindowsInterfaceSelectionStatus::Multiple) {
+      for (size_t index = 0; index < candidateCount; ++index) {
+        std::fputs("Candidate: ", stderr); std::fputs(candidates[index].name, stderr); std::fputs(" bind=", stderr); printEndpoint(stderr, candidates[index].address); std::fputs(" broadcast=", stderr); printEndpoint(stderr, windowsBroadcastAddress(candidates[index].address, candidates[index].netmask)); std::fputc('\n', stderr);
+      }
+      std::fputs("[E] Multiple active IPv4 interfaces found. Select one with --bind <ip>.\n", stderr);
+    } else {
+      std::fputs("[E] No suitable active IPv4 interface found.\n", stderr);
+    }
+    return false;
+  }
+  options.bindEndpoint = selected.address;
+  options.broadcastEndpoint = windowsBroadcastAddress(selected.address, selected.netmask);
+  options.hasBind = true;
+  options.hasBroadcast = true;
+  std::fputs("Auto-selected interface: ", stderr); std::fputs(selected.name, stderr); std::fputs("\nBind: ", stderr); printEndpoint(stderr, options.bindEndpoint); std::fputs("\nBroadcast: ", stderr); printEndpoint(stderr, options.broadcastEndpoint); std::fputc('\n', stderr);
+  return true;
 }
 
 const char* metadataValue(BacnetClient& client, const BacnetIpEndpoint& endpoint, uint32_t deviceId, BacnetPropertyId property, uint32_t timeoutMs, char* buffer, size_t capacity) {
@@ -64,6 +96,59 @@ int main(int argc, char* argv[]) {
   if (argc == 2 && std::strcmp(argv[1], "--help") == 0) { printHelp(); return 0; }
   BacnetNativeCliOptions options;
   if (!parseArguments(argc, argv, options)) { std::fputs("[E] invalid command-line arguments\n", stderr); printHelp(stderr); return static_cast<int>(BacnetCliExitCode::InvalidArguments); }
+  if (!options.hasBind) {
+    WindowsIpv4Interface selected;
+    WindowsIpv4Interface candidates[16] = {};
+    size_t candidateCount = 0;
+    windowsDiscoverIpv4Interface(nullptr, selected, candidates,
+                                 sizeof(candidates) / sizeof(candidates[0]),
+                                 candidateCount);
+    if (candidateCount == 0) {
+      std::fputs("[E] No suitable active IPv4 interface found.\n", stderr);
+      return 1;
+    }
+    BacnetIAmDevice devices[32] = {};
+    size_t deviceCount = 0;
+    bool usedInterface = false;
+    for (size_t candidateIndex = 0; candidateIndex < candidateCount; ++candidateIndex) {
+      const WindowsIpv4Interface& candidate = candidates[candidateIndex];
+      const BacnetIpEndpoint broadcast = windowsBroadcastAddress(candidate.address, candidate.netmask);
+      std::fprintf(stderr, "Using interface: %s, bind=", candidate.name);
+      printEndpoint(stderr, candidate.address);
+      std::fputs(", broadcast=", stderr);
+      printEndpoint(stderr, broadcast);
+      std::fputc('\n', stderr);
+      WindowsSocketRuntime runtime;
+      WindowsBacnetDatagramTransport transport(runtime);
+      WindowsMonotonicClock clock;
+      if (!runtime.begin() || !transport.setBindAddress(candidate.address)) continue;
+      BacnetClient client(transport, &clock);
+      if (!client.begin() || !client.sendWhoIs(broadcast)) { client.end(); continue; }
+      usedInterface = true;
+      const uint32_t start = client.nowMs();
+      while (client.nowMs() - start < options.timeoutMs) {
+        BacnetIAmDevice device;
+        if (client.pollIAm(device) && (!options.hasDeviceId || device.deviceInstance == options.deviceId)) {
+          bool duplicate = false;
+          for (size_t index = 0; index < deviceCount; ++index) {
+            duplicate = devices[index].deviceInstance == device.deviceInstance &&
+              devices[index].endpoint.port == device.endpoint.port &&
+              std::memcmp(devices[index].endpoint.address, device.endpoint.address, 4) == 0;
+            if (duplicate) break;
+          }
+          if (!duplicate && deviceCount < sizeof(devices) / sizeof(devices[0])) devices[deviceCount++] = device;
+        }
+        client.idle();
+      }
+      client.end();
+    }
+    for (size_t index = 0; index < deviceCount; ++index) {
+      const BacnetIAmDevice& device = devices[index];
+      std::printf("device-id=%lu ip=%u.%u.%u.%u port=%u\n", static_cast<unsigned long>(device.deviceInstance), static_cast<unsigned>(device.endpoint.address[0]), static_cast<unsigned>(device.endpoint.address[1]), static_cast<unsigned>(device.endpoint.address[2]), static_cast<unsigned>(device.endpoint.address[3]), static_cast<unsigned>(device.endpoint.port));
+    }
+    return deviceCount > 0 ? 0 : (usedInterface ? 2 : 1);
+  }
+  if (!resolveInterface(options)) return static_cast<int>(BacnetCliExitCode::InvalidArguments);
   WindowsSocketRuntime runtime;
   WindowsBacnetDatagramTransport transport(runtime);
   WindowsMonotonicClock clock;
