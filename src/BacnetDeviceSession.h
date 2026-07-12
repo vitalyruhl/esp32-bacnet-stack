@@ -88,6 +88,19 @@ enum class BacnetDeviceSessionReadStatus : uint8_t {
   Busy,
 };
 
+enum class BacnetDeviceSessionWriteStatus : uint8_t {
+  Ack,
+  Error,
+  Reject,
+  Abort,
+  Timeout,
+  SendFailed,
+  Disabled,
+  InvalidArgument,
+  UnsupportedValue,
+  Busy,
+};
+
 inline const char* bacnetReadStatusText(BacnetDeviceSessionReadStatus status) {
   switch (status) {
     case BacnetDeviceSessionReadStatus::Ack:
@@ -432,6 +445,10 @@ public:
     BacnetObjectId object, BacnetPropertyId property, BacnetValue& value, uint32_t timeoutMs = kDefaultReadTimeoutMs, uint32_t arrayIndex = kBacnetNoArrayIndex);
   BacnetDeviceSessionReadStatus readProperty(
     BacnetObjectType objectType, uint32_t objectInstance, BacnetPropertyId property, BacnetValue& value, uint32_t timeoutMs = kDefaultReadTimeoutMs, uint32_t arrayIndex = kBacnetNoArrayIndex);
+  BacnetDeviceSessionWriteStatus writeProperty(
+    BacnetObjectId object, BacnetPropertyId property, const BacnetValue& value, uint32_t timeoutMs = kDefaultReadTimeoutMs, uint32_t arrayIndex = kBacnetNoArrayIndex);
+  BacnetDeviceSessionWriteStatus writeProperty(
+    BacnetObjectType objectType, uint32_t objectInstance, BacnetPropertyId property, const BacnetValue& value, uint32_t timeoutMs = kDefaultReadTimeoutMs, uint32_t arrayIndex = kBacnetNoArrayIndex);
   BacnetObjectHealthState readObjectStatus(
     BacnetObjectId object,
     BacnetObjectStatus& status,

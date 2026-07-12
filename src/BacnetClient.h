@@ -20,6 +20,7 @@ public:
   static constexpr uint16_t kDefaultPort = 47808;
   static constexpr size_t kWhoIsRequestSize = 8;
   static constexpr size_t kMaxReadPropertyRequestSize = 25;
+  static constexpr size_t kMaxWritePropertyRequestSize = BacnetProtocol::kMaxWritePropertyRequestSize;
   static constexpr size_t kMaxSubscribeCovRequestSize = 32;
   static constexpr uint32_t kNoArrayIndex = kBacnetNoArrayIndex;
 
@@ -57,6 +58,12 @@ public:
                         BacnetPropertyId property,
                         uint8_t invokeId = 1,
                         uint32_t arrayIndex = kNoArrayIndex);
+  BacnetWritePropertyPollStatus sendWriteProperty(
+    const BacnetIpEndpoint& destination,
+    const BacnetPropertyRequest& request,
+    const BacnetValue& value,
+    uint8_t invokeId = 1);
+  BacnetWritePropertyPollStatus pollWriteProperty(uint8_t expectedInvokeId);
   bool pollReadProperty(BacnetValue& value, uint8_t expectedInvokeId, const BacnetPropertyRequest& expectedRequest);
   bool pollReadProperty(BacnetValue& value, uint8_t expectedInvokeId, BacnetPropertyId expectedProperty);
   void logReadPropertyTimeout(uint8_t invokeId,
@@ -73,6 +80,7 @@ public:
   static size_t buildWhoIsRequest(uint8_t* buffer, size_t bufferSize);
   static bool parseIAmResponse(const uint8_t* buffer, size_t length, BacnetIAmDevice& device);
   static size_t buildReadPropertyRequest(uint8_t* buffer, size_t bufferSize, const BacnetPropertyRequest& request, uint8_t invokeId = 1);
+  static size_t buildWritePropertyRequest(uint8_t* buffer, size_t bufferSize, const BacnetPropertyRequest& request, const BacnetValue& value, uint8_t invokeId = 1);
   static size_t buildReadPropertyRequest(uint8_t* buffer, size_t bufferSize, BacnetObjectId object, BacnetPropertyId property, uint8_t invokeId = 1, uint32_t arrayIndex = kNoArrayIndex);
   static bool parseReadPropertyAck(const uint8_t* buffer, size_t length, uint8_t expectedInvokeId, const BacnetPropertyRequest& expectedRequest, BacnetValue& value);
   static bool parseReadPropertyAck(const uint8_t* buffer, size_t length, uint8_t expectedInvokeId, BacnetPropertyId expectedProperty, BacnetValue& value);

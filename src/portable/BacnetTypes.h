@@ -138,6 +138,27 @@ enum class BacnetReadPropertyResponseKind : uint8_t {
   Abort,
 };
 
+enum class BacnetWritePropertyPollStatus : uint8_t {
+  None,
+  Ack,
+  Error,
+  Reject,
+  Abort,
+  DecodeError,
+  Disabled,
+  InvalidArgument,
+  UnsupportedValue,
+  SendFailed,
+};
+
+enum class BacnetWritePropertyResponseKind : uint8_t {
+  Unrelated,
+  Ack,
+  Error,
+  Reject,
+  Abort,
+};
+
 struct BacnetCovNotification {
   uint32_t processId = 0;
   BacnetObjectId object;

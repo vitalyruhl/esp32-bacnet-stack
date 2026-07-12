@@ -41,7 +41,8 @@
 ## Safety And Boundaries
 
 - The current client library is read-oriented.
-- WriteProperty, priority writes, and hardware writes are not implemented.
+- Priority writes and hardware writes are not implemented. WriteProperty is an
+  explicit compile-time opt-in client API and is disabled by default.
 - The library must remain vendor-neutral and must not hardcode WAGO-specific assumptions in reusable APIs.
 - ConfigManager is optional demo infrastructure and is not a library dependency.
 

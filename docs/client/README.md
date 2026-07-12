@@ -11,7 +11,8 @@ Use the linked pages depending on what you need:
 
 ## Current Scope
 
-The implemented client scope is read-oriented BACnet/IP work on ESP32:
+The implemented client scope is portable BACnet/IP work shared by ESP32
+adapters and native Windows applications:
 
 - Who-Is / I-Am discovery
 - known-device sessions through `BacnetDeviceSession`
@@ -19,5 +20,10 @@ The implemented client scope is read-oriented BACnet/IP work on ESP32:
 - object-list scanning in blocking and non-blocking forms
 - property-list discovery and safe read-all attempts with per-property status
 - property subscription abstraction with fallback polling
+- SubscribeCOV registration, renewal, notification routing, and polling fallback
+- explicit compile-time opt-in WriteProperty for supported `BacnetValue` types
 
-The client documentation describes implemented behavior only. Planned items such as SubscribeCOV and writes are documented as planned, not as available features.
+The portable protocol and client code are shared across platforms. Only
+transport, clock, logging, and application integration belong to the Arduino
+or Windows adapters. The client documentation describes implemented behavior
+only; priority writes and hardware write validation remain planned.

@@ -44,9 +44,28 @@ add_executable(bacnet_cli_support_tests test/cli_support_tests.cpp)
 target_compile_features(bacnet_cli_support_tests PRIVATE cxx_std_17)
 target_link_libraries(bacnet_cli_support_tests PRIVATE bacnet_cli_common)
 
+add_library(bacnet_client_write_enabled STATIC
+  ${CMAKE_CURRENT_LIST_DIR}/../../src/BacnetClient.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/../../src/BacnetLogger.cpp)
+target_compile_features(bacnet_client_write_enabled PUBLIC cxx_std_17)
+target_compile_definitions(bacnet_client_write_enabled PRIVATE ESP_BACNET_ENABLE_WRITE_PROPERTY=1)
+target_include_directories(bacnet_client_write_enabled PUBLIC ${CMAKE_CURRENT_LIST_DIR}/../../src)
+target_link_libraries(bacnet_client_write_enabled PUBLIC bacnet_portable)
+
+add_executable(bacnet_write_property_tests test/write_property_tests.cpp)
+target_compile_features(bacnet_write_property_tests PRIVATE cxx_std_17)
+target_compile_definitions(bacnet_write_property_tests PRIVATE ESP_BACNET_ENABLE_WRITE_PROPERTY=1)
+target_link_libraries(bacnet_write_property_tests PRIVATE bacnet_client_write_enabled)
+
+add_executable(bacnet_write_property_disabled_tests test/write_property_disabled_tests.cpp)
+target_compile_features(bacnet_write_property_disabled_tests PRIVATE cxx_std_17)
+target_link_libraries(bacnet_write_property_disabled_tests PRIVATE bacnet_client)
+
 if(BUILD_TESTING)
   add_test(NAME bacnet_windows_tests COMMAND bacnet_windows_tests)
   add_test(NAME bacnet_cli_support_tests COMMAND bacnet_cli_support_tests)
+  add_test(NAME bacnet_write_property_tests COMMAND bacnet_write_property_tests)
+  add_test(NAME bacnet_write_property_disabled_tests COMMAND bacnet_write_property_disabled_tests)
   add_test(NAME bacnet_cli_help COMMAND bacnet_cli_smoke --help)
   add_test(NAME bacnet_cli_self_test COMMAND bacnet_cli_smoke --self-test)
   add_test(NAME bacnet_cli_unknown_option COMMAND bacnet_cli_smoke --unknown)

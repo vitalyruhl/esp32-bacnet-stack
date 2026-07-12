@@ -2,6 +2,14 @@
 
 This changelog is a curated overview.
 
+## 0.32.0
+
+- Added an explicit typed WriteProperty client/session API backed by one shared
+  portable BACnet application-value encoder.
+- WriteProperty remains compile-time disabled by default and reports explicit
+  disabled, argument, transport, ACK, Error, Reject, Abort, and timeout states.
+- Priority and priority-array writes remain unsupported.
+
 ## 0.31.0
 
 - Added sequential multi-interface auto-discovery for the native Windows

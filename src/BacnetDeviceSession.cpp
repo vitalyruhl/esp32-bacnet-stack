@@ -552,6 +552,66 @@ BacnetDeviceSessionReadStatus BacnetDeviceSession::readProperty(
     arrayIndex);
 }
 
+BacnetDeviceSessionWriteStatus BacnetDeviceSession::writeProperty(
+  BacnetObjectId objectId, BacnetPropertyId property, const BacnetValue& value, uint32_t timeoutMs, uint32_t arrayIndex) {
+  if (inFlightSubscription_ != nullptr || inFlightObjectListScan_ != nullptr) {
+    return BacnetDeviceSessionWriteStatus::Busy;
+  }
+  const BacnetPropertyRequest request{objectId, property, arrayIndex};
+  const uint8_t invokeId = allocateInvokeId();
+  const BacnetWritePropertyPollStatus sendStatus = client_.sendWriteProperty(
+    endpoint_, request, value, invokeId);
+  switch (sendStatus) {
+    case BacnetWritePropertyPollStatus::Disabled:
+      return BacnetDeviceSessionWriteStatus::Disabled;
+    case BacnetWritePropertyPollStatus::InvalidArgument:
+      return BacnetDeviceSessionWriteStatus::InvalidArgument;
+    case BacnetWritePropertyPollStatus::UnsupportedValue:
+      return BacnetDeviceSessionWriteStatus::UnsupportedValue;
+    case BacnetWritePropertyPollStatus::SendFailed:
+      return BacnetDeviceSessionWriteStatus::SendFailed;
+    case BacnetWritePropertyPollStatus::None:
+      break;
+    default:
+      return BacnetDeviceSessionWriteStatus::Error;
+  }
+  const uint32_t startedAt = client_.nowMs();
+  while (true) {
+    switch (client_.pollWriteProperty(invokeId)) {
+      case BacnetWritePropertyPollStatus::Ack:
+        return BacnetDeviceSessionWriteStatus::Ack;
+      case BacnetWritePropertyPollStatus::Error:
+        return BacnetDeviceSessionWriteStatus::Error;
+      case BacnetWritePropertyPollStatus::Reject:
+        return BacnetDeviceSessionWriteStatus::Reject;
+      case BacnetWritePropertyPollStatus::Abort:
+        return BacnetDeviceSessionWriteStatus::Abort;
+      case BacnetWritePropertyPollStatus::Disabled:
+        return BacnetDeviceSessionWriteStatus::Disabled;
+      case BacnetWritePropertyPollStatus::SendFailed:
+        return BacnetDeviceSessionWriteStatus::SendFailed;
+      case BacnetWritePropertyPollStatus::None:
+        break;
+      default:
+        return BacnetDeviceSessionWriteStatus::Error;
+    }
+    if (client_.nowMs() - startedAt >= timeoutMs) {
+      client_.logger().warn("BACnet/WriteProperty", "WriteProperty timeout invoke %u", static_cast<unsigned>(invokeId));
+      return BacnetDeviceSessionWriteStatus::Timeout;
+    }
+    client_.idle();
+  }
+}
+
+BacnetDeviceSessionWriteStatus BacnetDeviceSession::writeProperty(
+  BacnetObjectType objectType, uint32_t objectInstance, BacnetPropertyId property, const BacnetValue& value, uint32_t timeoutMs, uint32_t arrayIndex) {
+  return writeProperty(BacnetObjectId{static_cast<uint16_t>(objectType), objectInstance},
+                       property,
+                       value,
+                       timeoutMs,
+                       arrayIndex);
+}
+
 BacnetObjectHealthState BacnetDeviceSession::readObjectStatus(
   BacnetObjectId objectId,
   BacnetObjectStatus& status,
