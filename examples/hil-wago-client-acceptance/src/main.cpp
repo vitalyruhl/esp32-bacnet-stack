@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-or-later WITH GCC-exception-2.0
 
 #include <Arduino.h>
+#include <ArduinoBacnetClient.h>
 #include <BacnetClient.h>
 #include <BacnetDeviceSession.h>
-#include <EspBacnet.h>
+#include <BacnetRemoteObject.h>
+#include <WiFiUdp.h>
 
 #ifndef EXAMPLE_USE_ETHERNET
 #define EXAMPLE_USE_ETHERNET 0
@@ -368,7 +370,10 @@ void printS02ObjectLine(ScenarioOutcome outcome, const S02TargetSpec& target, Ba
   Serial.println();
 }
 
-BacnetClient client;
+WiFiUDP bacnetUdp;
+ArduinoUdpDatagramTransport bacnetTransport(bacnetUdp);
+ArduinoMonotonicClock bacnetClock;
+BacnetClient client(bacnetTransport, &bacnetClock);
 BacnetScannedObject scanResults[kMaxScanResults];
 BacnetObjectListScanJob scanJob;
 bool completed = false;
@@ -615,7 +620,7 @@ ScenarioOutcome runNonBlockingObjectListScanScenario() {
     return ScenarioOutcome::Fail;
   }
 
-  BacnetDeviceSession device(client, BACNET_TARGET_DEVICE_INSTANCE, targetAddress, BACNET_TARGET_PORT);
+  BacnetDeviceSession device(client, BACNET_TARGET_DEVICE_INSTANCE, bacnetIpEndpointFromArduino(targetAddress, BACNET_TARGET_PORT));
   const BacnetObjectType valueTypes[] = {
     BacnetObjectType::AnalogInput,
     BacnetObjectType::AnalogOutput,
@@ -781,7 +786,7 @@ ScenarioOutcome runCommonProcessPresentValueReadScenario() {
     return ScenarioOutcome::Fail;
   }
 
-  BacnetDeviceSession device(client, BACNET_TARGET_DEVICE_INSTANCE, targetAddress, BACNET_TARGET_PORT);
+  BacnetDeviceSession device(client, BACNET_TARGET_DEVICE_INSTANCE, bacnetIpEndpointFromArduino(targetAddress, BACNET_TARGET_PORT));
   const S02TargetSpec targets[] = {
     {"AI100", BacnetObjectType::AnalogInput, HIL_AI100_ANALOG_INPUT, HIL_REQUIRE_AI100},
     {"AI101", BacnetObjectType::AnalogInput, HIL_AI101_ANALOG_INPUT, HIL_REQUIRE_AI101},
@@ -865,7 +870,7 @@ ScenarioOutcome runCommonProcessStatusReadScenario() {
     return ScenarioOutcome::Fail;
   }
 
-  BacnetDeviceSession device(client, BACNET_TARGET_DEVICE_INSTANCE, targetAddress, BACNET_TARGET_PORT);
+  BacnetDeviceSession device(client, BACNET_TARGET_DEVICE_INSTANCE, bacnetIpEndpointFromArduino(targetAddress, BACNET_TARGET_PORT));
   const S02TargetSpec targets[] = {
     {"AI100", BacnetObjectType::AnalogInput, HIL_AI100_ANALOG_INPUT, HIL_REQUIRE_AI100},
     {"AI101", BacnetObjectType::AnalogInput, HIL_AI101_ANALOG_INPUT, HIL_REQUIRE_AI101},

@@ -3,7 +3,7 @@
 #pragma once
 
 #include <Arduino.h>
-#include <EspBacnet.h>
+#include <BacnetDisplayText.h>
 
 String shortenBacnetLabel(const String& label);
 String valueTextIfAck(BacnetDeviceSessionReadStatus status,

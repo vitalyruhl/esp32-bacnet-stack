@@ -127,21 +127,25 @@ Repository setup notes are tracked in
 ## Minimal Use
 
 ```cpp
-#include <EspBacnet.h>
+#include <ArduinoEspBacnet.h>
+#include <WiFiUdp.h>
 
-BacnetClient client;
+WiFiUDP udp;
+ArduinoUdpDatagramTransport transport(udp);
+ArduinoMonotonicClock clock;
+BacnetClient client(transport, &clock);
 BacnetServer server;
 
 void setup() {
   client.begin();
-  client.sendWhoIs();
+  client.sendWhoIs(BacnetIpEndpoint(255, 255, 255, 255));
   server.begin(1234);
 }
 
 void loop() {
   BacnetIAmDevice device;
   if (client.pollIAm(device)) {
-    // Discovery result available in device.address, device.deviceInstance, etc.
+    // Discovery result available in device.endpoint, device.deviceInstance, etc.
   }
 }
 ```
@@ -164,12 +168,17 @@ Detailed documentation is split by topic:
 The library supports simple known-target reads through `BacnetDeviceSession`:
 
 ```cpp
-#include <EspBacnet.h>
+#include <ArduinoBacnetClient.h>
+#include <BacnetDeviceSession.h>
+#include <WiFiUdp.h>
 
-BacnetClient client;
+WiFiUDP udp;
+ArduinoUdpDatagramTransport transport(udp);
+ArduinoMonotonicClock clock;
+BacnetClient client(transport, &clock);
 BacnetDeviceSession device =
     BacnetDeviceSession::fromEndpoint(client, 1234,
-                                      IPAddress(192, 0, 2, 101));
+                                      BacnetIpEndpoint(192, 0, 2, 101));
 
 void setup() {
   client.begin();
@@ -185,6 +194,16 @@ void setup() {
 
 void loop() {}
 ```
+
+## Public Imports
+
+- Client-only Arduino projects include `BacnetClient.h` and
+  `ArduinoBacnetClient.h`; they do not include server declarations.
+- Server-only Arduino projects include `ArduinoBacnetServer.h`; the server
+  remains a placeholder API and does not provide BACnet server services.
+- `ArduinoEspBacnet.h` is the optional combined Arduino import.
+- `EspBacnet.h` remains a legacy compatibility umbrella and imports both roles;
+  use one of the narrower imports in new projects.
 
 ## Build Basics
 

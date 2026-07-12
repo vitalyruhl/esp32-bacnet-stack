@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include <EspBacnet.h>
+#include <portable/BacnetTypes.h>
 
 #include <stdint.h>
 

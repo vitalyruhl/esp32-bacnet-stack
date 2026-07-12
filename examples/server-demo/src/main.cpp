@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later WITH GCC-exception-2.0
 
 #include <Arduino.h>
-#include <EspBacnet.h>
+#include <ArduinoBacnetServer.h>
 
 #ifndef EXAMPLE_USE_ETHERNET
 #define EXAMPLE_USE_ETHERNET 0

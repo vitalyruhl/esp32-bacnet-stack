@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-or-later WITH GCC-exception-2.0
 
 #include <Arduino.h>
-#include <EspBacnet.h>
+#include <ArduinoBacnetClient.h>
+#include <BacnetClient.h>
+#include <BacnetDeviceSession.h>
+#include <BacnetRemoteObject.h>
+#include <WiFiUdp.h>
 
 #ifndef EXAMPLE_USE_ETHERNET
 #define EXAMPLE_USE_ETHERNET 0
@@ -28,7 +32,7 @@
 #endif
 
 #ifndef APP_VERSION
-#define APP_VERSION "0.26.0"
+#define APP_VERSION "0.27.0"
 #endif
 
 #ifndef MY_USE_DHCP
@@ -61,7 +65,10 @@ constexpr uint32_t kMaxObjectListEntries = 600;
 constexpr size_t kMaxScanResults = 10;
 constexpr uint32_t kSubscriptionFallbackPollMs = 5000;
 
-BacnetClient bacnetClient;
+WiFiUDP bacnetUdp;
+ArduinoUdpDatagramTransport bacnetTransport(bacnetUdp);
+ArduinoMonotonicClock bacnetClock;
+BacnetClient bacnetClient(bacnetTransport, &bacnetClock);
 BacnetScannedObject scanResults[kMaxScanResults];
 BacnetDeviceSession* activeSession = nullptr;
 BacnetPropertySubscription* activeSubscription = nullptr;
@@ -323,7 +330,7 @@ void runScan() {
     return;
   }
   static BacnetDeviceSession session = BacnetDeviceSession::fromEndpoint(
-    bacnetClient, BACNET_TARGET_DEVICE_INSTANCE, targetAddress, BACNET_TARGET_PORT);
+    bacnetClient, BACNET_TARGET_DEVICE_INSTANCE, bacnetIpEndpointFromArduino(targetAddress, BACNET_TARGET_PORT));
 
   Serial.print("[I] target BACnet IP ");
   Serial.println(targetAddress);

@@ -2,16 +2,19 @@
 
 #include <BacnetClient.h>
 #include <BacnetDeviceSession.h>
+#include <BacnetDisplayText.h>
+#include <BacnetFixedTextBuffer.h>
 #include <BacnetRemoteObject.h>
 #include <portable/BacnetProtocol.h>
 #include <BacnetServer.h>
-#include <EspBacnet.h>
 #include <unity.h>
 
 #include <cstdio>
 #include <cstring>
 #include <type_traits>
 #include <utility>
+
+using IPAddress = BacnetIpEndpoint;
 
 struct SubscriptionCallbackCapture {
   size_t calls = 0;
@@ -75,8 +78,8 @@ void test_bacnet_client_lifecycle() {
   BacnetClient client;
 
   TEST_ASSERT_FALSE(client.isRunning());
-  TEST_ASSERT_TRUE(client.begin(47809));
-  TEST_ASSERT_TRUE(client.isRunning());
+  TEST_ASSERT_FALSE(client.begin(47809));
+  TEST_ASSERT_FALSE(client.isRunning());
   TEST_ASSERT_EQUAL_UINT16(47809, client.localPort());
 
   client.end();
@@ -1040,10 +1043,11 @@ void test_bacnet_client_parses_property_list_entry_ack() {
 void test_bacnet_device_session_keeps_remote_device_metadata() {
   BacnetClient client;
   IPAddress address(192, 168, 1, 50);
-  BacnetDeviceSession session(client, 1234, address, 47809);
+  BacnetDeviceSession session(client, 1234, IPAddress(192, 168, 1, 50, 47809));
 
   TEST_ASSERT_EQUAL_UINT32(1234, session.deviceInstance());
-  TEST_ASSERT_EQUAL_STRING("192.168.1.50", session.address().toString().c_str());
+  TEST_ASSERT_EQUAL_UINT8(192, session.endpoint().address[0]);
+  TEST_ASSERT_EQUAL_UINT8(50, session.endpoint().address[3]);
   TEST_ASSERT_EQUAL_UINT16(47809, session.port());
   TEST_ASSERT_EQUAL_PTR(&client, &session.client());
 
@@ -1057,10 +1061,11 @@ void test_bacnet_device_session_from_endpoint_keeps_metadata() {
   BacnetClient client;
   IPAddress address(192, 168, 1, 51);
   BacnetDeviceSession session =
-    BacnetDeviceSession::fromEndpoint(client, 5678, address, 47810);
+    BacnetDeviceSession::fromEndpoint(client, 5678, IPAddress(192, 168, 1, 51, 47810));
 
   TEST_ASSERT_EQUAL_UINT32(5678, session.deviceInstance());
-  TEST_ASSERT_EQUAL_STRING("192.168.1.51", session.address().toString().c_str());
+  TEST_ASSERT_EQUAL_UINT8(192, session.endpoint().address[0]);
+  TEST_ASSERT_EQUAL_UINT8(51, session.endpoint().address[3]);
   TEST_ASSERT_EQUAL_UINT16(47810, session.port());
   TEST_ASSERT_EQUAL_PTR(&client, &session.client());
 }
@@ -1068,14 +1073,15 @@ void test_bacnet_device_session_from_endpoint_keeps_metadata() {
 void test_bacnet_device_session_from_i_am_uses_default_port() {
   BacnetClient client;
   BacnetIAmDevice device;
-  device.address = IPAddress(192, 168, 1, 52);
+  device.endpoint = IPAddress(192, 168, 1, 52);
   device.deviceInstance = 9012;
   device.vendorId = 222;
 
   BacnetDeviceSession session = BacnetDeviceSession::fromIAm(client, device);
 
   TEST_ASSERT_EQUAL_UINT32(9012, session.deviceInstance());
-  TEST_ASSERT_EQUAL_STRING("192.168.1.52", session.address().toString().c_str());
+  TEST_ASSERT_EQUAL_UINT8(192, session.endpoint().address[0]);
+  TEST_ASSERT_EQUAL_UINT8(52, session.endpoint().address[3]);
   TEST_ASSERT_EQUAL_UINT16(BacnetClient::kDefaultPort, session.port());
   TEST_ASSERT_EQUAL_PTR(&client, &session.client());
 }

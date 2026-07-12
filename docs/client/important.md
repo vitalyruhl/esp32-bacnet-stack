@@ -8,7 +8,10 @@
 
 ## Ownership And Lifetime
 
-- `BacnetClient` owns the UDP transport and logger.
+- `BacnetClient` uses a caller-owned `BacnetDatagramTransport` and owns its
+  logger. Arduino projects bind `ArduinoUdpDatagramTransport` and may use
+  `ArduinoMonotonicClock` from `ArduinoBacnetClient.h`. The compatibility
+  constructor requires `setTransport()` before `begin()`.
 - `BacnetDeviceSession` stores target identity and uses a caller-owned `BacnetClient`.
 - `BacnetPropertySubscription` must not outlive the `BacnetDeviceSession` that created it.
 - Callback notification pointers are valid only during the callback; copy retained values explicitly.

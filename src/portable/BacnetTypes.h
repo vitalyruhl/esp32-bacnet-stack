@@ -196,6 +196,10 @@ struct BacnetIpEndpoint {
   uint8_t address[4] = {};
   uint16_t port = 47808;
 
+  constexpr BacnetIpEndpoint() = default;
+  constexpr BacnetIpEndpoint(uint8_t a, uint8_t b, uint8_t c, uint8_t d, uint16_t endpointPort = 47808)
+      : address{a, b, c, d}, port(endpointPort) {}
+
   bool isZero() const {
     return address[0] == 0 && address[1] == 0 && address[2] == 0 && address[3] == 0;
   }

@@ -21,4 +21,5 @@ public:
   virtual size_t receive(uint8_t* data,
                          size_t capacity,
                          BacnetIpEndpoint& source) = 0;
+  virtual void idle() = 0;
 };
