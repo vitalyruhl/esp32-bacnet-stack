@@ -138,6 +138,22 @@ enum class BacnetReadPropertyResponseKind : uint8_t {
   Abort,
 };
 
+struct BacnetCovNotification {
+  uint32_t processId = 0;
+  BacnetObjectId object;
+  BacnetPropertyId property = BacnetPropertyId::PresentValue;
+  uint32_t arrayIndex = kBacnetNoArrayIndex;
+  BacnetValue value;
+};
+
+enum class BacnetSubscribeCovResponseKind : uint8_t {
+  None,
+  Ack,
+  Error,
+  Reject,
+  Abort,
+};
+
 inline const char* bacnetPropertyName(BacnetPropertyId property) {
   switch (property) {
     case BacnetPropertyId::ApplicationSoftwareVersion:

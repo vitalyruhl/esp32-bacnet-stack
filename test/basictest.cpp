@@ -225,6 +225,31 @@ void test_portable_protocol_builds_who_is_request() {
   TEST_ASSERT_EQUAL_UINT32(0, BacnetProtocol::buildWhoIsRequest(nullptr, 0));
 }
 
+void test_portable_protocol_builds_subscribe_cov_request() {
+  uint8_t request[BacnetProtocol::kMaxSubscribeCovRequestSize] = {};
+  const size_t length = BacnetProtocol::buildSubscribeCovRequest(
+    request, sizeof(request), 7, BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::AnalogValue), 200}, 60);
+  TEST_ASSERT_TRUE(length > 18);
+  TEST_ASSERT_EQUAL_UINT8(0x81, request[0]);
+  TEST_ASSERT_EQUAL_UINT8(0x0A, request[1]);
+  TEST_ASSERT_EQUAL_UINT8(0x05, request[9]);
+  TEST_ASSERT_EQUAL_UINT8(0x09, request[10]);
+  TEST_ASSERT_EQUAL_UINT8(7, request[11]);
+  TEST_ASSERT_EQUAL_UINT32(0, BacnetProtocol::buildSubscribeCovRequest(nullptr, 0, 7, BacnetObjectId{}, 60));
+}
+
+void test_portable_protocol_classifies_subscribe_cov_responses() {
+  const uint8_t ack[] = {0x81, 0x0A, 0x00, 0x09, 0x01, 0x00, 0x20, 0x07, 0x05};
+  const uint8_t error[] = {0x81, 0x0A, 0x00, 0x09, 0x01, 0x00, 0x50, 0x07, 0x05};
+  const uint8_t reject[] = {0x81, 0x0A, 0x00, 0x08, 0x01, 0x00, 0x60, 0x07};
+  const uint8_t abort[] = {0x81, 0x0A, 0x00, 0x08, 0x01, 0x00, 0x70, 0x07};
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetSubscribeCovResponseKind::Ack), static_cast<uint8_t>(BacnetProtocol::classifySubscribeCovResponse(ack, sizeof(ack), 7)));
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetSubscribeCovResponseKind::Error), static_cast<uint8_t>(BacnetProtocol::classifySubscribeCovResponse(error, sizeof(error), 7)));
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetSubscribeCovResponseKind::Reject), static_cast<uint8_t>(BacnetProtocol::classifySubscribeCovResponse(reject, sizeof(reject), 7)));
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetSubscribeCovResponseKind::Abort), static_cast<uint8_t>(BacnetProtocol::classifySubscribeCovResponse(abort, sizeof(abort), 7)));
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetSubscribeCovResponseKind::None), static_cast<uint8_t>(BacnetProtocol::classifySubscribeCovResponse(ack, sizeof(ack), 8)));
+}
+
 void test_portable_protocol_parses_i_am_response() {
   const uint8_t response[] = {
     0x81,
@@ -1687,6 +1712,9 @@ void test_bacnet_subscribe_options_defaults() {
                            options.timeoutMs);
   TEST_ASSERT_TRUE(options.immediateFirstRead);
   TEST_ASSERT_TRUE(options.notifyOnStatusChange);
+  TEST_ASSERT_FALSE(options.preferCov);
+  TEST_ASSERT_EQUAL_UINT32(60, options.covLifetimeSeconds);
+  TEST_ASSERT_EQUAL_UINT32(5, options.covRenewBeforeSeconds);
 }
 
 void test_bacnet_property_subscription_is_move_only() {
@@ -1927,6 +1955,8 @@ void setup() {
   RUN_TEST(test_bacnet_logger_ignores_extra_scoped_tags);
   RUN_TEST(test_bacnet_logger_verbose_compile_gate);
   RUN_TEST(test_portable_protocol_builds_who_is_request);
+  RUN_TEST(test_portable_protocol_builds_subscribe_cov_request);
+  RUN_TEST(test_portable_protocol_classifies_subscribe_cov_responses);
   RUN_TEST(test_portable_protocol_parses_i_am_response);
   RUN_TEST(test_bacnet_client_rejects_non_i_am_response);
   RUN_TEST(test_portable_protocol_classifies_reject_and_abort);
