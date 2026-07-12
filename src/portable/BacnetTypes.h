@@ -54,6 +54,7 @@ inline const char* bacnetObjectTypeText(uint16_t objectType) {
 }
 
 enum class BacnetPropertyId : uint32_t {
+  ApplicationSoftwareVersion = 12,
   CovIncrement = 22,
   Description = 28,
   EventState = 36,
@@ -68,13 +69,16 @@ enum class BacnetPropertyId : uint32_t {
   OutOfService = 81,
   PresentValue = 85,
   PriorityArray = 87,
+  ProtocolVersion = 98,
   Reliability = 103,
   RelinquishDefault = 104,
   Resolution = 106,
   StateText = 110,
   StatusFlags = 111,
   Units = 117,
+  VendorIdentifier = 120,
   VendorName = 121,
+  ProtocolRevision = 139,
   PropertyList = 371,
 };
 
@@ -136,6 +140,8 @@ enum class BacnetReadPropertyResponseKind : uint8_t {
 
 inline const char* bacnetPropertyName(BacnetPropertyId property) {
   switch (property) {
+    case BacnetPropertyId::ApplicationSoftwareVersion:
+      return "applicationSoftwareVersion";
     case BacnetPropertyId::CovIncrement:
       return "covIncrement";
     case BacnetPropertyId::Description:
@@ -162,6 +168,10 @@ inline const char* bacnetPropertyName(BacnetPropertyId property) {
       return "outOfService";
     case BacnetPropertyId::PresentValue:
       return "presentValue";
+    case BacnetPropertyId::ProtocolRevision:
+      return "protocolRevision";
+    case BacnetPropertyId::ProtocolVersion:
+      return "protocolVersion";
     case BacnetPropertyId::PriorityArray:
       return "priorityArray";
     case BacnetPropertyId::PropertyList:
@@ -178,6 +188,8 @@ inline const char* bacnetPropertyName(BacnetPropertyId property) {
       return "statusFlags";
     case BacnetPropertyId::Units:
       return "units";
+    case BacnetPropertyId::VendorIdentifier:
+      return "vendorIdentifier";
     case BacnetPropertyId::VendorName:
       return "vendorName";
     default:

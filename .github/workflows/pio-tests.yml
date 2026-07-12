@@ -71,5 +71,9 @@ jobs:
       - name: Run discovery smoke CLI checks
         shell: pwsh
         run: |
+          & .\build\native-windows\native\Debug\bacnet-discover.exe --help
+          & .\build\native-windows\native\Debug\bacnet-client.exe --help
+          & .\build\native-windows\native\Debug\bacnet-client.exe list --help
+          & .\build\native-windows\native\Debug\bacnet-client.exe read --help
           & .\build\native-windows\native\Debug\bacnet-discover-smoke.exe --help
           & .\build\native-windows\native\Debug\bacnet-discover-smoke.exe --self-test

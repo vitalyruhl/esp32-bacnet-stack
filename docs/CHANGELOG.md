@@ -2,6 +2,14 @@
 
 This changelog is a curated overview.
 
+## 0.29.0
+
+- Added the productive native Windows `bacnet-discover` and `bacnet-client`
+  executables for device discovery, filtered Object List output, and one
+  ReadProperty value at a time.
+- Added native CLI parsing for BACnet object selectors and property aliases,
+  direct target addressing, and CI smoke coverage for the productive tools.
+
 ## 0.28.0
 
 - Added a native Windows Winsock UDP transport, monotonic clock, and console

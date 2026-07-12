@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later WITH GCC-exception-2.0
 
 #include "BacnetCliSupport.h"
+#include "BacnetNativeCli.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -9,6 +10,8 @@
 int main() {
   uint32_t value = 0;
   BacnetIpEndpoint endpoint(0, 0, 0, 0, 47808);
+  BacnetObjectSelector selector;
+  BacnetPropertyId property = BacnetPropertyId::ObjectName;
   if (!bacnetCliParseUnsigned("47808", value) || value != 47808 ||
       bacnetCliParseUnsigned("", value) || bacnetCliParseUnsigned("-1", value) ||
       bacnetCliParseUnsigned("4294967296", value) ||
@@ -17,6 +20,19 @@ int main() {
       endpoint.address[2] != 2 || endpoint.address[3] != 101 || endpoint.port != 47808 ||
       bacnetCliParseIpv4("192.168.2.256", endpoint) ||
       bacnetCliParseIpv4("192.168.2", endpoint) ||
+      !bacnetNativeParseObjectSelector("AV0", selector) ||
+      selector.object.type != static_cast<uint16_t>(BacnetObjectType::AnalogValue) ||
+      selector.object.instance != 0 ||
+      !bacnetNativeParseObjectSelector("msv2000", selector) ||
+      selector.object.type != static_cast<uint16_t>(BacnetObjectType::MultiStateValue) ||
+      selector.object.instance != 2000 ||
+      bacnetNativeParseObjectSelector("AV", selector) ||
+      bacnetNativeParseObjectSelector("AV4294967296", selector) ||
+      !bacnetNativeParseObjectPropertySelector("AV200.presentValue", selector, property) ||
+      property != BacnetPropertyId::PresentValue ||
+      !bacnetNativeParseProperty("statusFlags", property) ||
+      property != BacnetPropertyId::StatusFlags ||
+      bacnetNativeParseProperty("unknown-property", property) ||
       std::strcmp(bacnetCliExitCodeText(BacnetCliExitCode::InvalidArguments),
                   "invalid arguments") != 0 ||
       std::strcmp(bacnetCliExitCodeText(BacnetCliExitCode::Timeout), "timeout") != 0) {

@@ -233,10 +233,9 @@ ESP32 headers.
 ## Native Windows Foundation
 
 The native Windows build provides Winsock UDP transport, a monotonic clock,
-console logging, focused localhost-only tests, and `bacnet-discover-smoke`.
-The discovery smoke program sends one Who-Is and decodes I-Am replies through
-the portable client/protocol code. Device-property reads, object-list scans,
-and the complete discovery CLI remain scoped to #75 and #76.
+console logging, focused localhost-only tests, and two productive CLI tools:
+`bacnet-discover` and `bacnet-client`. `bacnet-discover-smoke` remains an
+internal smoke/HIL target and is not an end-user program.
 
 Requirements: CMake 3.16+, MSVC with C++17 support, and the Windows SDK.
 
@@ -248,20 +247,49 @@ ctest --test-dir build/native-windows -C Debug --output-on-failure
 .\build\native-windows\native\Debug\bacnet-discover-smoke.exe --self-test
 ```
 
-`--self-test` initializes and closes the Winsock runtime and transport only; the
-transport test uses local UDP loopback on `127.0.0.1` and sends no broadcasts.
+The executables are in the MSVC multi-config output directory
+`build/native-windows/native/Debug/`. `--self-test` initializes and closes the
+Winsock runtime and transport only; the transport test uses local UDP loopback
+on `127.0.0.1` and sends no broadcasts.
 
 To validate a real BACnet/IP network, supply the local interface and its
 broadcast address at runtime; do not store site-specific addresses in the
 repository:
 
 ```powershell
-.\build\native-windows\native\Debug\bacnet-discover-smoke.exe `
+.\build\native-windows\native\Debug\bacnet-discover.exe `
   --bind <local-ip> --broadcast <broadcast-ip> --timeout-ms 5000
 ```
 
-The process returns `0` after at least one matching I-Am, `1` for runtime or
-socket errors, `2` for a clean timeout, and `3` for invalid arguments.
+`bacnet-discover` accepts an optional `--device-id <id>` filter and prints the
+endpoint, best-effort Device metadata, and Object List counts. Unsupported
+metadata remains visible as `<status>` and does not make discovery fail.
+
+`bacnet-client` resolves a device by `--device-id` through `--broadcast`, or
+uses `--target <ip[:port]>` directly. `--bind` is always explicit; no local
+address is hard-coded. Its two subcommands are:
+
+```powershell
+.\build\native-windows\native\Debug\bacnet-client.exe `
+  --bind <local-ip> --broadcast <broadcast-ip> --device-id <id> `
+  list --max 20 AV0
+
+.\build\native-windows\native\Debug\bacnet-client.exe `
+  --bind <local-ip> --target <ip[:port]> --device-id <id> `
+  read AV200.present-value
+```
+
+An Object selector combines a type and minimum instance (`AI0`, `AV200`,
+`MSV2000`). `list` reads the Device Object List, filters and sorts existing
+objects, then limits output with `--max`; it never probes an unbounded instance
+range. Successful values and list rows use stdout; diagnostics and list
+summaries use stderr. Property aliases include `objectName`, `presentValue`,
+`statusFlags`, and `outOfService`.
+
+Discovery returns `0` after at least one matching I-Am, `1` for runtime or
+socket errors, `2` for a clean timeout, and `3` for invalid arguments. `list`
+uses the same `0`-`3` convention. `read` additionally returns `4` for Reject,
+`5` for Abort, and `6` for decode or unsupported-value errors.
 
 Optional compile-time write feature gates:
 
