@@ -10,12 +10,13 @@ target_link_libraries(bacnet_windows PUBLIC bacnet_client ws2_32)
 
 add_library(bacnet_cli_common STATIC
   ${CMAKE_CURRENT_LIST_DIR}/cli/BacnetCliSupport.cpp
-  ${CMAKE_CURRENT_LIST_DIR}/cli/BacnetNativeCli.cpp)
+  ${CMAKE_CURRENT_LIST_DIR}/cli/BacnetNativeCli.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/cli/WindowsInterfaceSelection.cpp)
 target_compile_features(bacnet_cli_common PUBLIC cxx_std_17)
 target_include_directories(bacnet_cli_common PUBLIC
   ${CMAKE_CURRENT_LIST_DIR}/../../src
   ${CMAKE_CURRENT_LIST_DIR}/cli)
-target_link_libraries(bacnet_cli_common PUBLIC bacnet_client bacnet_windows)
+target_link_libraries(bacnet_cli_common PUBLIC bacnet_client bacnet_windows iphlpapi)
 
 add_executable(bacnet-discover cli/bacnet_discover.cpp)
 target_compile_features(bacnet-discover PRIVATE cxx_std_17)
