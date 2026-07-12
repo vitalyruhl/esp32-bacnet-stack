@@ -2,9 +2,13 @@
 
 This changelog is a curated overview.
 
-## Unreleased
+## 0.27.0
 
-- No unreleased changes documented yet.
+- Separated portable client and server imports from Arduino/ESP32 adapters.
+- Added Arduino UDP transport, monotonic clock, endpoint conversion, and Serial
+  log-output adapters without adding a server runtime.
+- Added role-specific Arduino import compile fixtures and retained `EspBacnet.h`
+  as the legacy combined Arduino umbrella.
 
 ## 0.26.0
 

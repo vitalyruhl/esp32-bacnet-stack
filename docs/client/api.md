@@ -8,6 +8,8 @@ This page summarizes the current public client API surface. It documents impleme
 
 Current public responsibilities:
 
+- use a caller-provided `BacnetDatagramTransport` and optional
+  `BacnetMonotonicClock`
 - transport lifecycle with `begin()` and `end()`
 - client state queries with `isRunning()` and `localPort()`
 - reusable logging through `logger()`

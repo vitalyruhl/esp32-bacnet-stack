@@ -3,7 +3,8 @@
 #pragma once
 
 #include <Arduino.h>
-#include <EspBacnet.h>
+#include <BacnetDisplayText.h>
+#include <BacnetRemoteObject.h>
 
 #include <memory>
 

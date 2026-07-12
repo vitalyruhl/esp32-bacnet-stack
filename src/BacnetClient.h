@@ -2,17 +2,13 @@
 
 #pragma once
 
-#include <Arduino.h>
-#include <WiFiUdp.h>
-
 #include "BacnetFeatureGates.h"
 #include "BacnetLogger.h"
 #include "portable/BacnetProtocol.h"
 #include "portable/BacnetRuntime.h"
 
 struct BacnetIAmDevice {
-  // Arduino compatibility wrapper. Portable decoding uses BacnetIAmDeviceInfo.
-  IPAddress address;
+  BacnetIpEndpoint endpoint;
   uint32_t deviceInstance = 0;
   uint32_t maxApduLengthAccepted = 0;
   uint8_t segmentationSupported = 0;
@@ -26,7 +22,10 @@ public:
   static constexpr size_t kMaxReadPropertyRequestSize = 25;
   static constexpr uint32_t kNoArrayIndex = kBacnetNoArrayIndex;
 
+  // Compatibility constructor. Bind an explicit transport before calling begin().
   BacnetClient();
+  explicit BacnetClient(BacnetDatagramTransport& transport,
+                        const BacnetMonotonicClock* clock = nullptr);
 
   bool begin(uint16_t localPort = kDefaultPort);
   void end();
@@ -35,14 +34,21 @@ public:
   uint16_t localPort() const;
   BacnetLogger& logger();
   const BacnetLogger& logger() const;
+  bool setTransport(BacnetDatagramTransport& transport);
   void setClock(const BacnetMonotonicClock* clock);
   uint32_t nowMs() const;
+  void idle();
 
-  bool sendWhoIs(IPAddress address = IPAddress(255, 255, 255, 255),
-                 uint16_t port = kDefaultPort);
+  bool sendWhoIs(const BacnetIpEndpoint& destination);
   bool pollIAm(BacnetIAmDevice& device);
-  bool sendReadProperty(IPAddress address, const BacnetPropertyRequest& request, uint8_t invokeId = 1, uint16_t port = kDefaultPort);
-  bool sendReadProperty(IPAddress address, BacnetObjectId object, BacnetPropertyId property, uint8_t invokeId = 1, uint16_t port = kDefaultPort, uint32_t arrayIndex = kNoArrayIndex);
+  bool sendReadProperty(const BacnetIpEndpoint& destination,
+                        const BacnetPropertyRequest& request,
+                        uint8_t invokeId = 1);
+  bool sendReadProperty(const BacnetIpEndpoint& destination,
+                        BacnetObjectId object,
+                        BacnetPropertyId property,
+                        uint8_t invokeId = 1,
+                        uint32_t arrayIndex = kNoArrayIndex);
   bool pollReadProperty(BacnetValue& value, uint8_t expectedInvokeId, const BacnetPropertyRequest& expectedRequest);
   bool pollReadProperty(BacnetValue& value, uint8_t expectedInvokeId, BacnetPropertyId expectedProperty);
   void logReadPropertyTimeout(uint8_t invokeId,
@@ -68,7 +74,7 @@ public:
 private:
   static constexpr size_t kMaxDiscoveryPacketSize = 512;
 
-  WiFiUDP udp_;
+  BacnetDatagramTransport* transport_ = nullptr;
   BacnetLogger logger_;
   bool running_ = false;
   uint16_t localPort_ = kDefaultPort;

@@ -387,13 +387,12 @@ public:
   static constexpr uint32_t kUseClientClock = UINT32_MAX;
   static constexpr size_t kMaxCachedProperties = ESP_BACNET_PROPERTY_CACHE_SIZE;
 
-  BacnetDeviceSession(BacnetClient& client, uint32_t deviceInstance, IPAddress address, uint16_t port = BacnetClient::kDefaultPort);
+  BacnetDeviceSession(BacnetClient& client, uint32_t deviceInstance, BacnetIpEndpoint endpoint);
 
   static BacnetDeviceSession fromEndpoint(
     BacnetClient& client,
     uint32_t deviceInstance,
-    IPAddress address,
-    uint16_t port = BacnetClient::kDefaultPort);
+    BacnetIpEndpoint endpoint);
   static BacnetDeviceSession fromIAm(
     BacnetClient& client,
     const BacnetIAmDevice& device,
@@ -402,7 +401,7 @@ public:
   BacnetClient& client();
   const BacnetClient& client() const;
   uint32_t deviceInstance() const;
-  IPAddress address() const;
+  const BacnetIpEndpoint& endpoint() const;
   uint16_t port() const;
   BacnetObjectId deviceObject() const;
   BacnetRemoteObject object(BacnetObjectId objectId);
@@ -562,8 +561,7 @@ private:
 
   BacnetClient& client_;
   uint32_t deviceInstance_ = 0;
-  IPAddress address_;
-  uint16_t port_ = BacnetClient::kDefaultPort;
+  BacnetIpEndpoint endpoint_;
   uint8_t nextInvokeId_ = 1;
   BacnetPropertySubscription* inFlightSubscription_ = nullptr;
   BacnetObjectListScanJob* inFlightObjectListScan_ = nullptr;

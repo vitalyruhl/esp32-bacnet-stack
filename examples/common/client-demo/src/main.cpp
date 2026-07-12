@@ -2,7 +2,12 @@
 
 #include <Arduino.h>
 
-#include <EspBacnet.h>
+#include <ArduinoBacnetClient.h>
+#include <BacnetClient.h>
+#include <BacnetDeviceSession.h>
+#include <BacnetDisplayText.h>
+#include <BacnetRemoteObject.h>
+#include <WiFiUdp.h>
 #ifndef BACNET_DEMO_USE_ETHERNET
 #define BACNET_DEMO_USE_ETHERNET 0
 #endif
@@ -38,7 +43,7 @@
 #endif
 
 #ifndef APP_VERSION
-#define APP_VERSION "0.26.0"
+#define APP_VERSION "0.27.0"
 #endif
 #ifndef APP_NAME
 #if BACNET_DEMO_USE_ETHERNET
@@ -92,7 +97,10 @@ static cm::CoreWiFiSettings& wifiSettings = coreSettings.wifi;
 static cm::CoreWiFiServices wifiServices;
 #endif
 
-static BacnetClient bacnetClient;
+static WiFiUDP bacnetUdp;
+static ArduinoUdpDatagramTransport bacnetTransport(bacnetUdp);
+static ArduinoMonotonicClock bacnetClock;
+static BacnetClient bacnetClient(bacnetTransport, &bacnetClock);
 static BacnetDemoLogging demoLogging(ConfigManager, bacnetClient);
 
 #ifndef BACNET_WHOIS_DESTINATION
@@ -343,14 +351,14 @@ static void formatBacnetDeviceSummary(FixedTextBuffer& out) {
     return;
   }
 
-  const IPAddress address = activeBacnetSession->address();
+  const BacnetIpEndpoint& endpoint = activeBacnetSession->endpoint();
   out.appendFormat("ID %lu @ %u.%u.%u.%u:%u",
                    static_cast<unsigned long>(
                      activeBacnetSession->deviceInstance()),
-                   static_cast<unsigned>(address[0]),
-                   static_cast<unsigned>(address[1]),
-                   static_cast<unsigned>(address[2]),
-                   static_cast<unsigned>(address[3]),
+                   static_cast<unsigned>(endpoint.address[0]),
+                   static_cast<unsigned>(endpoint.address[1]),
+                   static_cast<unsigned>(endpoint.address[2]),
+                   static_cast<unsigned>(endpoint.address[3]),
                    static_cast<unsigned>(activeBacnetSession->port()));
   if (activeBacnetVendorId > 0) {
     out.appendFormat(" vendor %u", static_cast<unsigned>(activeBacnetVendorId));
@@ -908,7 +916,7 @@ static void sendWhoIs() {
     return;
   }
 
-  if (!bacnetClient.sendWhoIs(whoIsDestination)) {
+  if (!bacnetClient.sendWhoIs(bacnetIpEndpointFromArduino(whoIsDestination))) {
     Serial.println("[W] BACnet Who-Is send failed");
     demoLogging.log(BacnetDemoLogging::Level::Warn, "Who-Is send failed");
     return;
@@ -1253,7 +1261,8 @@ static void selectBacnetDevice(uint32_t deviceInstance,
   resetBacnetPreviews();
   activeBacnetVendorId = vendorId;
   activeBacnetSession.reset(new BacnetDeviceSession(
-    BacnetDeviceSession::fromEndpoint(bacnetClient, deviceInstance, address, port)));
+    BacnetDeviceSession::fromEndpoint(
+      bacnetClient, deviceInstance, bacnetIpEndpointFromArduino(address, port))));
   bacnetDeviceSelected = true;
   bacnetScanStatus = "Scan queued for selected device";
 
@@ -1270,7 +1279,7 @@ static void selectBacnetDevice(uint32_t deviceInstance,
 }
 
 static void selectBacnetDevice(const BacnetIAmDevice& device) {
-  if (bacnetDeviceSelected || isZeroBacnetAddress(device.address)) {
+  if (bacnetDeviceSelected || device.endpoint.isZero()) {
     return;
   }
 
@@ -1284,10 +1293,11 @@ static void selectBacnetDevice(const BacnetIAmDevice& device) {
   Serial.print("[I] BACnet selected device ");
   Serial.print(device.deviceInstance);
   Serial.print(" at ");
-  Serial.print(device.address);
+  Serial.print(bacnetIpAddressFromEndpoint(device.endpoint));
   Serial.print(":");
   Serial.println(BacnetClient::kDefaultPort);
-  demoLogging.log(BacnetDemoLogging::Level::Info, "selected device %lu at %s:%u", static_cast<unsigned long>(device.deviceInstance), device.address.toString().c_str(), static_cast<unsigned>(BacnetClient::kDefaultPort));
+  const IPAddress address = bacnetIpAddressFromEndpoint(device.endpoint);
+  demoLogging.log(BacnetDemoLogging::Level::Info, "selected device %lu at %s:%u", static_cast<unsigned long>(device.deviceInstance), address.toString().c_str(), static_cast<unsigned>(device.endpoint.port));
 
   bacnetScanRequested = true;
   demoLogging.log(BacnetDemoLogging::Level::Info, "scan queued for selected device %lu", static_cast<unsigned long>(device.deviceInstance));

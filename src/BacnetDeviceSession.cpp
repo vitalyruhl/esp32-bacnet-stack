@@ -430,24 +430,23 @@ void BacnetPropertySubscription::moveFrom(BacnetPropertySubscription& other) {
 
 BacnetDeviceSession::BacnetDeviceSession(BacnetClient& client,
                                          uint32_t deviceInstance,
-                                         IPAddress address,
-                                         uint16_t port)
+                                         BacnetIpEndpoint endpoint)
     : client_(client),
       deviceInstance_(deviceInstance),
-      address_(address),
-      port_(port) {}
+      endpoint_(endpoint) {}
 
 BacnetDeviceSession BacnetDeviceSession::fromEndpoint(BacnetClient& client,
                                                       uint32_t deviceInstance,
-                                                      IPAddress address,
-                                                      uint16_t port) {
-  return BacnetDeviceSession(client, deviceInstance, address, port);
+                                                      BacnetIpEndpoint endpoint) {
+  return BacnetDeviceSession(client, deviceInstance, endpoint);
 }
 
 BacnetDeviceSession BacnetDeviceSession::fromIAm(BacnetClient& client,
                                                  const BacnetIAmDevice& device,
                                                  uint16_t port) {
-  return fromEndpoint(client, device.deviceInstance, device.address, port);
+  BacnetIpEndpoint discoveredEndpoint = device.endpoint;
+  discoveredEndpoint.port = port;
+  return fromEndpoint(client, device.deviceInstance, discoveredEndpoint);
 }
 
 BacnetClient& BacnetDeviceSession::client() {
@@ -462,12 +461,12 @@ uint32_t BacnetDeviceSession::deviceInstance() const {
   return deviceInstance_;
 }
 
-IPAddress BacnetDeviceSession::address() const {
-  return address_;
+const BacnetIpEndpoint& BacnetDeviceSession::endpoint() const {
+  return endpoint_;
 }
 
 uint16_t BacnetDeviceSession::port() const {
-  return port_;
+  return endpoint_.port;
 }
 
 BacnetObjectId BacnetDeviceSession::deviceObject() const {
@@ -649,7 +648,7 @@ BacnetPropertyReadStatus BacnetDeviceSession::readPropertyDetailed(
   }
 
   const uint8_t invokeId = allocateInvokeId();
-  if (!client_.sendReadProperty(address_, request, invokeId, port_)) {
+  if (!client_.sendReadProperty(endpoint_, request, invokeId)) {
     updatePropertyCache(request,
                         BacnetPropertyReadStatus::SendFailed,
                         nullptr,
@@ -676,7 +675,7 @@ BacnetPropertyReadStatus BacnetDeviceSession::readPropertyDetailed(
                           client_.nowMs());
       return BacnetPropertyReadStatus::Timeout;
     }
-    yield();
+    client_.idle();
   }
 }
 
@@ -901,7 +900,7 @@ BacnetObjectScanResult BacnetDeviceSession::scanObjectList(
 
   while (job.isActive()) {
     pollObjectListScan(job);
-    yield();
+    client_.idle();
   }
   return job.summary();
 }
@@ -936,11 +935,11 @@ bool BacnetDeviceSession::beginObjectListScan(
     "scan start device %lu target %u.%u.%u.%u:%u max-entries %lu filter-count "
     "%u",
     static_cast<unsigned long>(deviceInstance_),
-    static_cast<unsigned>(address_[0]),
-    static_cast<unsigned>(address_[1]),
-    static_cast<unsigned>(address_[2]),
-    static_cast<unsigned>(address_[3]),
-    static_cast<unsigned>(port_),
+    static_cast<unsigned>(endpoint_.address[0]),
+    static_cast<unsigned>(endpoint_.address[1]),
+    static_cast<unsigned>(endpoint_.address[2]),
+    static_cast<unsigned>(endpoint_.address[3]),
+    static_cast<unsigned>(endpoint_.port),
     static_cast<unsigned long>(options.maxObjectListEntries),
     static_cast<unsigned>(options.objectTypeCount));
   logger.debug("BACnet/Scan", "read device,%lu objectList[0] start", static_cast<unsigned long>(deviceInstance_));
@@ -987,7 +986,7 @@ bool BacnetDeviceSession::tryStartObjectListScanRead(
   job.phase_ = phase;
   job.inFlightRequest_ = request;
   job.inFlightValue_ = BacnetValue{};
-  if (!client_.sendReadProperty(address_, request, invokeId, port_)) {
+  if (!client_.sendReadProperty(endpoint_, request, invokeId)) {
     updatePropertyCache(request,
                         BacnetPropertyReadStatus::SendFailed,
                         nullptr,
@@ -1499,7 +1498,7 @@ void BacnetDeviceSession::tryStartSubscriptionPoll(
   client_.logger().debug(
     "BACnet/Subscription", "%s read start %s,%lu %u array=%lu", subscriptionPollTriggerText(trigger), bacnetObjectTypeText(subscription.objectId_.type), static_cast<unsigned long>(subscription.objectId_.instance), static_cast<unsigned>(subscription.propertyId_), static_cast<unsigned long>(subscription.arrayIndex_));
 
-  if (!client_.sendReadProperty(address_, request, invokeId, port_)) {
+  if (!client_.sendReadProperty(endpoint_, request, invokeId)) {
     finishSubscriptionPoll(subscription,
                            BacnetDeviceSessionReadStatus::SendFailed,
                            nullptr,

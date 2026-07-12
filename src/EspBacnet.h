@@ -2,12 +2,14 @@
 
 #pragma once
 
-#include "BacnetClient.h"
+#include "ArduinoEspBacnet.h"
 #include "BacnetDeviceSession.h"
 #include "BacnetDisplayText.h"
 #include "BacnetFixedTextBuffer.h"
 #include "BacnetRemoteObject.h"
-#include "BacnetServer.h"
+
+// Legacy combined Arduino umbrella. Prefer role-specific headers:
+// BacnetClient.h plus ArduinoBacnetClient.h, or ArduinoBacnetServer.h.
 
 namespace EspBacnet {
 constexpr const char* kProjectName = "esp32-bacnet-stack";
