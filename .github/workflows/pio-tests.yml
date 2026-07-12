@@ -51,3 +51,25 @@ jobs:
 
       - name: Compile tests
         run: pio test -e usb --without-uploading --without-testing
+
+  windows-native:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Configure native Windows build
+        run: cmake -S tools/portable-smoke -B build/native-windows
+
+      - name: Build native Windows targets
+        run: cmake --build build/native-windows --config Debug
+
+      - name: Run native Windows tests
+        run: ctest --test-dir build/native-windows -C Debug --output-on-failure
+
+      - name: Run discovery smoke CLI checks
+        shell: pwsh
+        run: |
+          & .\build\native-windows\native\Debug\bacnet-discover-smoke.exe --help
+          & .\build\native-windows\native\Debug\bacnet-discover-smoke.exe --self-test

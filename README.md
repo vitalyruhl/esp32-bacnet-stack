@@ -228,7 +228,40 @@ build/portable-smoke/portable_smoke
 ```
 
 The smoke target compiles the portable protocol modules without Arduino or
-ESP32 headers. It does not provide a native transport, Windows runtime, or CLI.
+ESP32 headers.
+
+## Native Windows Foundation
+
+The native Windows build provides Winsock UDP transport, a monotonic clock,
+console logging, focused localhost-only tests, and `bacnet-discover-smoke`.
+The discovery smoke program sends one Who-Is and decodes I-Am replies through
+the portable client/protocol code. Device-property reads, object-list scans,
+and the complete discovery CLI remain scoped to #75 and #76.
+
+Requirements: CMake 3.16+, MSVC with C++17 support, and the Windows SDK.
+
+```powershell
+cmake -S tools/portable-smoke -B build/native-windows
+cmake --build build/native-windows --config Debug
+ctest --test-dir build/native-windows -C Debug --output-on-failure
+.\build\native-windows\native\Debug\bacnet-discover-smoke.exe --help
+.\build\native-windows\native\Debug\bacnet-discover-smoke.exe --self-test
+```
+
+`--self-test` initializes and closes the Winsock runtime and transport only; the
+transport test uses local UDP loopback on `127.0.0.1` and sends no broadcasts.
+
+To validate a real BACnet/IP network, supply the local interface and its
+broadcast address at runtime; do not store site-specific addresses in the
+repository:
+
+```powershell
+.\build\native-windows\native\Debug\bacnet-discover-smoke.exe `
+  --bind <local-ip> --broadcast <broadcast-ip> --timeout-ms 5000
+```
+
+The process returns `0` after at least one matching I-Am, `1` for runtime or
+socket errors, `2` for a clean timeout, and `3` for invalid arguments.
 
 Optional compile-time write feature gates:
 

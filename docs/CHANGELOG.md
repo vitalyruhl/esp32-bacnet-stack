@@ -2,6 +2,15 @@
 
 This changelog is a curated overview.
 
+## 0.28.0
+
+- Added a native Windows Winsock UDP transport, monotonic clock, and console
+  log sink for the portable BACnet client foundation.
+- Added native CMake targets, localhost-only transport tests, and the
+  `bacnet-discover-smoke` Who-Is/I-Am validation program. Property reads,
+  object-list scans, and the complete discovery CLI remain planned for #75 and
+  #76.
+
 ## 0.27.0
 
 - Separated portable client and server imports from Arduino/ESP32 adapters.
