@@ -31,6 +31,8 @@ Current public responsibilities:
 - create a session from discovered I-Am metadata through `fromIAm()`
 - read one property through `readProperty()`
 - explicitly write one typed property through `writeProperty()` when enabled
+  and optionally provide `BacnetWritePropertyOptions` for an array index and a
+  BACnet priority from `1` through `16`
 - read compact object health through `readObjectStatus()`
 - collect a property's advertised property list through `readPropertyList()`
 - safely attempt all collected properties through `readAllProperties()`

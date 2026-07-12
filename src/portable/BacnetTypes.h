@@ -90,6 +90,12 @@ struct BacnetPropertyRequest {
   uint32_t arrayIndex = kBacnetNoArrayIndex;
 };
 
+struct BacnetWritePropertyOptions {
+  uint32_t arrayIndex = kBacnetNoArrayIndex;
+  bool hasPriority = false;
+  uint8_t priority = 0;
+};
+
 enum class BacnetValueType : uint8_t {
   Empty,
   Null,

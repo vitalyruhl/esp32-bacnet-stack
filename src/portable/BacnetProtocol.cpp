@@ -1110,9 +1110,10 @@ size_t BacnetProtocol::buildReadPropertyRequest(uint8_t* buffer,
 }
 
 size_t BacnetProtocol::buildWritePropertyRequest(
-  uint8_t* buffer, size_t bufferSize, const BacnetPropertyRequest& request, const BacnetValue& value, uint8_t invokeId) {
-  if (buffer == nullptr || bufferSize < 24 || request.object.type > 1023 ||
-      request.object.instance > kObjectInstanceMask) {
+  uint8_t* buffer, size_t bufferSize, BacnetObjectId object, BacnetPropertyId property, const BacnetValue& value, const BacnetWritePropertyOptions& options, uint8_t invokeId) {
+  if (buffer == nullptr || bufferSize < 24 || object.type > 1023 ||
+      object.instance > kObjectInstanceMask ||
+      (options.hasPriority && (options.priority == 0 || options.priority > 16))) {
     return 0;
   }
   size_t offset = 0;
@@ -1126,10 +1127,10 @@ size_t BacnetProtocol::buildWritePropertyRequest(
   buffer[offset++] = 0x05;
   buffer[offset++] = invokeId;
   buffer[offset++] = kServiceWriteProperty;
-  offset = writeContextObjectIdentifier(buffer, offset, 0, request.object);
-  offset = writeContextUnsigned(buffer, offset, 1, static_cast<uint32_t>(request.property));
-  if (request.arrayIndex != kBacnetNoArrayIndex) {
-    offset = writeContextUnsigned(buffer, offset, 2, request.arrayIndex);
+  offset = writeContextObjectIdentifier(buffer, offset, 0, object);
+  offset = writeContextUnsigned(buffer, offset, 1, static_cast<uint32_t>(property));
+  if (options.arrayIndex != kBacnetNoArrayIndex) {
+    offset = writeContextUnsigned(buffer, offset, 2, options.arrayIndex);
   }
   if (offset + 2 > bufferSize) {
     return 0;
@@ -1143,9 +1144,22 @@ size_t BacnetProtocol::buildWritePropertyRequest(
   }
   offset += valueLength;
   buffer[offset++] = 0x3F;
+  if (options.hasPriority) {
+    if (offset + 2 > bufferSize) {
+      return 0;
+    }
+    offset = writeContextUnsigned(buffer, offset, 4, options.priority);
+  }
   buffer[2] = static_cast<uint8_t>(offset >> 8);
   buffer[3] = static_cast<uint8_t>(offset);
   return offset;
+}
+
+size_t BacnetProtocol::buildWritePropertyRequest(
+  uint8_t* buffer, size_t bufferSize, const BacnetPropertyRequest& request, const BacnetValue& value, uint8_t invokeId) {
+  BacnetWritePropertyOptions options;
+  options.arrayIndex = request.arrayIndex;
+  return buildWritePropertyRequest(buffer, bufferSize, request.object, request.property, value, options, invokeId);
 }
 
 size_t BacnetProtocol::buildReadPropertyRequest(uint8_t* buffer,

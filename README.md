@@ -341,6 +341,10 @@ write feature is disabled by default; a disabled build returns an explicit
 `Disabled` status and sends no datagram. Priority, priority-array handling, and
 automatic writes are not implemented.
 
+`BacnetWritePropertyOptions` may supply an optional priority from `1` through
+`16`; omitting it preserves a normal WriteProperty request without a priority
+field. Invalid priority values are rejected before sending.
+
 ## Property Subscriptions
 
 `BacnetSubscribeOptions` remains source-compatible with polling subscriptions.

@@ -612,6 +612,39 @@ BacnetDeviceSessionWriteStatus BacnetDeviceSession::writeProperty(
                        arrayIndex);
 }
 
+BacnetDeviceSessionWriteStatus BacnetDeviceSession::writeProperty(
+  BacnetObjectType objectType, uint32_t objectInstance, BacnetPropertyId property, const BacnetValue& value, const BacnetWritePropertyOptions& options, uint32_t timeoutMs) {
+  if (inFlightSubscription_ != nullptr || inFlightObjectListScan_ != nullptr) {
+    return BacnetDeviceSessionWriteStatus::Busy;
+  }
+  const uint8_t invokeId = allocateInvokeId();
+  const BacnetWritePropertyPollStatus sendStatus = client_.sendWriteProperty(
+    endpoint_, BacnetObjectId{static_cast<uint16_t>(objectType), objectInstance}, property, value, options, invokeId);
+  if (sendStatus == BacnetWritePropertyPollStatus::Disabled)
+    return BacnetDeviceSessionWriteStatus::Disabled;
+  if (sendStatus == BacnetWritePropertyPollStatus::InvalidArgument)
+    return BacnetDeviceSessionWriteStatus::InvalidArgument;
+  if (sendStatus == BacnetWritePropertyPollStatus::UnsupportedValue)
+    return BacnetDeviceSessionWriteStatus::UnsupportedValue;
+  if (sendStatus != BacnetWritePropertyPollStatus::None)
+    return BacnetDeviceSessionWriteStatus::SendFailed;
+  const uint32_t startedAt = client_.nowMs();
+  while (true) {
+    const BacnetWritePropertyPollStatus status = client_.pollWriteProperty(invokeId);
+    if (status == BacnetWritePropertyPollStatus::Ack)
+      return BacnetDeviceSessionWriteStatus::Ack;
+    if (status == BacnetWritePropertyPollStatus::Error)
+      return BacnetDeviceSessionWriteStatus::Error;
+    if (status == BacnetWritePropertyPollStatus::Reject)
+      return BacnetDeviceSessionWriteStatus::Reject;
+    if (status == BacnetWritePropertyPollStatus::Abort)
+      return BacnetDeviceSessionWriteStatus::Abort;
+    if (client_.nowMs() - startedAt >= timeoutMs)
+      return BacnetDeviceSessionWriteStatus::Timeout;
+    client_.idle();
+  }
+}
+
 BacnetObjectHealthState BacnetDeviceSession::readObjectStatus(
   BacnetObjectId objectId,
   BacnetObjectStatus& status,

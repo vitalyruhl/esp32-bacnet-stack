@@ -2,6 +2,12 @@
 
 This changelog is a curated overview.
 
+## 0.33.0
+
+- Added optional WriteProperty priority encoding for BACnet priorities `1..16`.
+- A missing priority retains the existing WriteProperty APDU shape; invalid
+  priority values are rejected before a datagram is sent.
+
 ## 0.32.0
 
 - Added an explicit typed WriteProperty client/session API backed by one shared
