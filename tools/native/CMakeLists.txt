@@ -26,6 +26,18 @@ add_executable(bacnet-client cli/bacnet_client.cpp)
 target_compile_features(bacnet-client PRIVATE cxx_std_17)
 target_link_libraries(bacnet-client PRIVATE bacnet_cli_common)
 
+add_executable(bacnet-write-hil
+  cli/bacnet_write_hil.cpp
+  cli/BacnetWriteHil.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/../../src/BacnetDeviceSession.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/../../src/BacnetRemoteObject.cpp)
+target_compile_features(bacnet-write-hil PRIVATE cxx_std_17)
+target_compile_definitions(bacnet-write-hil PRIVATE
+  ESP_BACNET_ENABLE_WRITE_PROPERTY=1
+  ESP_BACNET_ENABLE_PRIORITY_WRITE=1)
+target_link_libraries(bacnet-write-hil PRIVATE
+  bacnet_client_write_enabled bacnet_cli_common bacnet_windows)
+
 add_executable(bacnet_cli_smoke cli/bacnet_cli_smoke.cpp)
 target_compile_features(bacnet_cli_smoke PRIVATE cxx_std_17)
 target_link_libraries(bacnet_cli_smoke PRIVATE
@@ -78,12 +90,29 @@ target_include_directories(bacnet_priority_helpers_tests PRIVATE
   ${CMAKE_CURRENT_LIST_DIR}/../../src)
 target_link_libraries(bacnet_priority_helpers_tests PRIVATE bacnet_portable)
 
+add_executable(bacnet_write_hil_tests
+  test/write_hil_tests.cpp
+  cli/BacnetWriteHil.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/../../src/BacnetClient.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/../../src/BacnetLogger.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/../../src/BacnetDeviceSession.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/../../src/BacnetRemoteObject.cpp)
+target_compile_features(bacnet_write_hil_tests PRIVATE cxx_std_17)
+target_compile_definitions(bacnet_write_hil_tests PRIVATE
+  ESP_BACNET_ENABLE_WRITE_PROPERTY=1
+  ESP_BACNET_ENABLE_PRIORITY_WRITE=1)
+target_include_directories(bacnet_write_hil_tests PRIVATE
+  ${CMAKE_CURRENT_LIST_DIR}/../../src
+  ${CMAKE_CURRENT_LIST_DIR}/cli)
+target_link_libraries(bacnet_write_hil_tests PRIVATE bacnet_portable)
+
 if(BUILD_TESTING)
   add_test(NAME bacnet_windows_tests COMMAND bacnet_windows_tests)
   add_test(NAME bacnet_cli_support_tests COMMAND bacnet_cli_support_tests)
   add_test(NAME bacnet_write_property_tests COMMAND bacnet_write_property_tests)
   add_test(NAME bacnet_write_property_disabled_tests COMMAND bacnet_write_property_disabled_tests)
   add_test(NAME bacnet_priority_helpers_tests COMMAND bacnet_priority_helpers_tests)
+  add_test(NAME bacnet_write_hil_tests COMMAND bacnet_write_hil_tests)
   add_test(NAME bacnet_cli_help COMMAND bacnet_cli_smoke --help)
   add_test(NAME bacnet_cli_self_test COMMAND bacnet_cli_smoke --self-test)
   add_test(NAME bacnet_cli_unknown_option COMMAND bacnet_cli_smoke --unknown)
@@ -96,4 +125,5 @@ if(BUILD_TESTING)
   add_test(NAME bacnet_client_help COMMAND bacnet-client --help)
   add_test(NAME bacnet_client_list_help COMMAND bacnet-client list --help)
   add_test(NAME bacnet_client_read_help COMMAND bacnet-client read --help)
+  add_test(NAME bacnet_write_hil_help COMMAND bacnet-write-hil --help)
 endif()

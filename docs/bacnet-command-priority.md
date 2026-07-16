@@ -30,6 +30,17 @@ Both modes use the existing Present Value WriteProperty encoder and dispatch.
 They send no datagrams when the WriteProperty feature gate is disabled. Neither
 mode runs automatically or cyclically.
 
+## Native Windows HIL
+
+The internal `bacnet-write-hil` executable is a one-shot HIL utility, not a
+productive CLI. It selects the requested Windows IPv4 interface, uses the
+Winsock BACnet/IP transport, and runs the portable device-session priority
+helpers against explicit command-line targets. It does not store local network
+addresses or test-object instances in repository configuration. The utility
+uses priority 8 for its temporary command, relinquishes an active temporary
+priority after a failed readback, and performs the writable reset only for its
+requested Analog Value target.
+
 ## Device compatibility note
 
 Devices can apply different or stricter access policies to command priorities.
