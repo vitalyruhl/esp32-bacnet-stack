@@ -448,6 +448,10 @@ public:
     BacnetObjectType objectType, uint32_t objectInstance, BacnetPropertyId property, BacnetValue& value, uint32_t timeoutMs = kDefaultReadTimeoutMs, uint32_t arrayIndex = kBacnetNoArrayIndex);
   BacnetPropertyReadStatus readPropertyStatus(
     BacnetObjectId object, BacnetPropertyId property, BacnetValue& value, uint32_t timeoutMs = kDefaultReadTimeoutMs, uint32_t arrayIndex = kBacnetNoArrayIndex);
+  BacnetPropertyReadStatus readPriorityArray(
+    BacnetObjectId object,
+    BacnetPriorityArray& value,
+    uint32_t timeoutMs = kDefaultReadTimeoutMs);
   BacnetDeviceSessionWriteStatus writeProperty(
     BacnetObjectId object, BacnetPropertyId property, const BacnetValue& value, uint32_t timeoutMs = kDefaultReadTimeoutMs, uint32_t arrayIndex = kBacnetNoArrayIndex);
   BacnetDeviceSessionWriteStatus writeProperty(

@@ -1263,6 +1263,52 @@ bool BacnetProtocol::parseReadPropertyAck(const uint8_t* buffer, size_t length, 
   return offset < length && buffer[offset] == 0x3F;
 }
 
+bool BacnetProtocol::parseReadPriorityArrayAck(
+  const uint8_t* buffer,
+  size_t length,
+  uint8_t expectedInvokeId,
+  const BacnetPropertyRequest& expectedRequest,
+  BacnetPriorityArray& value) {
+  value = BacnetPriorityArray{};
+  if (expectedRequest.property != BacnetPropertyId::PriorityArray ||
+      expectedRequest.arrayIndex != kBacnetNoArrayIndex ||
+      buffer == nullptr || length < 17 ||
+      buffer[0] != kBvlcTypeBacnetIp ||
+      buffer[1] != kBvlcOriginalUnicastNpdu ||
+      readUint16(&buffer[2]) != length) {
+    return false;
+  }
+
+  size_t offset = 4;
+  if (!readNpduHeader(buffer, length, offset) || offset + 3 > length ||
+      (buffer[offset++] & 0xF0) != kApduComplexAck ||
+      buffer[offset++] != expectedInvokeId ||
+      buffer[offset++] != kServiceReadProperty) {
+    return false;
+  }
+
+  uint32_t objectIdentifier = 0;
+  uint32_t propertyIdentifier = 0;
+  if (!readContextValue(buffer, length, offset, 0, objectIdentifier) ||
+      objectIdentifier != encodeObjectId(expectedRequest.object) ||
+      !readContextValue(buffer, length, offset, 1, propertyIdentifier) ||
+      propertyIdentifier != static_cast<uint32_t>(BacnetPropertyId::PriorityArray) ||
+      offset >= length || buffer[offset++] != 0x3E) {
+    return false;
+  }
+
+  for (size_t slot = 0; slot < BacnetPriorityArray::kSlotCount; ++slot) {
+    if (offset >= length || buffer[offset] == 0x3F ||
+        !parseReadPropertyApplicationValue(
+          buffer, length, offset, BacnetPropertyId::PriorityArray, value.slots[slot])) {
+      return false;
+    }
+    value.present[slot] = true;
+  }
+
+  return offset + 1 == length && buffer[offset] == 0x3F;
+}
+
 bool BacnetProtocol::parseReadPropertyError(const uint8_t* buffer, size_t length, uint8_t expectedInvokeId, BacnetValue& value) {
   return parseReadPropertyError(buffer, length, expectedInvokeId, value, nullptr, nullptr);
 }

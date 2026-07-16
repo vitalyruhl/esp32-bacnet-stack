@@ -130,6 +130,13 @@ struct BacnetValue {
   }
 };
 
+struct BacnetPriorityArray {
+  static constexpr size_t kSlotCount = 16;
+
+  BacnetValue slots[kSlotCount];
+  bool present[kSlotCount] = {};
+};
+
 enum class BacnetReadPropertyPollStatus { None,
                                           Ack,
                                           Error,

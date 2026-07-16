@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later WITH GCC-exception-2.0
 
 #include "BacnetClient.h"
+#include "BacnetDeviceSession.h"
+#include "BacnetRemoteObject.h"
 
 #include <cstdio>
 
@@ -26,6 +28,16 @@ int main() {
     value, 1);
   if (status != BacnetWritePropertyPollStatus::Disabled || transport.sendCount != 0) {
     std::fputs("[E] disabled write gate sent a datagram or returned wrong status\n", stderr);
+    return 1;
+  }
+  BacnetDeviceSession session(
+    client, 1234, BacnetIpEndpoint(192, 0, 2, 1, BacnetClient::kDefaultPort));
+  const BacnetPriorityRelinquishResult result =
+    session.object(BacnetObjectType::AnalogValue, 1).relinquishAllPriorities();
+  if (result.status != BacnetDeviceSessionWriteStatus::Disabled ||
+      result.failedPriority != 1 || result.completedPriorities != 0 ||
+      transport.sendCount != 0) {
+    std::fputs("[E] disabled priority reset sent a datagram or returned wrong status\n", stderr);
     return 1;
   }
   return 0;

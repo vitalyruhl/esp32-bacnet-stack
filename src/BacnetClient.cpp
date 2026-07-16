@@ -383,6 +383,66 @@ BacnetReadPropertyPollStatus BacnetClient::pollReadPropertyStatus(BacnetValue& v
   return BacnetReadPropertyPollStatus::None;
 }
 
+BacnetReadPropertyPollStatus BacnetClient::pollReadPriorityArrayStatus(
+  BacnetPriorityArray& value,
+  uint8_t expectedInvokeId,
+  const BacnetPropertyRequest& expectedRequest,
+  uint32_t* errorClass,
+  uint32_t* errorCode) {
+  value = BacnetPriorityArray{};
+  if (!running_) {
+    return BacnetReadPropertyPollStatus::None;
+  }
+  uint8_t packet[kMaxDiscoveryPacketSize] = {};
+  BacnetIpEndpoint source;
+  const size_t bytesRead = transport_->receive(packet, sizeof(packet), source);
+  if (bytesRead == 0) {
+    return BacnetReadPropertyPollStatus::None;
+  }
+
+  switch (BacnetProtocol::classifyReadPropertyResponse(packet, bytesRead, expectedInvokeId)) {
+    case BacnetReadPropertyResponseKind::Ack:
+      if (BacnetProtocol::parseReadPriorityArrayAck(
+            packet, bytesRead, expectedInvokeId, expectedRequest, value)) {
+        logger_.info("BACnet/ReadProperty",
+                     "ReadProperty %s,%lu %s = 16 slots invoke %u",
+                     bacnetObjectTypeText(expectedRequest.object.type),
+                     static_cast<unsigned long>(expectedRequest.object.instance),
+                     bacnetPropertyName(expectedRequest.property),
+                     static_cast<unsigned>(expectedInvokeId));
+        return BacnetReadPropertyPollStatus::Ack;
+      }
+      logger_.warn("BACnet/ReadProperty",
+                   "ReadProperty %s,%lu %s decode error invoke %u",
+                   bacnetObjectTypeText(expectedRequest.object.type),
+                   static_cast<unsigned long>(expectedRequest.object.instance),
+                   bacnetPropertyName(expectedRequest.property),
+                   static_cast<unsigned>(expectedInvokeId));
+      return BacnetReadPropertyPollStatus::DecodeError;
+    case BacnetReadPropertyResponseKind::Error: {
+      BacnetValue error;
+      if (parseReadPropertyError(packet, bytesRead, expectedInvokeId, error, errorClass, errorCode)) {
+        logger_.warn("BACnet/ReadProperty",
+                     "ReadProperty %s,%lu %s error %s invoke %u",
+                     bacnetObjectTypeText(expectedRequest.object.type),
+                     static_cast<unsigned long>(expectedRequest.object.instance),
+                     bacnetPropertyName(expectedRequest.property),
+                     error.displayText(),
+                     static_cast<unsigned>(expectedInvokeId));
+        return BacnetReadPropertyPollStatus::Error;
+      }
+      return BacnetReadPropertyPollStatus::DecodeError;
+    }
+    case BacnetReadPropertyResponseKind::Reject:
+      return BacnetReadPropertyPollStatus::Reject;
+    case BacnetReadPropertyResponseKind::Abort:
+      return BacnetReadPropertyPollStatus::Abort;
+    case BacnetReadPropertyResponseKind::Unrelated:
+      return BacnetReadPropertyPollStatus::None;
+  }
+  return BacnetReadPropertyPollStatus::None;
+}
+
 size_t BacnetClient::buildWhoIsRequest(uint8_t* buffer, size_t bufferSize) {
   return BacnetProtocol::buildWhoIsRequest(buffer, bufferSize);
 }

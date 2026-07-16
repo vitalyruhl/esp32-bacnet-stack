@@ -161,6 +161,11 @@ BacnetPropertyReadStatus BacnetRemoteObject::readPriorityArray(
   return session_->readPropertyStatus(objectId_, BacnetPropertyId::PriorityArray, value, timeoutMs, arrayIndex);
 }
 
+BacnetPropertyReadStatus BacnetRemoteObject::readPriorityArray(
+  BacnetPriorityArray& value, uint32_t timeoutMs) const {
+  return session_->readPriorityArray(objectId_, value, timeoutMs);
+}
+
 BacnetPropertyReadStatus BacnetRemoteObject::readRelinquishDefault(
   BacnetValue& value, uint32_t timeoutMs) const {
   return session_->readPropertyStatus(objectId_,
@@ -187,6 +192,20 @@ BacnetDeviceSessionWriteStatus BacnetRemoteObject::relinquishPresentValue(
   BacnetValue value;
   value.type = BacnetValueType::Null;
   return writePresentValue(value, priority, timeoutMs);
+}
+
+BacnetPriorityRelinquishResult BacnetRemoteObject::relinquishAllPriorities(
+  uint32_t timeoutMs) const {
+  BacnetPriorityRelinquishResult result;
+  for (uint8_t priority = 1; priority <= 16; ++priority) {
+    result.status = relinquishPresentValue(priority, timeoutMs);
+    if (result.status != BacnetDeviceSessionWriteStatus::Ack) {
+      result.failedPriority = priority;
+      return result;
+    }
+    result.completedPriorities = priority;
+  }
+  return result;
 }
 
 BacnetDeviceSessionReadStatus BacnetRemoteObject::readPropertyList(

@@ -230,6 +230,18 @@
 #define HIL_ENABLE_PRIORITY_WRITE_TESTS false
 #endif
 
+#ifndef HIL_PRIORITY_WRITE_AV_INSTANCE
+#define HIL_PRIORITY_WRITE_AV_INSTANCE 200
+#endif
+
+#ifndef HIL_PRIORITY_WRITE_BV_INSTANCE
+#define HIL_PRIORITY_WRITE_BV_INSTANCE 320
+#endif
+
+#ifndef HIL_PRIORITY_WRITE_MSV_INSTANCE
+#define HIL_PRIORITY_WRITE_MSV_INSTANCE 2020
+#endif
+
 namespace {
 
 constexpr uint32_t kNetworkConnectTimeoutMs = 30000;
@@ -237,6 +249,9 @@ constexpr uint32_t kNetworkRetryDelayMs = 250;
 constexpr uint32_t kScanTimeoutMs = 90000;
 constexpr uint32_t kScanReadTimeoutMs = 3000;
 constexpr uint32_t kPollDelayMs = 10;
+constexpr uint32_t kPriorityWriteObservationDelayMs = 1000;
+constexpr uint8_t kPriorityWriteObservationCount = 3;
+constexpr uint8_t kPriorityWritePriority = 8;
 constexpr uint32_t kMaxObjectListEntries = 600;
 constexpr size_t kMaxScanResults = 40;
 enum class ScenarioOutcome : uint8_t {
@@ -259,6 +274,12 @@ struct S02TargetSpec {
   BacnetObjectType type = BacnetObjectType::AnalogValue;
   uint32_t instance = 0;
   bool required = false;
+};
+
+struct PriorityWriteTarget {
+  const char* label = "";
+  BacnetObjectType type = BacnetObjectType::AnalogValue;
+  uint32_t instance = 0;
 };
 
 const char* scenarioOutcomeText(ScenarioOutcome outcome);
@@ -971,10 +992,324 @@ ScenarioOutcome runWritePropertyScenario() {
   return ScenarioOutcome::Fail;
 }
 
+const char* priorityWriteStatusText(BacnetDeviceSessionWriteStatus status) {
+  switch (status) {
+    case BacnetDeviceSessionWriteStatus::Ack:
+      return "ack";
+    case BacnetDeviceSessionWriteStatus::Error:
+      return "error";
+    case BacnetDeviceSessionWriteStatus::NotCommandable:
+      return "not-commandable";
+    case BacnetDeviceSessionWriteStatus::Reject:
+      return "reject";
+    case BacnetDeviceSessionWriteStatus::Abort:
+      return "abort";
+    case BacnetDeviceSessionWriteStatus::Timeout:
+      return "timeout";
+    case BacnetDeviceSessionWriteStatus::SendFailed:
+      return "send-failed";
+    case BacnetDeviceSessionWriteStatus::Disabled:
+      return "disabled";
+    case BacnetDeviceSessionWriteStatus::InvalidArgument:
+      return "invalid-argument";
+    case BacnetDeviceSessionWriteStatus::UnsupportedValue:
+      return "unsupported-value";
+    case BacnetDeviceSessionWriteStatus::Busy:
+      return "busy";
+  }
+  return "unknown";
+}
+
+bool priorityWriteValueEquals(const BacnetValue& left, const BacnetValue& right) {
+  if (left.type != right.type) {
+    return false;
+  }
+  if (left.type == BacnetValueType::Real) {
+    return fabsf(left.realValue - right.realValue) < 0.001F;
+  }
+  if (left.type == BacnetValueType::Enumerated ||
+      left.type == BacnetValueType::Unsigned) {
+    return left.unsignedValue == right.unsignedValue;
+  }
+  return left.type == BacnetValueType::Null;
+}
+
+void printPriorityWriteValue(const PriorityWriteTarget& target,
+                             const char* stage,
+                             BacnetDeviceSessionReadStatus status,
+                             const BacnetValue& value) {
+  Serial.print("[HIL] priority-write ");
+  Serial.print(target.label);
+  Serial.print(" ");
+  Serial.print(bacnetObjectTypeText(target.type));
+  Serial.print(",");
+  Serial.print(target.instance);
+  Serial.print(" ");
+  Serial.print(stage);
+  Serial.print(" status=");
+  Serial.print(bacnetReadStatusText(status));
+  Serial.print(" value=");
+  Serial.print(value.displayText());
+  Serial.print(" type=");
+  Serial.println(bacnetValueTypeText(value.type));
+}
+
+void printPriorityWritePropertyStatus(const PriorityWriteTarget& target,
+                                      const char* stage,
+                                      BacnetPropertyReadStatus status,
+                                      const BacnetValue& value) {
+  Serial.print("[HIL] priority-write ");
+  Serial.print(target.label);
+  Serial.print(" ");
+  Serial.print(stage);
+  Serial.print(" status=");
+  Serial.print(bacnetPropertyReadStatusText(status));
+  Serial.print(" value=");
+  Serial.println(value.displayText());
+}
+
+void printPriorityWriteArrayStatus(const PriorityWriteTarget& target,
+                                   const char* stage,
+                                   BacnetPropertyReadStatus status,
+                                   const BacnetPriorityArray& value) {
+  Serial.print("[HIL] priority-write ");
+  Serial.print(target.label);
+  Serial.print(" ");
+  Serial.print(stage);
+  Serial.print(" status=");
+  Serial.println(bacnetPropertyReadStatusText(status));
+  if (status != BacnetPropertyReadStatus::Ack) {
+    return;
+  }
+  for (size_t slot = 0; slot < BacnetPriorityArray::kSlotCount; ++slot) {
+    Serial.print("[HIL] priority-write ");
+    Serial.print(target.label);
+    Serial.print(" ");
+    Serial.print(stage);
+    Serial.print("[");
+    Serial.print(slot + 1);
+    Serial.print("] value=");
+    Serial.print(value.slots[slot].displayText());
+    Serial.print(" present=");
+    Serial.println(value.present[slot] ? "yes" : "no");
+  }
+}
+
+void printPriorityWriteStatus(const PriorityWriteTarget& target,
+                              const char* stage,
+                              BacnetDeviceSessionWriteStatus status) {
+  Serial.print("[HIL] priority-write ");
+  Serial.print(target.label);
+  Serial.print(" ");
+  Serial.print(stage);
+  Serial.print(" status=");
+  Serial.println(priorityWriteStatusText(status));
+}
+
+void printPriorityWriteReset(const PriorityWriteTarget& target,
+                             const BacnetPriorityRelinquishResult& result) {
+  Serial.print("[HIL] priority-write ");
+  Serial.print(target.label);
+  Serial.print(" reset status=");
+  Serial.print(priorityWriteStatusText(result.status));
+  Serial.print(" completed=");
+  Serial.print(result.completedPriorities);
+  Serial.print(" failed-priority=");
+  Serial.println(result.failedPriority);
+}
+
+bool readPriorityWriteSlot(BacnetRemoteObject& object,
+                           const PriorityWriteTarget& target,
+                           uint8_t priority,
+                           const char* stage,
+                           BacnetValue& value) {
+  const BacnetPropertyReadStatus status = object.readPriorityArray(
+    value, kScanReadTimeoutMs, priority);
+  printPriorityWritePropertyStatus(target, stage, status, value);
+  return status == BacnetPropertyReadStatus::Ack ||
+         status == BacnetPropertyReadStatus::EmptyValue;
+}
+
+bool makePriorityWriteValue(BacnetRemoteObject& object,
+                            const PriorityWriteTarget& target,
+                            const BacnetValue& current,
+                            BacnetValue& value) {
+  value = BacnetValue{};
+  if (target.type == BacnetObjectType::AnalogValue) {
+    value.type = BacnetValueType::Real;
+    value.realValue = 12.5F;
+    return true;
+  }
+  if (target.type == BacnetObjectType::BinaryValue &&
+      (current.type == BacnetValueType::Enumerated ||
+       current.type == BacnetValueType::Unsigned) &&
+      current.unsignedValue <= 1) {
+    value.type = current.type;
+    value.unsignedValue = current.unsignedValue == 0 ? 1 : 0;
+    return true;
+  }
+  if (target.type == BacnetObjectType::MultiStateValue &&
+      (current.type == BacnetValueType::Enumerated ||
+       current.type == BacnetValueType::Unsigned)) {
+    BacnetValue states;
+    if (object.readProperty(BacnetPropertyId::NumberOfStates, states, kScanReadTimeoutMs) != BacnetDeviceSessionReadStatus::Ack ||
+        (states.type != BacnetValueType::Enumerated &&
+         states.type != BacnetValueType::Unsigned) ||
+        states.unsignedValue < 2 ||
+        current.unsignedValue == 0 || current.unsignedValue > states.unsignedValue) {
+      return false;
+    }
+    value.type = current.type;
+    value.unsignedValue = current.unsignedValue == 1 ? 2 : 1;
+    return true;
+  }
+  return false;
+}
+
+bool observePriorityWriteValue(BacnetRemoteObject& object,
+                               const PriorityWriteTarget& target,
+                               const BacnetValue& expected,
+                               const char* stage,
+                               bool requireExpectedValue) {
+  BacnetValue first;
+  BacnetValue last;
+  for (uint8_t observation = 0; observation < kPriorityWriteObservationCount;
+       ++observation) {
+    BacnetValue value;
+    const BacnetDeviceSessionReadStatus status =
+      object.readPresentValue(value, kScanReadTimeoutMs);
+    printPriorityWriteValue(target, stage, status, value);
+    if (status != BacnetDeviceSessionReadStatus::Ack ||
+        (requireExpectedValue && !priorityWriteValueEquals(value, expected))) {
+      return false;
+    }
+    if (observation == 0) {
+      first = value;
+    }
+    last = value;
+    if (observation + 1 < kPriorityWriteObservationCount) {
+      delay(kPriorityWriteObservationDelayMs);
+    }
+  }
+  return target.type != BacnetObjectType::AnalogValue || requireExpectedValue ||
+         !priorityWriteValueEquals(first, last);
+}
+
+bool verifyPriorityWriteReset(BacnetRemoteObject& object,
+                              const PriorityWriteTarget& target) {
+  for (uint8_t priority = 1; priority <= 15; ++priority) {
+    BacnetValue value;
+    if (!readPriorityWriteSlot(object, target, priority, "priority-array-reset", value) ||
+        value.type != BacnetValueType::Null) {
+      return false;
+    }
+  }
+  BacnetValue slot16;
+  return readPriorityWriteSlot(object, target, 16, "priority-array[16]-reset", slot16);
+}
+
 ScenarioOutcome runPresentValuePriorityWriteScenario() {
-  printResult("I",
-              "PresentValue priority write scenario enabled but no writes executed");
-  return ScenarioOutcome::Fail;
+  if (!ensureRuntimeReady()) {
+    return ScenarioOutcome::Fail;
+  }
+
+  const PriorityWriteTarget targets[] = {
+    {"AV", BacnetObjectType::AnalogValue, HIL_PRIORITY_WRITE_AV_INSTANCE},
+    {"BV", BacnetObjectType::BinaryValue, HIL_PRIORITY_WRITE_BV_INSTANCE},
+    {"MSV", BacnetObjectType::MultiStateValue, HIL_PRIORITY_WRITE_MSV_INSTANCE},
+  };
+  for (const PriorityWriteTarget& target : targets) {
+    BacnetDeviceSession device(
+      client,
+      BACNET_TARGET_DEVICE_INSTANCE,
+      bacnetIpEndpointFromArduino(targetAddress, BACNET_TARGET_PORT));
+    BacnetRemoteObject object = device.object(target.type, target.instance);
+    BacnetValue original;
+    const BacnetDeviceSessionReadStatus originalStatus =
+      object.readPresentValue(original, kScanReadTimeoutMs);
+    printPriorityWriteValue(target, "original-present-value", originalStatus, original);
+    if (originalStatus != BacnetDeviceSessionReadStatus::Ack ||
+        !hasExpectedPresentValueType(target.type, original)) {
+      return ScenarioOutcome::Fail;
+    }
+
+    // The HIL runner executes serially from setup(). Keep the 16-slot result
+    // out of the Arduino loopTask stack.
+    static BacnetPriorityArray priorityArray;
+    const BacnetPropertyReadStatus priorityArrayStatus =
+      object.readPriorityArray(priorityArray, kScanReadTimeoutMs);
+    printPriorityWriteArrayStatus(target, "priority-array", priorityArrayStatus, priorityArray);
+    if (priorityArrayStatus != BacnetPropertyReadStatus::Ack) {
+      return ScenarioOutcome::Fail;
+    }
+
+    BacnetValue relinquishDefault;
+    const BacnetPropertyReadStatus relinquishDefaultStatus =
+      object.readRelinquishDefault(relinquishDefault, kScanReadTimeoutMs);
+    printPriorityWritePropertyStatus(target, "relinquish-default", relinquishDefaultStatus, relinquishDefault);
+    if (relinquishDefaultStatus != BacnetPropertyReadStatus::Ack &&
+        relinquishDefaultStatus != BacnetPropertyReadStatus::UnsupportedProperty) {
+      return ScenarioOutcome::Fail;
+    }
+
+    BacnetValue slot8Before;
+    BacnetValue slot16Before;
+    if (!readPriorityWriteSlot(object, target, kPriorityWritePriority, "priority-array[8]-before", slot8Before) ||
+        !readPriorityWriteSlot(object, target, 16, "priority-array[16]-before", slot16Before)) {
+      return ScenarioOutcome::Fail;
+    }
+
+    BacnetValue temporary;
+    if (!makePriorityWriteValue(object, target, original, temporary)) {
+      printResult("FAIL", "priority write test value is invalid for object");
+      return ScenarioOutcome::Fail;
+    }
+    printPriorityWriteValue(target, "temporary-value", BacnetDeviceSessionReadStatus::Ack, temporary);
+    const BacnetDeviceSessionWriteStatus writeStatus =
+      object.writePresentValue(temporary, kPriorityWritePriority, kScanReadTimeoutMs);
+    printPriorityWriteStatus(target, "write-priority-8", writeStatus);
+    if (writeStatus != BacnetDeviceSessionWriteStatus::Ack) {
+      return ScenarioOutcome::Fail;
+    }
+
+    if (!observePriorityWriteValue(object, target, temporary, "priority-8-active", true)) {
+      return ScenarioOutcome::Fail;
+    }
+    BacnetValue slot8Active;
+    BacnetValue slot16Active;
+    if (!readPriorityWriteSlot(object, target, kPriorityWritePriority, "priority-array[8]-active", slot8Active) ||
+        !readPriorityWriteSlot(object, target, 16, "priority-array[16]-active", slot16Active) ||
+        !priorityWriteValueEquals(slot8Active, temporary)) {
+      printResult("FAIL", "priority 8 did not contain the temporary value");
+      return ScenarioOutcome::Fail;
+    }
+
+    const BacnetDeviceSessionWriteStatus relinquishStatus =
+      object.relinquishPresentValue(kPriorityWritePriority, kScanReadTimeoutMs);
+    printPriorityWriteStatus(target, "relinquish-priority-8", relinquishStatus);
+    if (relinquishStatus != BacnetDeviceSessionWriteStatus::Ack) {
+      return ScenarioOutcome::Fail;
+    }
+    BacnetValue slot8Relinquished;
+    if (!readPriorityWriteSlot(object, target, kPriorityWritePriority, "priority-array[8]-relinquished", slot8Relinquished) ||
+        slot8Relinquished.type != BacnetValueType::Null) {
+      printResult("FAIL", "priority 8 was not relinquished with Null");
+      return ScenarioOutcome::Fail;
+    }
+    if (!observePriorityWriteValue(object, target, slot16Active, "priority-16-resumed", false)) {
+      return ScenarioOutcome::Fail;
+    }
+
+    const BacnetPriorityRelinquishResult reset =
+      object.relinquishAllPriorities(kScanReadTimeoutMs);
+    printPriorityWriteReset(target, reset);
+    if (!reset.succeeded() ||
+        !verifyPriorityWriteReset(object, target) ||
+        !observePriorityWriteValue(object, target, slot16Active, "priority-reset-resumed", false)) {
+      return ScenarioOutcome::Fail;
+    }
+  }
+  return ScenarioOutcome::Pass;
 }
 
 void runScenario(ScenarioSummary& summary, const char* id, const char* scenarioName, bool enabled, bool required, ScenarioOutcome (*scenarioRunner)(), const char* skipReason) {

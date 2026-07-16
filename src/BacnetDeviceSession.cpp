@@ -553,6 +553,50 @@ BacnetPropertyReadStatus BacnetDeviceSession::readPropertyStatus(
                               errorCode);
 }
 
+BacnetPropertyReadStatus BacnetDeviceSession::readPriorityArray(
+  BacnetObjectId objectId,
+  BacnetPriorityArray& value,
+  uint32_t timeoutMs) {
+  value = BacnetPriorityArray{};
+  const BacnetPropertyRequest request{
+    objectId, BacnetPropertyId::PriorityArray, kBacnetNoArrayIndex};
+  if (inFlightSubscription_ != nullptr || inFlightObjectListScan_ != nullptr) {
+    client_.logger().warn(
+      "BACnet/ReadProperty",
+      "ReadProperty %s,%lu priorityArray skipped: session busy",
+      bacnetObjectTypeText(request.object.type),
+      static_cast<unsigned long>(request.object.instance));
+    return BacnetPropertyReadStatus::Busy;
+  }
+
+  const uint8_t invokeId = allocateInvokeId();
+  if (!client_.sendReadProperty(endpoint_, request, invokeId)) {
+    return BacnetPropertyReadStatus::SendFailed;
+  }
+
+  uint32_t errorClass = 0;
+  uint32_t errorCode = 0;
+  const uint32_t startedAt = client_.nowMs();
+  while (true) {
+    const BacnetReadPropertyPollStatus pollStatus =
+      client_.pollReadPriorityArrayStatus(
+        value, invokeId, request, &errorClass, &errorCode);
+    if (pollStatus == BacnetReadPropertyPollStatus::Ack) {
+      return BacnetPropertyReadStatus::Ack;
+    }
+    if (pollStatus != BacnetReadPropertyPollStatus::None) {
+      const BacnetValue ignoredValue;
+      return classifyDetailedReadStatus(
+        pollStatus, ignoredValue, errorClass, errorCode, kBacnetNoArrayIndex);
+    }
+    if (client_.nowMs() - startedAt >= timeoutMs) {
+      client_.logReadPropertyTimeout(invokeId, request);
+      return BacnetPropertyReadStatus::Timeout;
+    }
+    client_.idle();
+  }
+}
+
 BacnetDeviceSessionReadStatus BacnetDeviceSession::readProperty(
   BacnetObjectType objectType, uint32_t objectInstance, BacnetPropertyId property, BacnetValue& value, uint32_t timeoutMs, uint32_t arrayIndex) {
   return readProperty(

@@ -33,10 +33,14 @@ Current public responsibilities:
 - explicitly write one typed property through `writeProperty()` when enabled
   and optionally provide `BacnetWritePropertyOptions` for an array index and a
   BACnet priority from `1` through `16`
-- read `priority-array` and `relinquish-default` through the detailed
-  `BacnetPropertyReadStatus` convenience helpers; write or relinquish
+- read complete `priority-array` values through the typed
+  `BacnetPriorityArray` helper, or read one priority slot through the scalar
+  indexed helper; read `relinquish-default` through the detailed
+  `BacnetPropertyReadStatus` convenience helper; write or relinquish
   `present-value` explicitly through `writePresentValue()` and
-  `relinquishPresentValue()`
+  `relinquishPresentValue()`; reset explicit command priorities through
+  `relinquishAllPriorities()` and inspect its
+  `BacnetPriorityRelinquishResult`
 - read compact object health through `readObjectStatus()`
 - collect a property's advertised property list through `readPropertyList()`
 - safely attempt all collected properties through `readAllProperties()`
@@ -71,7 +75,10 @@ Current public responsibilities:
 
 ## Common Result Types
 
-- `BacnetValue`: typed value holder used by ReadProperty and scan helpers
+- `BacnetValue`: typed value holder used by scalar ReadProperty and scan helpers
+- `BacnetPriorityArray`: complete 16-slot typed `priority-array` result;
+  `slots[0]` through `slots[15]` correspond to BACnet priorities `1` through
+  `16`
 - `BacnetDeviceSessionWriteStatus` and `BacnetWritePropertyPollStatus`: typed
   WriteProperty result states
 - `BacnetDeviceSessionReadStatus`: session-level read result status
@@ -87,6 +94,5 @@ Current public responsibilities:
 
 The following are planned or intentionally absent from the current public client runtime:
 
-- priority write helpers
 - automatic background polling tasks
 - global discovery cache or mandatory object browser state

@@ -78,6 +78,12 @@ public:
     BacnetValue& value, uint8_t expectedInvokeId, BacnetPropertyId expectedProperty);
   BacnetReadPropertyPollStatus pollReadPropertyStatus(
     BacnetValue& value, uint8_t expectedInvokeId, BacnetPropertyId expectedProperty, uint32_t* errorClass, uint32_t* errorCode);
+  BacnetReadPropertyPollStatus pollReadPriorityArrayStatus(
+    BacnetPriorityArray& value,
+    uint8_t expectedInvokeId,
+    const BacnetPropertyRequest& expectedRequest,
+    uint32_t* errorClass = nullptr,
+    uint32_t* errorCode = nullptr);
 
   static size_t buildWhoIsRequest(uint8_t* buffer, size_t bufferSize);
   static bool parseIAmResponse(const uint8_t* buffer, size_t length, BacnetIAmDevice& device);
