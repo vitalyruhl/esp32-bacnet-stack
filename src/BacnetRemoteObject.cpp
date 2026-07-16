@@ -196,14 +196,24 @@ BacnetDeviceSessionWriteStatus BacnetRemoteObject::relinquishPresentValue(
 
 BacnetPriorityRelinquishResult BacnetRemoteObject::relinquishAllPriorities(
   uint32_t timeoutMs) const {
+  return relinquishAllPriorities(BacnetPriorityResetOptions{}, timeoutMs);
+}
+
+BacnetPriorityRelinquishResult BacnetRemoteObject::relinquishAllPriorities(
+  const BacnetPriorityResetOptions& options, uint32_t timeoutMs) const {
   BacnetPriorityRelinquishResult result;
   for (uint8_t priority = 1; priority <= 16; ++priority) {
+    if (options.skipMinimumOnOffPriority &&
+        priority == kMinimumOnOffPriority) {
+      result.skippedPriority = priority;
+      continue;
+    }
     result.status = relinquishPresentValue(priority, timeoutMs);
     if (result.status != BacnetDeviceSessionWriteStatus::Ack) {
       result.failedPriority = priority;
       return result;
     }
-    result.completedPriorities = priority;
+    ++result.completedPriorities;
   }
   return result;
 }

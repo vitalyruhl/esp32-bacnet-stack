@@ -188,6 +188,15 @@ size_t buildWriteAck(uint8_t* buffer, uint8_t invokeId) {
   return sizeof(response);
 }
 
+size_t buildWriteAccessDenied(uint8_t* buffer, uint8_t invokeId) {
+  const uint8_t response[] = {
+    0x81, 0x0A, 0x00, 0x0D, 0x01, 0x00, 0x50, invokeId, 0x0F,
+    0x91, 0x02, 0x91, 40,
+  };
+  std::memcpy(buffer, response, sizeof(response));
+  return sizeof(response);
+}
+
 bool testReadHelpers() {
   FakeTransport transport;
   FakeClock clock;
@@ -415,6 +424,9 @@ bool testRelinquishAllPriorities() {
 
   const BacnetPriorityRelinquishResult result = object.relinquishAllPriorities(3);
   if (!expect(result.succeeded(), "priority reset success") ||
+      !expect(result.completedPriorities == 16 && result.skippedPriority == 0 &&
+                  result.failedPriority == 0,
+              "strict priority reset result") ||
       !expect(transport.sendCount == 16, "priority reset write count")) {
     return false;
   }
@@ -429,33 +441,111 @@ bool testRelinquishAllPriorities() {
     }
   }
 
-  FakeTransport failureTransport;
-  FakeClock failureClock;
-  failureTransport.clock = &failureClock;
-  BacnetClient failureClient(failureTransport, &failureClock);
-  BacnetDeviceSession failureSession(
-    failureClient, 1234, BacnetIpEndpoint(192, 0, 2, 1, BacnetClient::kDefaultPort));
-  BacnetRemoteObject failureObject =
-    failureSession.object(BacnetObjectType::AnalogValue, 7);
-  if (!expect(failureClient.begin(), "failure fake client begin")) {
+  FakeTransport strictTransport;
+  FakeClock strictClock;
+  strictTransport.clock = &strictClock;
+  BacnetClient strictClient(strictTransport, &strictClock);
+  BacnetDeviceSession strictSession(
+    strictClient, 1234, BacnetIpEndpoint(192, 0, 2, 1, BacnetClient::kDefaultPort));
+  BacnetRemoteObject strictObject =
+    strictSession.object(BacnetObjectType::AnalogValue, 7);
+  if (!expect(strictClient.begin(), "strict failure fake client begin")) {
     return false;
   }
-  size_t responseSize = buildWriteAck(response, 1);
-  if (!expect(failureTransport.queueResponse(response, responseSize),
-              "queue first priority ACK")) {
+  for (uint8_t priority = 1; priority < kMinimumOnOffPriority; ++priority) {
+    const size_t responseSize = buildWriteAck(response, priority);
+    if (!expect(strictTransport.queueResponse(response, responseSize),
+                "queue strict priority ACK")) {
+      return false;
+    }
+  }
+  size_t responseSize = buildWriteAccessDenied(response, kMinimumOnOffPriority);
+  if (!expect(strictTransport.queueResponse(response, responseSize),
+              "queue minimum-on-off access denied")) {
     return false;
   }
-  responseSize = buildTerminalResponse(response, 0x60, 2);
-  if (!expect(failureTransport.queueResponse(response, responseSize),
-              "queue second priority reject")) {
+  const BacnetPriorityRelinquishResult strictFailure =
+    strictObject.relinquishAllPriorities(3);
+  if (!expect(strictFailure.status == BacnetDeviceSessionWriteStatus::NotCommandable &&
+                  strictFailure.completedPriorities == 5 &&
+                  strictFailure.skippedPriority == 0 &&
+                  strictFailure.failedPriority == kMinimumOnOffPriority &&
+                  strictTransport.sendCount == 6,
+              "strict reset stops at minimum-on-off priority")) {
     return false;
   }
-  const BacnetPriorityRelinquishResult failure =
-    failureObject.relinquishAllPriorities(3);
-  return expect(failure.status == BacnetDeviceSessionWriteStatus::Reject &&
-                  failure.completedPriorities == 1 && failure.failedPriority == 2 &&
-                  failureTransport.sendCount == 2,
-                "priority reset stops at first failure");
+
+  FakeTransport writableTransport;
+  FakeClock writableClock;
+  writableTransport.clock = &writableClock;
+  BacnetClient writableClient(writableTransport, &writableClock);
+  BacnetDeviceSession writableSession(
+    writableClient, 1234, BacnetIpEndpoint(192, 0, 2, 1, BacnetClient::kDefaultPort));
+  BacnetRemoteObject writableObject =
+    writableSession.object(BacnetObjectType::AnalogValue, 7);
+  if (!expect(writableClient.begin(), "writable reset fake client begin")) {
+    return false;
+  }
+  for (uint8_t invokeId = 1; invokeId <= 15; ++invokeId) {
+    responseSize = buildWriteAck(response, invokeId);
+    if (!expect(writableTransport.queueResponse(response, responseSize),
+                "queue writable priority ACK")) {
+      return false;
+    }
+  }
+  BacnetPriorityResetOptions writableOptions;
+  writableOptions.skipMinimumOnOffPriority = true;
+  const BacnetPriorityRelinquishResult writable =
+    writableObject.relinquishAllPriorities(writableOptions, 3);
+  if (!expect(writable.succeeded() && writable.completedPriorities == 15 &&
+                  writable.skippedPriority == kMinimumOnOffPriority &&
+                  writable.failedPriority == 0 && writableTransport.sendCount == 15,
+              "writable reset skips minimum-on-off priority")) {
+    return false;
+  }
+  const uint8_t expectedWritablePriorities[] = {
+    1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
+  for (size_t index = 0; index < sizeof(expectedWritablePriorities); ++index) {
+    if (!expect(writableTransport.sentPacketSizes[index] == 22 &&
+                    writableTransport.sentPackets[index][18] == 0x00 &&
+                    writableTransport.sentPackets[index][20] == 0x49 &&
+                    writableTransport.sentPackets[index][21] == expectedWritablePriorities[index],
+                "writable reset ordering and null encoding")) {
+      return false;
+    }
+  }
+
+  FakeTransport otherFailureTransport;
+  FakeClock otherFailureClock;
+  otherFailureTransport.clock = &otherFailureClock;
+  BacnetClient otherFailureClient(otherFailureTransport, &otherFailureClock);
+  BacnetDeviceSession otherFailureSession(
+    otherFailureClient, 1234, BacnetIpEndpoint(192, 0, 2, 1, BacnetClient::kDefaultPort));
+  BacnetRemoteObject otherFailureObject =
+    otherFailureSession.object(BacnetObjectType::AnalogValue, 7);
+  if (!expect(otherFailureClient.begin(), "other failure fake client begin")) {
+    return false;
+  }
+  for (uint8_t invokeId = 1; invokeId < 9; ++invokeId) {
+    responseSize = buildWriteAck(response, invokeId);
+    if (!expect(otherFailureTransport.queueResponse(response, responseSize),
+                "queue writable priority before failure")) {
+      return false;
+    }
+  }
+  responseSize = buildTerminalResponse(response, 0x60, 9);
+  if (!expect(otherFailureTransport.queueResponse(response, responseSize),
+              "queue writable reset reject")) {
+    return false;
+  }
+  const BacnetPriorityRelinquishResult otherFailure =
+    otherFailureObject.relinquishAllPriorities(writableOptions, 3);
+  return expect(otherFailure.status == BacnetDeviceSessionWriteStatus::Reject &&
+                  otherFailure.completedPriorities == 8 &&
+                  otherFailure.skippedPriority == kMinimumOnOffPriority &&
+                  otherFailure.failedPriority == 10 &&
+                  otherFailureTransport.sendCount == 9,
+                "writable reset stops at first non-skipped failure");
 }
 
 } // namespace

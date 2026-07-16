@@ -35,14 +35,21 @@ private:
   uint32_t arrayIndex_ = kBacnetNoArrayIndex;
 };
 
+constexpr uint8_t kMinimumOnOffPriority = 6;
+
+struct BacnetPriorityResetOptions {
+  bool skipMinimumOnOffPriority = false;
+};
+
 struct BacnetPriorityRelinquishResult {
   BacnetDeviceSessionWriteStatus status = BacnetDeviceSessionWriteStatus::Ack;
   uint8_t completedPriorities = 0;
+  uint8_t skippedPriority = 0;
   uint8_t failedPriority = 0;
 
   bool succeeded() const {
     return failedPriority == 0 &&
-           completedPriorities == 16 &&
+           completedPriorities + (skippedPriority == 0 ? 0 : 1) == 16 &&
            status == BacnetDeviceSessionWriteStatus::Ack;
   }
 };
@@ -82,6 +89,9 @@ public:
     uint8_t priority,
     uint32_t timeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs) const;
   BacnetPriorityRelinquishResult relinquishAllPriorities(
+    uint32_t timeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs) const;
+  BacnetPriorityRelinquishResult relinquishAllPriorities(
+    const BacnetPriorityResetOptions& options,
     uint32_t timeoutMs = BacnetDeviceSession::kDefaultReadTimeoutMs) const;
   BacnetDeviceSessionReadStatus readPropertyList(
     BacnetValue& value,

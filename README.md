@@ -338,8 +338,10 @@ Optional compile-time write feature gates:
 `BacnetClient::sendWriteProperty()`/`pollWriteProperty()` encode supported
 `BacnetValue` types through the shared portable application-value codec. The
 write feature is disabled by default; a disabled build returns an explicit
-`Disabled` status and sends no datagram. Priority, priority-array handling, and
-automatic writes are not implemented.
+`Disabled` status and sends no datagram. Priority-array reads and explicit
+command-priority relinquish helpers are supported; direct priority-array and
+automatic writes are not implemented. See
+[Command Priority Reset Semantics](docs/bacnet-command-priority.md).
 
 `BacnetWritePropertyOptions` may supply an optional priority from `1` through
 `16`; omitting it preserves a normal WriteProperty request without a priority

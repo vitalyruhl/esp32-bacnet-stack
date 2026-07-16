@@ -42,6 +42,13 @@ Current planned scenario blocks (runner scaffold exists):
 Writes are disabled by default. Write scenarios must remain explicit opt-in via
 local secrets flags.
 
+`S09` uses an explicit priority-8 override and relinquish flow. Its reset
+stage uses the writable command-priority reset mode: it relinquishes priorities
+1..5 and 7..16, explicitly reports skipped priority 6, and never writes
+`priority-array` directly. The Strict and writable reset semantics, including
+the WAGO compatibility observation, are documented in
+[`docs/bacnet-command-priority.md`](../../docs/bacnet-command-priority.md).
+
 `S02` is enabled by default in the local secrets template and reads
 `present-value` from configured AI/AO/AV, BI/BO/BV, MI/MO/MV objects without
 BACnet writes. Required objects fail the scenario when unreadable or decoded

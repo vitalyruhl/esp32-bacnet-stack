@@ -38,8 +38,9 @@ Current public responsibilities:
   indexed helper; read `relinquish-default` through the detailed
   `BacnetPropertyReadStatus` convenience helper; write or relinquish
   `present-value` explicitly through `writePresentValue()` and
-  `relinquishPresentValue()`; reset explicit command priorities through
-  `relinquishAllPriorities()` and inspect its
+  `relinquishPresentValue()`; run a strict command-priority reset through
+  `relinquishAllPriorities()` or explicitly skip Minimum On/Off priority 6
+  with `BacnetPriorityResetOptions`; inspect its
   `BacnetPriorityRelinquishResult`
 - read compact object health through `readObjectStatus()`
 - collect a property's advertised property list through `readPropertyList()`
@@ -79,6 +80,10 @@ Current public responsibilities:
 - `BacnetPriorityArray`: complete 16-slot typed `priority-array` result;
   `slots[0]` through `slots[15]` correspond to BACnet priorities `1` through
   `16`
+- `BacnetPriorityResetOptions` and `BacnetPriorityRelinquishResult`: explicit
+  strict or writable command-priority reset behavior and per-reset completed,
+  skipped, and failed priority reporting; see
+  [Command priority reset semantics](../bacnet-command-priority.md)
 - `BacnetDeviceSessionWriteStatus` and `BacnetWritePropertyPollStatus`: typed
   WriteProperty result states
 - `BacnetDeviceSessionReadStatus`: session-level read result status

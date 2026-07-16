@@ -230,6 +230,14 @@
 #define HIL_ENABLE_PRIORITY_WRITE_TESTS false
 #endif
 
+#ifndef HIL_PRIORITY_WRITE_RESET_PROBE_ONLY
+#define HIL_PRIORITY_WRITE_RESET_PROBE_ONLY false
+#endif
+
+#ifndef HIL_PRIORITY_WRITE_RESUME_PROBE_ONLY
+#define HIL_PRIORITY_WRITE_RESUME_PROBE_ONLY false
+#endif
+
 #ifndef HIL_PRIORITY_WRITE_AV_INSTANCE
 #define HIL_PRIORITY_WRITE_AV_INSTANCE 200
 #endif
@@ -1107,13 +1115,18 @@ void printPriorityWriteStatus(const PriorityWriteTarget& target,
 }
 
 void printPriorityWriteReset(const PriorityWriteTarget& target,
+                             const char* mode,
                              const BacnetPriorityRelinquishResult& result) {
   Serial.print("[HIL] priority-write ");
   Serial.print(target.label);
   Serial.print(" reset status=");
   Serial.print(priorityWriteStatusText(result.status));
+  Serial.print(" mode=");
+  Serial.print(mode);
   Serial.print(" completed=");
   Serial.print(result.completedPriorities);
+  Serial.print(" skipped-priority=");
+  Serial.print(result.skippedPriority);
   Serial.print(" failed-priority=");
   Serial.println(result.failedPriority);
 }
@@ -1197,15 +1210,144 @@ bool observePriorityWriteValue(BacnetRemoteObject& object,
 
 bool verifyPriorityWriteReset(BacnetRemoteObject& object,
                               const PriorityWriteTarget& target) {
-  for (uint8_t priority = 1; priority <= 15; ++priority) {
+  for (uint8_t priority = 1; priority <= 16; ++priority) {
     BacnetValue value;
-    if (!readPriorityWriteSlot(object, target, priority, "priority-array-reset", value) ||
+    if (!readPriorityWriteSlot(object, target, priority, "priority-array-reset", value)) {
+      return false;
+    }
+    if (priority != kMinimumOnOffPriority && priority != 16 &&
         value.type != BacnetValueType::Null) {
       return false;
     }
   }
-  BacnetValue slot16;
-  return readPriorityWriteSlot(object, target, 16, "priority-array[16]-reset", slot16);
+  return true;
+}
+
+ScenarioOutcome runPriorityResetProbeScenario() {
+  if (!ensureRuntimeReady()) {
+    return ScenarioOutcome::Fail;
+  }
+
+  const PriorityWriteTarget target{
+    "AV", BacnetObjectType::AnalogValue, HIL_PRIORITY_WRITE_AV_INSTANCE};
+  BacnetDeviceSession device(
+    client,
+    BACNET_TARGET_DEVICE_INSTANCE,
+    bacnetIpEndpointFromArduino(targetAddress, BACNET_TARGET_PORT));
+  BacnetRemoteObject object = device.object(target.type, target.instance);
+
+  BacnetValue original;
+  const BacnetDeviceSessionReadStatus originalStatus =
+    object.readPresentValue(original, kScanReadTimeoutMs);
+  printPriorityWriteValue(target, "reset-probe-original-present-value", originalStatus, original);
+  if (originalStatus != BacnetDeviceSessionReadStatus::Ack ||
+      !hasExpectedPresentValueType(target.type, original)) {
+    return ScenarioOutcome::Fail;
+  }
+
+  BacnetPriorityResetOptions resetOptions;
+  resetOptions.skipMinimumOnOffPriority = true;
+  const BacnetPriorityRelinquishResult reset =
+    object.relinquishAllPriorities(resetOptions, kScanReadTimeoutMs);
+  printPriorityWriteReset(target, "writable", reset);
+  if (!reset.succeeded() || reset.completedPriorities != 15 ||
+      reset.skippedPriority != kMinimumOnOffPriority) {
+    return ScenarioOutcome::Fail;
+  }
+
+  // The HIL runner executes serially from setup(). Keep the 16-slot result
+  // out of the Arduino loopTask stack.
+  static BacnetPriorityArray priorityArray;
+  const BacnetPropertyReadStatus priorityArrayStatus =
+    object.readPriorityArray(priorityArray, kScanReadTimeoutMs);
+  printPriorityWriteArrayStatus(target, "priority-array-reset-probe", priorityArrayStatus, priorityArray);
+  if (priorityArrayStatus != BacnetPropertyReadStatus::Ack) {
+    return ScenarioOutcome::Fail;
+  }
+  for (size_t slot = 0; slot < BacnetPriorityArray::kSlotCount; ++slot) {
+    if (slot != kMinimumOnOffPriority - 1 &&
+        priorityArray.slots[slot].type != BacnetValueType::Null) {
+      return ScenarioOutcome::Fail;
+    }
+  }
+
+  BacnetValue slotSix;
+  BacnetValue slotEight;
+  BacnetValue slotSixteen;
+  if (!readPriorityWriteSlot(object, target, kMinimumOnOffPriority, "priority-array[6]-reset-probe", slotSix) ||
+      !readPriorityWriteSlot(object, target, kPriorityWritePriority, "priority-array[8]-reset-probe", slotEight) ||
+      slotEight.type != BacnetValueType::Null ||
+      !readPriorityWriteSlot(object, target, 16, "priority-array[16]-reset-probe", slotSixteen) ||
+      slotSixteen.type != BacnetValueType::Null) {
+    return ScenarioOutcome::Fail;
+  }
+  BacnetValue relinquishDefault;
+  const BacnetPropertyReadStatus relinquishDefaultStatus =
+    object.readRelinquishDefault(relinquishDefault, kScanReadTimeoutMs);
+  printPriorityWritePropertyStatus(
+    target, "relinquish-default-reset-probe", relinquishDefaultStatus, relinquishDefault);
+  BacnetValue presentValue;
+  const BacnetDeviceSessionReadStatus presentValueStatus =
+    object.readPresentValue(presentValue, kScanReadTimeoutMs);
+  printPriorityWriteValue(
+    target, "reset-probe-present-value", presentValueStatus, presentValue);
+  if (presentValueStatus != BacnetDeviceSessionReadStatus::Ack ||
+      (relinquishDefaultStatus == BacnetPropertyReadStatus::Ack &&
+       !priorityWriteValueEquals(presentValue, relinquishDefault))) {
+    return ScenarioOutcome::Fail;
+  }
+  return ScenarioOutcome::Pass;
+}
+
+ScenarioOutcome runPriorityResumeProbeScenario() {
+  if (!ensureRuntimeReady()) {
+    return ScenarioOutcome::Fail;
+  }
+
+  const PriorityWriteTarget target{
+    "AV", BacnetObjectType::AnalogValue, HIL_PRIORITY_WRITE_AV_INSTANCE};
+  BacnetDeviceSession device(
+    client,
+    BACNET_TARGET_DEVICE_INSTANCE,
+    bacnetIpEndpointFromArduino(targetAddress, BACNET_TARGET_PORT));
+  BacnetRemoteObject object = device.object(target.type, target.instance);
+
+  BacnetValue slotEight;
+  if (!readPriorityWriteSlot(object, target, kPriorityWritePriority, "priority-array[8]-resume-probe", slotEight) ||
+      slotEight.type != BacnetValueType::Null) {
+    return ScenarioOutcome::Fail;
+  }
+
+  BacnetValue firstPresentValue;
+  BacnetValue lastPresentValue;
+  for (uint8_t observation = 0;
+       observation < kPriorityWriteObservationCount;
+       ++observation) {
+    BacnetValue slotSixteen;
+    if (!readPriorityWriteSlot(object, target, 16, "priority-array[16]-resume-probe", slotSixteen) ||
+        slotSixteen.type == BacnetValueType::Null) {
+      return ScenarioOutcome::Fail;
+    }
+    BacnetValue presentValue;
+    const BacnetDeviceSessionReadStatus presentValueStatus =
+      object.readPresentValue(presentValue, kScanReadTimeoutMs);
+    printPriorityWriteValue(
+      target, "resume-probe-present-value", presentValueStatus, presentValue);
+    if (presentValueStatus != BacnetDeviceSessionReadStatus::Ack ||
+        !priorityWriteValueEquals(presentValue, slotSixteen)) {
+      return ScenarioOutcome::Fail;
+    }
+    if (observation == 0) {
+      firstPresentValue = presentValue;
+    }
+    lastPresentValue = presentValue;
+    if (observation + 1 < kPriorityWriteObservationCount) {
+      delay(kPriorityWriteObservationDelayMs);
+    }
+  }
+  return !priorityWriteValueEquals(firstPresentValue, lastPresentValue)
+           ? ScenarioOutcome::Pass
+           : ScenarioOutcome::Fail;
 }
 
 ScenarioOutcome runPresentValuePriorityWriteScenario() {
@@ -1275,6 +1417,14 @@ ScenarioOutcome runPresentValuePriorityWriteScenario() {
     if (!observePriorityWriteValue(object, target, temporary, "priority-8-active", true)) {
       return ScenarioOutcome::Fail;
     }
+    const BacnetPropertyReadStatus activePriorityArrayStatus =
+      object.readPriorityArray(priorityArray, kScanReadTimeoutMs);
+    printPriorityWriteArrayStatus(
+      target, "priority-array-priority-8-active", activePriorityArrayStatus, priorityArray);
+    if (activePriorityArrayStatus != BacnetPropertyReadStatus::Ack ||
+        !priorityWriteValueEquals(priorityArray.slots[kPriorityWritePriority - 1], temporary)) {
+      return ScenarioOutcome::Fail;
+    }
     BacnetValue slot8Active;
     BacnetValue slot16Active;
     if (!readPriorityWriteSlot(object, target, kPriorityWritePriority, "priority-array[8]-active", slot8Active) ||
@@ -1300,10 +1450,13 @@ ScenarioOutcome runPresentValuePriorityWriteScenario() {
       return ScenarioOutcome::Fail;
     }
 
+    BacnetPriorityResetOptions resetOptions;
+    resetOptions.skipMinimumOnOffPriority = true;
     const BacnetPriorityRelinquishResult reset =
-      object.relinquishAllPriorities(kScanReadTimeoutMs);
-    printPriorityWriteReset(target, reset);
-    if (!reset.succeeded() ||
+      object.relinquishAllPriorities(resetOptions, kScanReadTimeoutMs);
+    printPriorityWriteReset(target, "writable", reset);
+    if (!reset.succeeded() || reset.completedPriorities != 15 ||
+        reset.skippedPriority != kMinimumOnOffPriority ||
         !verifyPriorityWriteReset(object, target) ||
         !observePriorityWriteValue(object, target, slot16Active, "priority-reset-resumed", false)) {
       return ScenarioOutcome::Fail;
@@ -1359,7 +1512,22 @@ ScenarioOutcome runAcceptanceRunner() {
 
   runScenario(summary, "S08", "WriteProperty (explicit opt-in)", HIL_ENABLE_WRITE_TESTS, false, runWritePropertyScenario, "disabled (HIL_ENABLE_WRITE_TESTS=false)");
 
-  runScenario(summary, "S09", "PresentValue priority write (explicit opt-in)", HIL_ENABLE_PRIORITY_WRITE_TESTS, false, runPresentValuePriorityWriteScenario, "disabled (HIL_ENABLE_PRIORITY_WRITE_TESTS=false)");
+  runScenario(
+    summary,
+    "S09",
+    HIL_PRIORITY_WRITE_RESUME_PROBE_ONLY
+      ? "PresentValue priority resume probe (read-only)"
+    : HIL_PRIORITY_WRITE_RESET_PROBE_ONLY
+      ? "PresentValue priority reset probe (explicit opt-in)"
+      : "PresentValue priority write (explicit opt-in)",
+    HIL_ENABLE_PRIORITY_WRITE_TESTS,
+    false,
+    HIL_PRIORITY_WRITE_RESUME_PROBE_ONLY
+      ? runPriorityResumeProbeScenario
+    : HIL_PRIORITY_WRITE_RESET_PROBE_ONLY
+      ? runPriorityResetProbeScenario
+      : runPresentValuePriorityWriteScenario,
+    "disabled (HIL_ENABLE_PRIORITY_WRITE_TESTS=false)");
 
   ScenarioOutcome finalOutcome = ScenarioOutcome::Skip;
   if (summary.fail > 0 || summary.requiredFailed > 0) {
