@@ -62,6 +62,11 @@ add_executable(bacnet_cli_support_tests test/cli_support_tests.cpp)
 target_compile_features(bacnet_cli_support_tests PRIVATE cxx_std_17)
 target_link_libraries(bacnet_cli_support_tests PRIVATE bacnet_cli_common)
 
+add_executable(bacnet_subscribe_cov_protocol_tests
+  test/subscribe_cov_protocol_tests.cpp)
+target_compile_features(bacnet_subscribe_cov_protocol_tests PRIVATE cxx_std_17)
+target_link_libraries(bacnet_subscribe_cov_protocol_tests PRIVATE bacnet_portable)
+
 add_library(bacnet_client_write_enabled STATIC
   ${CMAKE_CURRENT_LIST_DIR}/../../src/BacnetClient.cpp
   ${CMAKE_CURRENT_LIST_DIR}/../../src/BacnetLogger.cpp)
@@ -135,6 +140,8 @@ target_link_libraries(bacnet_write_hil_tests PRIVATE bacnet_portable)
 if(BUILD_TESTING)
   add_test(NAME bacnet_windows_tests COMMAND bacnet_windows_tests)
   add_test(NAME bacnet_cli_support_tests COMMAND bacnet_cli_support_tests)
+  add_test(NAME bacnet_subscribe_cov_protocol_tests
+    COMMAND bacnet_subscribe_cov_protocol_tests)
   add_test(NAME bacnet_write_property_tests COMMAND bacnet_write_property_tests)
   add_test(NAME bacnet_write_property_disabled_tests COMMAND bacnet_write_property_disabled_tests)
   add_test(NAME bacnet_priority_write_disabled_tests COMMAND bacnet_priority_write_disabled_tests)

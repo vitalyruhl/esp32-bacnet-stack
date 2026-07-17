@@ -238,6 +238,7 @@ struct BacnetSubscribeOptions {
   uint32_t covLifetimeSeconds = 60;
   uint32_t covRenewBeforeSeconds = 5;
   bool preferCov = false;
+  bool issueConfirmedNotifications = false;
   bool immediateFirstRead = true;
   bool notifyOnStatusChange = true;
 };
@@ -363,6 +364,7 @@ public:
   uint32_t lastUpdateMs() const;
   BacnetSubscriptionNotificationReason lastNotificationReason() const;
   BacnetCovSubscriptionStatus covStatus() const;
+  uint8_t covRejectReason() const;
 
   void stop();
   void requestRefresh();
@@ -415,6 +417,7 @@ private:
   bool covActive_ = false;
   bool covFallback_ = false;
   BacnetCovSubscriptionStatus covStatus_ = BacnetCovSubscriptionStatus::Pending;
+  uint8_t covRejectReason_ = 0xFF;
   uint32_t covRenewAtMs_ = 0;
 };
 

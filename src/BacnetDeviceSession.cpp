@@ -336,6 +336,10 @@ BacnetCovSubscriptionStatus BacnetPropertySubscription::covStatus() const {
   return covStatus_;
 }
 
+uint8_t BacnetPropertySubscription::covRejectReason() const {
+  return covRejectReason_;
+}
+
 void BacnetPropertySubscription::stop() {
   if (!active_) {
     return;
@@ -420,6 +424,8 @@ void BacnetPropertySubscription::moveFrom(BacnetPropertySubscription& other) {
   inFlightOperation_ = other.inFlightOperation_;
   covActive_ = other.covActive_;
   covFallback_ = other.covFallback_;
+  covStatus_ = other.covStatus_;
+  covRejectReason_ = other.covRejectReason_;
   covRenewAtMs_ = other.covRenewAtMs_;
 
   if (session_ != nullptr && session_->inFlightSubscription_ == &other) {
@@ -439,6 +445,8 @@ void BacnetPropertySubscription::moveFrom(BacnetPropertySubscription& other) {
   other.lastNotificationReason_ = BacnetSubscriptionNotificationReason::None;
   other.covActive_ = false;
   other.covFallback_ = false;
+  other.covStatus_ = BacnetCovSubscriptionStatus::Pending;
+  other.covRejectReason_ = 0xFF;
   other.covRenewAtMs_ = 0;
   other.callback_ = nullptr;
   other.userData_ = nullptr;
@@ -1637,8 +1645,9 @@ void BacnetDeviceSession::pollInFlightSubscription(uint32_t nowMs) {
 
   if (subscription.inFlightOperation_ ==
       BacnetPropertySubscription::Operation::SubscribeCov) {
-    const BacnetSubscribeCovResponseKind covStatus =
-      client_.pollSubscribeCov(subscription.inFlightInvokeId_);
+    uint8_t rejectReason = 0xFF;
+    const BacnetSubscribeCovResponseKind covStatus = client_.pollSubscribeCov(
+      subscription.inFlightInvokeId_, &rejectReason);
     if (covStatus == BacnetSubscribeCovResponseKind::Ack) {
       const uint32_t renewBefore = subscription.options_.covRenewBeforeSeconds;
       const uint32_t lifetime = subscription.options_.covLifetimeSeconds;
@@ -1662,6 +1671,7 @@ void BacnetDeviceSession::pollInFlightSubscription(uint32_t nowMs) {
           break;
         case BacnetSubscribeCovResponseKind::Reject:
           subscription.covStatus_ = BacnetCovSubscriptionStatus::Reject;
+          subscription.covRejectReason_ = rejectReason;
           break;
         case BacnetSubscribeCovResponseKind::Abort:
           subscription.covStatus_ = BacnetCovSubscriptionStatus::Abort;
@@ -1762,7 +1772,8 @@ bool BacnetDeviceSession::tryStartCovSubscription(
     return false;
   }
   const uint8_t invokeId = allocateInvokeId();
-  if (!client_.sendSubscribeCov(endpoint_, invokeId, subscription.objectId_, subscription.options_.covLifetimeSeconds, invokeId)) {
+  subscription.covRejectReason_ = 0xFF;
+  if (!client_.sendSubscribeCov(endpoint_, invokeId, subscription.objectId_, subscription.options_.covLifetimeSeconds, invokeId, subscription.options_.issueConfirmedNotifications)) {
     subscription.covFallback_ = true;
     subscription.covStatus_ = BacnetCovSubscriptionStatus::SendFailed;
     client_.logger().warn("BACnet/COV", "SubscribeCOV send failed; polling fallback");

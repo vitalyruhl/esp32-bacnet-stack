@@ -84,13 +84,15 @@ AV, BV, and MSV mean Analog Value, Binary Value, and Multi-State Value:
 .\04-read-msv.ps1 -Instance 2021
 .\05-subscribe-av200.ps1
 .\05-subscribe-av200.ps1 -Instance 250
+.\05-subscribe-av200.ps1 -DurationSeconds 10
 .\06-list-av.ps1
 .\06-list-av.ps1 -Target 192.168.10.20:47808 -DeviceId 5001
 ```
 
 The SubscribeCOV example displays only received COV values and does not fall
-back to polling. Stop it with Ctrl+C. Ctrl+C ends the local subscription runner;
-the available native API does not provide remote subscription cancellation.
+back to polling. Stop it with Ctrl+C, or use `-DurationSeconds` for a bounded
+local observation. The available native API does not provide remote subscription
+cancellation.
 
 Every script prints its resolved values before the native command. `-DryRun`
 loads and validates settings, prints those values and the native command, but

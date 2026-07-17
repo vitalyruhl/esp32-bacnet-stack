@@ -34,6 +34,7 @@ struct CommandOptions {
   BacnetPropertyId property = BacnetPropertyId::ObjectName;
   uint32_t maximum = 20;
   uint32_t lifetimeSeconds = 60;
+  uint32_t durationSeconds = 0;
   uint8_t priority = 0;
   bool execute = false;
   bool hasPriority = false;
@@ -54,7 +55,7 @@ void printHelp(FILE* output = stdout) {
     "Usage:\n"
     "  bacnet-client --bind <local-ip> --device-id <id> [--broadcast <broadcast-ip>|--target <ip[:port]>] [--timeout-ms <milliseconds>] list [--max <count>] <object-selector>\n"
     "  bacnet-client --bind <local-ip> --device-id <id> [--broadcast <broadcast-ip>|--target <ip[:port]>] [--timeout-ms <milliseconds>] read [--verbose] <object.property>\n"
-    "  bacnet-client --bind <local-ip> --device-id <id> --target <ip[:port]> [--timeout-ms <milliseconds>] subscribe <AV-instance> [--lifetime-seconds <seconds>]\n"
+    "  bacnet-client --bind <local-ip> --device-id <id> --target <ip[:port]> [--timeout-ms <milliseconds>] subscribe <AV-instance> [--lifetime-seconds <seconds>] [--duration-seconds <seconds>]\n"
     "  bacnet-client --bind <local-ip> --device-id <id> --target <ip[:port]> [--timeout-ms <milliseconds>] priority-slot <BV-instance> --priority <1..16>\n"
     "  bacnet-client --bind <local-ip> --device-id <id> --target <ip[:port]> [--timeout-ms <milliseconds>] write-bv-priority <BV-instance> <active|inactive> --priority <1..16> --execute\n"
     "  bacnet-client --bind <local-ip> --device-id <id> --target <ip[:port]> [--timeout-ms <milliseconds>] relinquish-bv-priority <BV-instance> --priority <1..16> --execute\n"
@@ -97,6 +98,7 @@ bool parseArguments(int argc,
     else if (std::strcmp(argument, "--max") == 0 && index + 1 < argc) { if (!bacnetCliParseUnsigned(argv[++index], commandOptions.maximum)) return false; }
     else if (std::strcmp(argument, "--priority") == 0 && index + 1 < argc) { if (!parsePriority(argv[++index], commandOptions)) return false; }
     else if (std::strcmp(argument, "--lifetime-seconds") == 0 && index + 1 < argc) { if (!bacnetCliParseUnsigned(argv[++index], commandOptions.lifetimeSeconds) || commandOptions.lifetimeSeconds == 0) return false; }
+    else if (std::strcmp(argument, "--duration-seconds") == 0 && index + 1 < argc) { if (!bacnetCliParseUnsigned(argv[++index], commandOptions.durationSeconds) || commandOptions.durationSeconds == 0) return false; }
     else if (std::strcmp(argument, "--execute") == 0) commandOptions.execute = true;
     else if (std::strcmp(argument, "--verbose") == 0) options.verbose = true;
     else if (argument[0] != '-' && selectorText == nullptr) selectorText = argument;
@@ -157,6 +159,12 @@ int runRead(BacnetClient& client, const BacnetIpEndpoint& endpoint, const Bacnet
   if (status != BacnetNativeReadStatus::Ack) { std::fprintf(stderr, "[E] read %s failed: %s\n", bacnetPropertyName(commandOptions.property), bacnetNativeReadStatusText(status)); return resultExitCode(status); }
   char text[BacnetValue::kMaxTextLength] = {};
   if (options.verbose) { char object[24] = {}; std::printf("object=%s\nproperty=%s\nvalue=", bacnetNativeObjectToken(commandOptions.selector.object, object, sizeof(object)), bacnetPropertyName(commandOptions.property)); }
+  if (commandOptions.selector.object.type == static_cast<uint16_t>(BacnetObjectType::BinaryValue) &&
+      commandOptions.property == BacnetPropertyId::PresentValue &&
+      value.type == BacnetValueType::Enumerated) {
+    if (value.unsignedValue == 0) { std::puts("inactive"); return 0; }
+    if (value.unsignedValue == 1) { std::puts("active"); return 0; }
+  }
   std::puts(bacnetValueDisplayText(value, text, sizeof(text)));
   return 0;
 }
@@ -239,6 +247,15 @@ int covExitCode(BacnetCovSubscriptionStatus status) {
   return static_cast<int>(BacnetCliExitCode::RuntimeFailure);
 }
 
+void printCovFailure(const char* phase, const BacnetPropertySubscription& subscription) {
+  if (subscription.covStatus() == BacnetCovSubscriptionStatus::Reject) {
+    const uint8_t code = subscription.covRejectReason();
+    std::fprintf(stderr, "[E] SubscribeCOV %s: reject reason=%s code=%u; polling fallback is disabled\n", phase, BacnetProtocol::rejectReasonText(code), static_cast<unsigned>(code));
+    return;
+  }
+  std::fprintf(stderr, "[E] SubscribeCOV %s: %s; polling fallback is disabled\n", phase, covStatusText(subscription.covStatus()));
+}
+
 void printCovNotification(const BacnetSubscriptionNotification& notification) {
   if (!notification.hasValue || !notification.valueChanged) return;
   std::time_t now = std::time(nullptr);
@@ -256,6 +273,7 @@ int runSubscribe(BacnetDeviceSession& session, BacnetClient& client, const Comma
   options.preferCov = true;
   options.fallbackPollMs = 0;
   options.immediateFirstRead = false;
+  options.issueConfirmedNotifications = false;
   options.timeoutMs = timeoutMs;
   options.covLifetimeSeconds = commandOptions.lifetimeSeconds;
   options.covRenewBeforeSeconds = commandOptions.lifetimeSeconds > 5 ? 5 : 1;
@@ -266,17 +284,22 @@ int runSubscribe(BacnetDeviceSession& session, BacnetClient& client, const Comma
     client.idle();
   }
   if (subscription.covStatus() != BacnetCovSubscriptionStatus::Active) {
-    std::fprintf(stderr, "[E] SubscribeCOV failed: %s; polling fallback is disabled\n", covStatusText(subscription.covStatus()));
+    printCovFailure("failed", subscription);
     subscription.stop();
     return covExitCode(subscription.covStatus());
   }
   char object[24] = {};
   std::printf("SubscribeCOV active for %s. Press Ctrl+C to stop.\n", bacnetNativeObjectToken(commandOptions.selector.object, object, sizeof(object)));
   SetConsoleCtrlHandler(onConsoleControl, TRUE);
+  const uint32_t activeAt = client.nowMs();
   while (!gStopRequested) {
+    if (commandOptions.durationSeconds != 0 &&
+        client.nowMs() - activeAt >= commandOptions.durationSeconds * 1000UL) {
+      break;
+    }
     session.poll(subscription);
     if (subscription.covStatus() != BacnetCovSubscriptionStatus::Active) {
-      std::fprintf(stderr, "[E] SubscribeCOV renewal failed: %s; polling fallback is disabled\n", covStatusText(subscription.covStatus()));
+      printCovFailure("renewal failed", subscription);
       SetConsoleCtrlHandler(onConsoleControl, FALSE);
       subscription.stop();
       return covExitCode(subscription.covStatus());
@@ -305,7 +328,7 @@ int main(int argc, char* argv[]) {
   WindowsMonotonicClock clock;
   if (!runtime.begin() || !transport.setBindAddress(options.bindEndpoint)) { std::fputs("[E] Windows UDP initialization failed\n", stderr); return static_cast<int>(BacnetCliExitCode::RuntimeFailure); }
   BacnetClient client(transport, &clock);
-  if (!client.begin()) { std::fputs("[E] Windows UDP bind failed\n", stderr); return static_cast<int>(BacnetCliExitCode::RuntimeFailure); }
+  if (!client.begin(0)) { std::fputs("[E] Windows UDP bind failed\n", stderr); return static_cast<int>(BacnetCliExitCode::RuntimeFailure); }
   BacnetIpEndpoint endpoint;
   if (!bacnetNativeResolveDevice(client, transport, options, endpoint)) { std::fputs("[E] device resolution timeout or failure\n", stderr); client.end(); return static_cast<int>(BacnetCliExitCode::Timeout); }
   int result = 0;

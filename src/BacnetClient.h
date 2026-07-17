@@ -46,8 +46,10 @@ public:
                         uint32_t processId,
                         BacnetObjectId object,
                         uint32_t lifetimeSeconds,
-                        uint8_t invokeId = 1);
-  BacnetSubscribeCovResponseKind pollSubscribeCov(uint8_t expectedInvokeId);
+                        uint8_t invokeId = 1,
+                        bool issueConfirmedNotifications = false);
+  BacnetSubscribeCovResponseKind pollSubscribeCov(uint8_t expectedInvokeId,
+                                                  uint8_t* rejectReason = nullptr);
   bool pollCovNotification(BacnetCovNotification& notification);
   bool pollIAm(BacnetIAmDevice& device);
   bool sendReadProperty(const BacnetIpEndpoint& destination,

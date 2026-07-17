@@ -92,10 +92,11 @@ bool BacnetClient::sendSubscribeCov(const BacnetIpEndpoint& destination,
                                     uint32_t processId,
                                     BacnetObjectId object,
                                     uint32_t lifetimeSeconds,
-                                    uint8_t invokeId) {
+                                    uint8_t invokeId,
+                                    bool issueConfirmedNotifications) {
   uint8_t request[kMaxSubscribeCovRequestSize] = {};
   const size_t requestSize = BacnetProtocol::buildSubscribeCovRequest(
-    request, sizeof(request), processId, object, lifetimeSeconds);
+    request, sizeof(request), processId, object, lifetimeSeconds, issueConfirmedNotifications);
   if (!running_ || requestSize == 0)
     return false;
   request[8] = invokeId;
@@ -103,7 +104,7 @@ bool BacnetClient::sendSubscribeCov(const BacnetIpEndpoint& destination,
 }
 
 BacnetSubscribeCovResponseKind BacnetClient::pollSubscribeCov(
-  uint8_t expectedInvokeId) {
+  uint8_t expectedInvokeId, uint8_t* rejectReason) {
   if (!running_)
     return BacnetSubscribeCovResponseKind::None;
   uint8_t packet[kMaxDiscoveryPacketSize] = {};
@@ -112,7 +113,7 @@ BacnetSubscribeCovResponseKind BacnetClient::pollSubscribeCov(
   if (bytesRead == 0)
     return BacnetSubscribeCovResponseKind::None;
   return BacnetProtocol::classifySubscribeCovResponse(
-    packet, bytesRead, expectedInvokeId);
+    packet, bytesRead, expectedInvokeId, rejectReason);
 }
 
 bool BacnetClient::pollCovNotification(BacnetCovNotification& notification) {
