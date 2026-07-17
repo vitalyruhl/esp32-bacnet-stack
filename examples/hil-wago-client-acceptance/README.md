@@ -50,7 +50,7 @@ the WAGO compatibility observation, are documented in
 [`docs/bacnet-command-priority.md`](../../docs/bacnet-command-priority.md).
 
 `S02` is enabled by default in the local secrets template and reads
-`present-value` from configured AI/AO/AV, BI/BO/BV, MI/MO/MV objects without
+`present-value` from configured AI/AO/AV, BI/BO/BV, MI/MO/MSV objects without
 BACnet writes. Required objects fail the scenario when unreadable or decoded
 with an unexpected value type. Optional objects can be set to `0` in
 `src/secret/secrets.h` so they are skipped.
@@ -94,3 +94,13 @@ for both the ESP32 and Ethernet PHY.
 3. Mark required vs optional explicitly.
 4. Gate risky actions behind local opt-in flags in `src/secret/secrets.h`.
 5. Keep local writes disabled by default.
+
+## Internal Support Modules
+
+The scenario order and BACnet calls intentionally remain visible in
+`src/main.cpp`. Reusable HIL-only result accounting and output live in
+`HilScenarioRunner` and `HilResultOutput`; shared temporary-value selection and
+comparison for the ESP32 and native HIL runners live in
+`examples/common/BacnetHilPrioritySupport.h`. WiFi-only startup support is
+provided by `examples/common/Esp32WiFiNetwork.h` and does not own BACnet
+requests or writes.

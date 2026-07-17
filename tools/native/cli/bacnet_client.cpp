@@ -136,23 +136,6 @@ int writeExitCode(BacnetDeviceSessionWriteStatus status) {
   }
 }
 
-const char* writeStatusText(BacnetDeviceSessionWriteStatus status) {
-  switch (status) {
-    case BacnetDeviceSessionWriteStatus::Ack: return "ack";
-    case BacnetDeviceSessionWriteStatus::Error: return "error";
-    case BacnetDeviceSessionWriteStatus::NotCommandable: return "not-commandable";
-    case BacnetDeviceSessionWriteStatus::Reject: return "reject";
-    case BacnetDeviceSessionWriteStatus::Abort: return "abort";
-    case BacnetDeviceSessionWriteStatus::Timeout: return "timeout";
-    case BacnetDeviceSessionWriteStatus::SendFailed: return "send-failed";
-    case BacnetDeviceSessionWriteStatus::Disabled: return "disabled";
-    case BacnetDeviceSessionWriteStatus::InvalidArgument: return "invalid-argument";
-    case BacnetDeviceSessionWriteStatus::UnsupportedValue: return "unsupported-value";
-    case BacnetDeviceSessionWriteStatus::Busy: return "busy";
-  }
-  return "unknown";
-}
-
 int runRead(BacnetClient& client, const BacnetIpEndpoint& endpoint, const BacnetNativeCliOptions& options, const CommandOptions& commandOptions) {
   BacnetValue value;
   const BacnetNativeReadStatus status = bacnetNativeReadProperty(client, endpoint, BacnetPropertyRequest{commandOptions.selector.object, commandOptions.property}, options.timeoutMs, value);
@@ -169,29 +152,60 @@ int runRead(BacnetClient& client, const BacnetIpEndpoint& endpoint, const Bacnet
   return 0;
 }
 
-int runList(BacnetClient& client, const BacnetIpEndpoint& endpoint, const BacnetNativeCliOptions& options, const CommandOptions& commandOptions) {
-  BacnetValue value;
-  const BacnetObjectId device{static_cast<uint16_t>(BacnetObjectType::Device), options.deviceId};
-  BacnetNativeReadStatus status = bacnetNativeReadProperty(client, endpoint, BacnetPropertyRequest{device, BacnetPropertyId::ObjectList, 0}, options.timeoutMs, value);
-  if (status != BacnetNativeReadStatus::Ack || value.type != BacnetValueType::Unsigned) { std::fprintf(stderr, "[E] object-list failed: %s\n", status == BacnetNativeReadStatus::Ack ? "decode-error" : bacnetNativeReadStatusText(status)); return status == BacnetNativeReadStatus::Ack ? 1 : resultExitCode(status); }
-  std::vector<BacnetObjectId> matches;
-  for (uint32_t index = 1; index <= value.unsignedValue; ++index) {
-    BacnetValue entry;
-    status = bacnetNativeReadProperty(client, endpoint, BacnetPropertyRequest{device, BacnetPropertyId::ObjectList, index}, options.timeoutMs, entry);
-    if (status == BacnetNativeReadStatus::Ack && entry.type == BacnetValueType::ObjectIdentifier && entry.objectValue.type == commandOptions.selector.object.type && entry.objectValue.instance >= commandOptions.selector.object.instance) matches.push_back(entry.objectValue);
+int runList(BacnetDeviceSession& session,
+            const CommandOptions& commandOptions,
+            uint32_t timeoutMs) {
+  constexpr size_t kMaxScanResults = 600;
+  BacnetScannedObject scanned[kMaxScanResults];
+  const BacnetObjectType objectTypes[] = {
+    static_cast<BacnetObjectType>(commandOptions.selector.object.type)};
+  BacnetObjectScanOptions scanOptions;
+  scanOptions.maxObjectListEntries = kMaxScanResults;
+  scanOptions.readTimeoutMs = timeoutMs;
+  scanOptions.readObjectName = true;
+  scanOptions.readDescription = true;
+  scanOptions.readPresentValue = false;
+  bacnetSetObjectTypeFilter(scanOptions, objectTypes);
+
+  const BacnetObjectScanResult summary =
+    session.scanObjectList(scanOptions, scanned, kMaxScanResults);
+  if (summary.objectListCountStatus != BacnetDeviceSessionReadStatus::Ack) {
+    std::fprintf(stderr, "[E] object-list failed: %s\n",
+                 bacnetReadStatusText(summary.objectListCountStatus));
+    return static_cast<int>(BacnetCliExitCode::RuntimeFailure);
   }
-  std::sort(matches.begin(), matches.end(), [](const BacnetObjectId& left, const BacnetObjectId& right) { return left.instance < right.instance; });
-  size_t errors = 0; const size_t listed = std::min(matches.size(), static_cast<size_t>(commandOptions.maximum));
+
+  std::vector<const BacnetScannedObject*> matches;
+  for (size_t index = 0; index < summary.stored; ++index) {
+    if (scanned[index].objectId.instance >= commandOptions.selector.object.instance) {
+      matches.push_back(&scanned[index]);
+    }
+  }
+  std::sort(matches.begin(), matches.end(),
+            [](const BacnetScannedObject* left, const BacnetScannedObject* right) {
+              return left->objectId.instance < right->objectId.instance;
+            });
+
+  size_t errors = 0;
+  const size_t listed = std::min(matches.size(), static_cast<size_t>(commandOptions.maximum));
   for (size_t index = 0; index < listed; ++index) {
-    BacnetValue name, description;
-    const BacnetNativeReadStatus nameStatus = bacnetNativeReadProperty(client, endpoint, BacnetPropertyRequest{matches[index], BacnetPropertyId::ObjectName}, options.timeoutMs, name);
-    const BacnetNativeReadStatus descriptionStatus = bacnetNativeReadProperty(client, endpoint, BacnetPropertyRequest{matches[index], BacnetPropertyId::Description}, options.timeoutMs, description);
-    if (nameStatus != BacnetNativeReadStatus::Ack) ++errors;
-    if (descriptionStatus != BacnetNativeReadStatus::Ack) ++errors;
-    char token[24] = {}; char nameText[BacnetValue::kMaxTextLength] = {}; char descriptionText[BacnetValue::kMaxTextLength] = {};
-    std::printf("%s - Name: %s, Description: %s\n", bacnetNativeObjectToken(matches[index], token, sizeof(token)), nameStatus == BacnetNativeReadStatus::Ack ? bacnetValueDisplayText(name, nameText, sizeof(nameText)) : (std::string("<") + bacnetNativeReadStatusText(nameStatus) + ">").c_str(), descriptionStatus == BacnetNativeReadStatus::Ack ? bacnetValueDisplayText(description, descriptionText, sizeof(descriptionText)) : (std::string("<") + bacnetNativeReadStatusText(descriptionStatus) + ">").c_str());
+    const BacnetScannedObject& entry = *matches[index];
+    if (entry.objectNameStatus != BacnetDeviceSessionReadStatus::Ack) ++errors;
+    if (entry.descriptionStatus != BacnetDeviceSessionReadStatus::Ack) ++errors;
+    char token[24] = {};
+    char nameText[BacnetValue::kMaxTextLength] = {};
+    char descriptionText[BacnetValue::kMaxTextLength] = {};
+    std::printf("%s - Name: %s, Description: %s\n",
+                bacnetNativeObjectToken(entry.objectId, token, sizeof(token)),
+                entry.objectNameStatus == BacnetDeviceSessionReadStatus::Ack
+                  ? bacnetValueDisplayText(entry.objectName, nameText, sizeof(nameText))
+                  : (std::string("<") + bacnetReadStatusText(entry.objectNameStatus) + ">").c_str(),
+                entry.descriptionStatus == BacnetDeviceSessionReadStatus::Ack
+                  ? bacnetValueDisplayText(entry.description, descriptionText, sizeof(descriptionText))
+                  : (std::string("<") + bacnetReadStatusText(entry.descriptionStatus) + ">").c_str());
   }
-  std::fprintf(stderr, "Listed: %zu\nMatched: %zu\nProperty errors: %zu\n", listed, matches.size(), errors);
+  std::fprintf(stderr, "Listed: %zu\nMatched: %zu\nSkipped: %zu\nProperty errors: %zu\n",
+               listed, matches.size(), matches.size() - listed, errors);
   return 0;
 }
 
@@ -220,7 +234,7 @@ int runWrite(BacnetDeviceSession& session, const CommandOptions& commandOptions,
     status = object.writePresentValue(value, commandOptions.priority, timeoutMs);
   }
   if (status != BacnetDeviceSessionWriteStatus::Ack) {
-    std::fprintf(stderr, "[E] %s failed: %s\n", relinquish ? "relinquish" : "priority write", writeStatusText(status));
+    std::fprintf(stderr, "[E] %s failed: %s\n", relinquish ? "relinquish" : "priority write", bacnetWriteStatusText(status));
     return writeExitCode(status);
   }
   std::printf("%s BV%lu priority %u acknowledged\n", relinquish ? "relinquish" : "write", static_cast<unsigned long>(commandOptions.selector.object.instance), static_cast<unsigned>(commandOptions.priority));
@@ -332,11 +346,11 @@ int main(int argc, char* argv[]) {
   BacnetIpEndpoint endpoint;
   if (!bacnetNativeResolveDevice(client, transport, options, endpoint)) { std::fputs("[E] device resolution timeout or failure\n", stderr); client.end(); return static_cast<int>(BacnetCliExitCode::Timeout); }
   int result = 0;
-  if (command == Command::List) result = runList(client, endpoint, options, commandOptions);
-  else if (command == Command::Read) result = runRead(client, endpoint, options, commandOptions);
+  if (command == Command::Read) result = runRead(client, endpoint, options, commandOptions);
   else {
     BacnetDeviceSession session(client, options.deviceId, endpoint);
-    if (command == Command::Subscribe) result = runSubscribe(session, client, commandOptions, options.timeoutMs);
+    if (command == Command::List) result = runList(session, commandOptions, options.timeoutMs);
+    else if (command == Command::Subscribe) result = runSubscribe(session, client, commandOptions, options.timeoutMs);
     else if (command == Command::PrioritySlot) result = runPrioritySlot(session, commandOptions, options.timeoutMs);
     else result = runWrite(session, commandOptions, valueText, options.timeoutMs, command == Command::RelinquishBvPriority);
   }
