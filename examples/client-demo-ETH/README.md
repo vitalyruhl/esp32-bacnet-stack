@@ -10,9 +10,8 @@ password, and system/NTP settings. Address changes take effect after a reboot.
 The tracked first-run default is `192.168.2.127/24`; copy
 `src/secret/secrets.example.h` to `src/secret/secrets.h` to use other local
 defaults. The tracked WAGO test target uses Device instance `1682101` at
-`192.168.2.101:47808`. If the bounded object-list preview fills before a value
- category is stored, the demo probes its configured AV220, BV320, or MSV2020
- reference object for that missing category.
+`192.168.2.101:47808`. Configured monitoring cards remain independent from
+Object_List scanning; a failed scan retains its actual BACnet status.
 
 ## Monitoring and manual overrides
 
@@ -23,9 +22,11 @@ sent. The settings page provides the object instances, COV lifetime, and Write
 Priority (`1..16`).
 
 The bounded Property Browser reads up to eight advertised properties from a
-correctly addressed Device, AV, or MSV object. A small known-property profile
-is used only when that object's `Property_List` is explicitly unsupported.
-Each row preserves its typed value or its individual failure status, so an
+correctly addressed Device, AV, or MSV object. It advances through `queued`,
+`reading-property-list`, `reading-properties`, and a terminal state with at
+most one new BACnet request per loop step. A small known-property profile is
+used only when that object's `Property_List` is explicitly unsupported. Each
+row preserves its typed value or its individual failure status, so an
 unsupported property does not block the remaining rows.
 
 The shared **Manual Priority Overrides** card contains a numeric AV input,

@@ -16,10 +16,19 @@ public:
   // without moving large BacnetValue instances onto the Arduino loop stack.
   static constexpr size_t kMaxAdvertisedProperties = 64;
 
-  void reset();
-  void load(BacnetDeviceSession& session,
-            BacnetObjectId object,
-            uint32_t timeoutMs);
+  enum class LoadState : uint8_t {
+    Idle,
+    Queued,
+    ReadingPropertyList,
+    ReadingProperties,
+    Complete,
+    Failed,
+    Cancelled,
+  };
+
+  void reset(BacnetDeviceSession* session = nullptr);
+  bool queueLoad(BacnetObjectId object, uint32_t timeoutMs);
+  void cancelLoad(BacnetDeviceSession& session);
   void applyReadAllResult(BacnetObjectId object,
                           const BacnetPropertyReadAllResult& summary,
                           const BacnetPropertyReadResult* rows,
@@ -34,6 +43,9 @@ public:
   void poll(BacnetDeviceSession& session, uint32_t nowMs);
 
   bool loaded() const;
+  bool loading() const;
+  LoadState loadState() const;
+  const char* loadStateText() const;
   BacnetObjectId objectId() const;
   const BacnetPropertyReadAllResult& result() const;
   bool usingFallbackProperties() const;
@@ -47,9 +59,27 @@ private:
   BacnetObjectId object_;
   BacnetPropertyReadAllResult summary_;
   BacnetPropertyId advertisedProperties_[kMaxAdvertisedProperties];
+  BacnetPropertyId selectedProperties_[kMaxProperties];
   BacnetPropertyReadResult rows_[kMaxProperties];
+  BacnetPropertyReadJob readJob_;
+  uint32_t timeoutMs_ = 0;
+  size_t advertisedIndex_ = 0;
+  size_t selectedPropertyCount_ = 0;
+  size_t propertyReadIndex_ = 0;
+  bool readResultHandled_ = false;
   size_t rowCount_ = 0;
   size_t selectedIndex_ = kMaxProperties;
   bool usingFallbackProperties_ = false;
+  LoadState loadState_ = LoadState::Idle;
   std::unique_ptr<BacnetPropertySubscription> subscription_;
+
+  void beginQueuedLoad(BacnetDeviceSession& session, uint32_t nowMs);
+  void processPropertyListRead();
+  void processPropertyRead();
+  void startNextPropertyListRead(BacnetDeviceSession& session, uint32_t nowMs);
+  void startNextPropertyRead(BacnetDeviceSession& session, uint32_t nowMs);
+  void selectPropertiesFromAdvertised();
+  void selectFallbackProperties();
+  void failLoad(BacnetPropertyReadStatus status);
+  void completeLoad();
 };

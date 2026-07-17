@@ -1283,10 +1283,10 @@ void test_bacnet_device_session_from_endpoint_keeps_metadata() {
   TEST_ASSERT_EQUAL_PTR(&client, &session.client());
 }
 
-void test_bacnet_device_session_from_i_am_uses_default_port() {
+void test_bacnet_device_session_from_i_am_preserves_source_port() {
   BacnetClient client;
   BacnetIAmDevice device;
-  device.endpoint = IPAddress(192, 168, 1, 52);
+  device.endpoint = BacnetIpEndpoint(192, 168, 1, 52, 47809);
   device.deviceInstance = 9012;
   device.vendorId = 222;
 
@@ -1295,8 +1295,19 @@ void test_bacnet_device_session_from_i_am_uses_default_port() {
   TEST_ASSERT_EQUAL_UINT32(9012, session.deviceInstance());
   TEST_ASSERT_EQUAL_UINT8(192, session.endpoint().address[0]);
   TEST_ASSERT_EQUAL_UINT8(52, session.endpoint().address[3]);
-  TEST_ASSERT_EQUAL_UINT16(BacnetClient::kDefaultPort, session.port());
+  TEST_ASSERT_EQUAL_UINT16(47809, session.port());
   TEST_ASSERT_EQUAL_PTR(&client, &session.client());
+
+  BacnetDeviceSession overridden = BacnetDeviceSession::fromIAm(client, device, 47810);
+  TEST_ASSERT_EQUAL_UINT16(47810, overridden.port());
+}
+
+void test_bacnet_device_session_manual_endpoint_defaults_port() {
+  BacnetClient client;
+  BacnetDeviceSession session = BacnetDeviceSession::fromEndpoint(
+    client, 9013, BacnetIpEndpoint(192, 168, 1, 53));
+
+  TEST_ASSERT_EQUAL_UINT16(BacnetClient::kDefaultPort, session.port());
 }
 
 void test_bacnet_device_session_reports_send_failure() {
@@ -2176,7 +2187,8 @@ void setup() {
   RUN_TEST(test_bacnet_client_parses_property_list_entry_ack);
   RUN_TEST(test_bacnet_device_session_keeps_remote_device_metadata);
   RUN_TEST(test_bacnet_device_session_from_endpoint_keeps_metadata);
-  RUN_TEST(test_bacnet_device_session_from_i_am_uses_default_port);
+  RUN_TEST(test_bacnet_device_session_from_i_am_preserves_source_port);
+  RUN_TEST(test_bacnet_device_session_manual_endpoint_defaults_port);
   RUN_TEST(test_bacnet_device_session_reports_send_failure);
   RUN_TEST(test_bacnet_device_session_caches_failed_read_status);
   RUN_TEST(test_bacnet_property_exposes_cached_read_state);

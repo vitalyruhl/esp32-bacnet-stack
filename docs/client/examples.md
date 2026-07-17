@@ -30,10 +30,11 @@ It demonstrates:
 - Who-Is / I-Am discovery
 - session creation for the configured or first discovered BACnet target
 - non-blocking object-list scanning
-- bounded on-demand Property Browser for a discovered or configured Device, AV,
-  or MSV object (at most eight advertised properties; a known-property profile
-  is used only when the correctly addressed object's `Property_List` is
-  unsupported, and each row retains its own value or failure status)
+- bounded stepwise on-demand Property Browser for a discovered or configured
+  Device, AV, or MSV object (at most eight advertised properties; each loop
+  step starts at most one request; a known-property profile is used only when
+  the correctly addressed object's `Property_List` is unsupported, and each
+  row retains its own value or failure status)
 - selected-property SubscribeCOV with visible polling-fallback state
 - read-only value/status monitoring plus separately gated manual priority actions
 - BACnet logger forwarding into the demo GUI log

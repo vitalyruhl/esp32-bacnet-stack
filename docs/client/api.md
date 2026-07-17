@@ -28,7 +28,8 @@ Current public responsibilities:
 
 - represent one known BACnet/IP target bound to a caller-owned `BacnetClient`
 - create a session from known endpoint data through `fromEndpoint()`
-- create a session from discovered I-Am metadata through `fromIAm()`
+- create a session from discovered I-Am metadata through `fromIAm()`, retaining
+  the observed source port unless an explicit override is supplied
 - read one property through `readProperty()`
 - explicitly write one typed property through `writeProperty()` when enabled
   and optionally provide `BacnetWritePropertyOptions` for an array index and a
@@ -51,8 +52,9 @@ Current public responsibilities:
   then attempt every collected property without aborting on one property failure
 - inspect the latest collected/read property cache through `cachedProperty()`
 	and `cachedPropertyCount()`
-- inspect whether a session-owned scan or subscription request is in flight
-  through `isBusy()`
+- inspect whether a session-owned scan, subscription, or non-blocking property
+  read is in flight through `isBusy()`; advance only existing work through
+  `pollInFlight()` or a caller-owned `BacnetPropertyReadJob`
 - create `BacnetRemoteObject` wrappers through `object()`
 - run blocking object-list scans through `scanObjectList()`
 - run non-blocking object-list scans through `beginObjectListScan()`, `pollObjectListScan()`, and `cancelObjectListScan()`

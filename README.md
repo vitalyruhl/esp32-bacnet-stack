@@ -22,73 +22,40 @@ coverage are still evolving.
 
 ## Current Status
 
-BACnet/IP client APIs are already usable for common read-oriented use cases,
-including common process object present-value reads, cached-property access,
-read-only process-object helpers, and Analog Value metadata reads, while
-advanced discovery workflows and the server MVP remain future work. Write and
-priority helpers remain explicit compile-time opt-ins.
+The portable BACnet/IP client core is available for ESP32 WiFi, ESP32 Ethernet,
+and native Windows applications. BACnet/IP server support remains planned and
+is not an implemented server feature. `API` in the Windows column means the
+native C++ API is available but the productive CLI does not expose that feature
+directly.
 
-## Implementation Matrix
+| Function | ESP32 WiFi | ESP32 Ethernet | Windows |
+| --- | ---: | ---: | ---: |
+| Portable BACnet/IP client core | Yes | Yes | Yes |
+| Discovery / I-Am | Yes | Yes | Yes |
+| ReadProperty | Yes | Yes | Yes |
+| Object List / Property List | Yes | Yes | Yes |
+| Property cache | Yes | Yes | API |
+| SubscribeCOV | Yes | Yes | CLI |
+| Polling fallback | Yes | Yes | API |
+| WriteProperty / Priority | Opt-in | Opt-in | Opt-in CLI |
+| Rich Client Demo | Yes | Yes | No |
+| Native CLI | No | No | Yes |
+| BACnet Server | Planned | Planned | Planned |
 
-| Area | Capability | Status | Notes |
-| --- | --- | --- | --- |
-| Client discovery | Who-Is / I-Am discovery | ✅ Implemented | Core discovery flow available through `BacnetClient`. |
-| Windows CLI | Device discovery | ✅ Implemented | `bacnet-discover.exe` performs native BACnet/IP discovery. |
-| Windows CLI | Object listing | ✅ Implemented | `bacnet-client.exe list` reads and lists Device Object List entries. |
-| Windows CLI | Property read | ✅ Implemented | `bacnet-client.exe read` reads one selected property. |
-| Windows platform | UDP/Winsock transport | ✅ Implemented | Native UDP transport, monotonic clock, and console logging adapter. |
-| Windows platform | CMake/MSVC builds | ✅ Implemented | Native CMake targets and CTest coverage build with MSVC. |
-| Client discovery | Known-device session with `BacnetDeviceSession` | ✅ Implemented | Session keeps target identity, drives device-scoped calls, and can be created from a known endpoint or discovered `I-Am` metadata. |
-| ReadProperty / values | Generic ReadProperty model | ✅ Implemented | Object + property + optional array index request model is available. |
-| ReadProperty / values | Reading known device/object properties | ✅ Implemented | Works for selected known properties and known object IDs. |
-| ReadProperty / values | Client-side property cache access | ✅ Implemented | Cached value/status/last-update access is available through `BacnetDeviceSession`, `BacnetProperty`, and `BacnetRemoteObject` helpers. |
-| ReadProperty / values | Reading selected `present-value` from known AI/AO/AV, BI/BO/BV, and MI/MO/MSV objects | 🟢 Use-case ready | Suitable for practical value monitoring on known process objects. |
-| ReadProperty / values | Read-only process-object convenience helpers for known AI/AO/AV, BI/BO/BV, and MI/MO/MSV objects | 🟢 Use-case ready | `BacnetProcessObject` exposes typed convenience access to `present-value`, status snapshots, and cached helper reads for common process objects. |
-| ReadProperty / values | Read-only Analog Value metadata helpers | ✅ Implemented | Engineering units, min/max present-value, resolution, and COV increment reads are available for practical Analog Value monitoring flows. |
-| ReadProperty / values | Reading object health/status from `status-flags`, `event-state`, `reliability`, and `out-of-service` | 🟢 Use-case ready | `BacnetDeviceSession::readObjectStatus()` reads each property safely and preserves per-property status. |
-| ReadProperty / values | Derived Normal/Warning/Error/OutOfService/Unknown state | 🟡 Partial | Conservative derivation is implemented; warning/error hardware cases still need targeted HIL validation. |
-| ReadProperty / values | Displaying/forwarding selected BACnet values by fallback polling | 🟢 Use-case ready | Property subscription abstraction with fallback polling is available. |
-| ReadProperty / values | Typed value decode coverage | 🟡 Partial | Common value paths are supported; full coverage is still expanding. |
-| Object discovery | Device `object-list` scan | ✅ Implemented | Scans entries from the remote Device object's `object-list`. |
-| Object discovery | Blocking `scanObjectList()` | ✅ Implemented | Source-compatible convenience path remains available. |
-| Object discovery | Non-blocking object-list scan job | ✅ Implemented | Loop-driven scan job is available for responsive applications. |
-| Object discovery | Optional `object-name`, `description`, `present-value` reads during object-list scan | ✅ Implemented | Optional reads are supported during object-list scan flow. |
-| Object discovery | BACnet `property-list` discovery / safe read-all | ✅ Implemented | Caller-buffered APIs discover advertised properties where available and safely attempt each property with per-property status results. |
-| Subscriptions | Property subscription abstraction with fallback polling | 🟢 Use-case ready | Practical for cyclic update use cases without SubscribeCOV. |
-| Subscriptions | Real SubscribeCOV | ✅ Implemented | Registration, renewal, notification routing, and polling fallback are available. |
-| Writes | WriteProperty | ⚠️ Explicit opt-in | Typed client/session API; disabled by default with `ESP_BACNET_ENABLE_WRITE_PROPERTY=0`. |
-| Writes | Optional priority `1..16` | ⚠️ Explicit opt-in | `BacnetWritePropertyOptions` and Present Value priority helpers additionally require `ESP_BACNET_ENABLE_PRIORITY_WRITE=1`. |
-| Writes | Priority Array / Relinquish Default reads | ✅ Implemented | Typed complete and indexed Priority Array reads plus Relinquish Default reads. |
-| Writes | Single priority relinquish | ✅ Implemented | `relinquishPresentValue()` writes `Present_Value = Null` at an explicit priority. |
-| Writes | Strict and writable priority reset | ✅ Implemented | Strict reset covers `1..16`; writable reset documents and skips priority `6`. |
-| Examples / validation | `examples/client-object-list-scan-basic` | ✅ Implemented | Canonical serial-only basic client example for known-target property read, object-list scan, and fallback polling. |
-| Examples / validation | `examples/client-demo-wifi` | ✅ Implemented | WiFi client demo with discovery, bounded on-demand property browsing, selected-property subscriptions, and explicitly gated priority writes. |
-| Examples / validation | `examples/client-demo-ETH` | ✅ Implemented | WT32-ETH01 V1.4 Ethernet variant of the same shared demo with identical BACnet features. |
-| Examples / validation | `examples/hil-wago-client-acceptance` | 🧪 Local HIL validated | Local hardware acceptance runner for client scenarios. |
-| Examples / validation | HIL scenario S01 non-blocking object-list scan | 🧪 Local HIL validated | Validated on local ESP32/BACnet-IP target setup. |
-| Examples / validation | HIL scenario S02 common process present-value reads | 🧪 Local HIL validated | Validated on local ESP32/WAGO BACnet-IP target setup. |
-| Examples / validation | HIL scenario S03 common process object status reads | 🧪 Local HIL validated | Validated on local ESP32/WAGO BACnet-IP target setup. |
-| Examples / validation | Priority WriteProperty HIL | 🧪 Local HIL validated | ESP32 and internal Windows HIL paths were exercised with explicit targets; the Windows utility is not a productive user CLI. |
-| Examples / validation | Future HIL scenarios S04-S09 | ⏳ Planned | Present as scenario blocks and skipped by default unless enabled. |
-| Server / transports | BACnet/IP server role | 🧱 Placeholder | Placeholder role exists; not a completed server feature set. |
-| Server / transports | Server MVP | ⏳ Planned | Planned after client runtime completion milestones. |
-| Server / transports | BACnet MS/TP | ⏳ Planned | Scheduled for later transport work. |
-| Server / transports | Imported upstream bacnet-stack files | 🚫 Not implemented | Upstream files are not imported in this repository. |
+The WiFi and Ethernet rich demos share the same BACnet application and feature
+set. They differ only in network transport, board, and connection parameters.
+Both enable WriteProperty and priority writes explicitly at compile time;
+writes are never automatic and each UI action issues at most one request.
 
-Terminology:
+The Property Browser uses the remote Device `object-list` and object
+`property-list` as its primary discovery paths. It loads incrementally and
+shows at most eight rows to bound RAM and UI payloads; per-property failures
+remain visible instead of being reported as successful fallback data. See the
+[Client Guide](docs/client/README.md) for lifecycle and API details.
 
-- object-list scan means scanning entries from the remote Device object's `object-list`.
-- optional reads during object-list scan means selected reads such as `object-name`, `description`, and `present-value`.
-- property-list discovery/read-all means discovering advertised properties of an object where available and safely reading them with one status per property.
-- property cache access means using the latest stored value/status/update timestamps from earlier reads or fallback-polled subscriptions.
-- for simple use cases that need a few known variables and `present-value` display/forwarding, the current client API is already usable.
-
-Additional status notes:
-
-- A reusable BACnet logging layer is available with application-owned outputs.
-- BACnet/IP is the first target.
-- ESP32 Configuration Manager is not a core dependency. V4.4.0 is pinned only
-  by the two explicitly optional client-demo projects.
+Repository release `0.34.0` is dated 2026-07-17. Package metadata and the
+currently available installation version are listed in the
+[PlatformIO Registry](https://registry.platformio.org/libraries/vitaly.ruhl/ESP32%20BACnet%20Stack).
 
 ## Goals
 
@@ -158,8 +125,8 @@ wiring.
 | Path | Purpose |
 | --- | --- |
 | `src/` | Library headers and implementation |
-| `examples/client-demo-wifi/` | Optional WiFi GUI client demo with discovery, scan, and fallback-polled value updates |
-| `examples/client-demo-ETH/` | Optional WT32-ETH01 V1.4 Ethernet GUI client demo |
+| `examples/client-demo-wifi/` | Optional WiFi rich client demo using the shared BACnet/UI application |
+| `examples/client-demo-ETH/` | Optional WT32-ETH01 V1.4 Ethernet transport variant of the same rich client demo |
 | `examples/common/` | Shared example-only Ethernet and client-demo implementation helpers |
 | `examples/client-object-list-scan-basic/` | Canonical serial-only basic BACnet/IP client example |
 | `examples/hil-wago-client-acceptance/` | Local ESP32/WAGO client acceptance HIL runner |

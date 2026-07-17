@@ -1,208 +1,104 @@
 # Changelog
 
-This changelog is a curated overview.
+This changelog is a curated overview. The canonical library version is in
+`library.json`.
 
-## Unreleased
+## 0.34.0 - 2026-07-17
 
-## 0.34.0
+### Added
 
-- Added a bounded on-demand Property Browser to the shared WiFi/Ethernet client
-  demo. It reads up to eight advertised Device, AV, or MSV properties of a
-  bounded discovered/configured object; its known-property profile is used only
-  when the correctly addressed object explicitly reports `Property_List` as
-  unsupported. It preserves typed values and per-property statuses, including
-  canonical BACnet error names, and can subscribe to one explicitly selected
-  property with visible SubscribeCOV or polling-fallback state.
-- Added canonical portable BACnet error class/code names for known
-  ReadProperty errors such as `unknown-object (object/31)`,
-  `unknown-property (property/32)`, and `invalid-array-index`.
-- Aligned the canonical WiFi `usb` and Ethernet `eth` rich client demos: both
-  explicitly enable the existing WriteProperty and priority-write gates, while
-  the library itself remains read-only by default. Each manual priority action
-  remains a single explicit request and must be relinquished explicitly.
+- Added a bounded, typed Property Browser to the shared WiFi/Ethernet rich
+  client demo. It supports Device, Analog Value, and Multi-State Value objects,
+  keeps values typed, and retains a status for every attempted property.
+- Added a stepwise, non-blocking browser job with visible load states and at
+  most one new BACnet transaction per loop step.
+- Added focused Device/Object/Property List support, indexed native CLI array
+  selectors, and canonical portable BACnet error names.
+
+### Changed
+
+- Aligned the WiFi `usb` and Ethernet `eth` rich demos on one shared BACnet
+  feature set, including identical explicit WriteProperty and priority gates.
+- Made the actual I-Am endpoint, including a non-default UDP source port, the
+  discovered session endpoint.
+- Made remote Object List and Property List reads the primary discovery paths.
+  The browser keeps only eight visible rows for RAM and UI bounds.
+
+### Fixed
+
+- Replaced current test/demo references to the obsolete WAGO Device instance
+  `9001` with `1682101`; historical release notes remain unchanged.
+- Stopped treating `unknown-object` as an unsupported property.
+- Removed configured-object substitution from failed Object List scans, so the
+  original scan status remains visible.
+- Prevented browser loading from blocking the Arduino loop, placing large
+  browser results on the loop stack, or allowing background subscriptions to
+  overtake a queued browser job indefinitely.
+
+### Validated
+
+- Validated the rich client demos on ESP32 WiFi and WT32-ETH01 Ethernet against
+  WAGO Device `1682101`: 72 Object List entries, Device Property List 53,
+  AV200 Property List 37, and MSV2020 Property List 30.
+- Validated SubscribeCOV and polling, browser responsiveness, and heap/runtime
+  stability without a reset or watchdog event; Windows CMake/CTest also passed.
 
 ## 0.33.0
 
-- Extended the Ethernet client demo with AV200 SubscribeCOV monitoring, AV201
-  polling, and explicitly user-triggered Priority WriteProperty controls for
-  AV and BV. The Ethernet environment alone enables the write gates; no action
-  performs automatic writes or direct `priority-array` writes.
-- Added optional WriteProperty priority encoding for BACnet priorities `1..16`.
-- A missing priority retains the existing WriteProperty APDU shape; invalid
-  priority values are rejected before a datagram is sent.
-- Added typed Priority Array decoding, Priority Array and Relinquish Default
-  read helpers, explicit single relinquish, and strict/writable priority reset
-  helpers; writable reset documents its priority-6 compatibility skip.
-- Added local ESP32 and Windows HIL evidence for priority writes. Failed HIL
-  relinquish operations retain the primary status and make one bounded cleanup
-  attempt without claiming BACnet certification.
-- Added native Windows PowerShell examples for Who-Is/I-Am discovery, AV/BV/MSV
-  reads, SubscribeCOV, Analog Value listing, and one explicit Binary Value
-  priority-8 toggle/relinquish flow.
-- Added central example settings with optional local and explicit-file overrides
-  so discovery, read, list, and SubscribeCOV examples can run without a long
-  parameter list after one test-environment configuration step.
-- Extended `bacnet-client` with focused SubscribeCOV, priority-slot, and
-  explicitly authorized Binary Value priority commands. These remain bounded,
-  use the existing client/session APIs, and do not claim BACnet certification.
-- Added a read-only current Binary Value status indicator to the shared client
-  demo priority-override card. It uses the existing controlled polling path and
-  confirmed Present Value readbacks after an acknowledged BV action; it does
-  not send automatic writes or infer the displayed state from a requested write.
+- Expanded explicit WriteProperty with BACnet priority `1..16` support, typed
+  Priority Array and Relinquish Default reads, and single-priority relinquish.
+- Added native Windows PowerShell examples and productive CLI commands for
+  discovery, reads, Object List filtering, SubscribeCOV, and explicit
+  Priority-8 Binary Value write/relinquish flows.
+- Added shared rich-demo monitoring, SubscribeCOV, polling, and manual priority
+  controls. Writes remain compile-time and action opt-ins; no path writes a
+  Priority Array directly or performs automatic writes.
 
-## 0.32.0
+## 0.25.0 - 0.32.0
 
-- Added an explicit typed WriteProperty client/session API backed by one shared
-  portable BACnet application-value encoder.
-- WriteProperty remains compile-time disabled by default and reports explicit
-  disabled, argument, transport, ACK, Error, Reject, Abort, and timeout states.
-- Priority and priority-array writes remain unsupported.
+- Established the portable BACnet protocol/client core, Arduino adapters, and
+  native Windows Winsock transport, CMake targets, and productive CLI tools.
+- Added SubscribeCOV registration, notification routing, renewal, and polling
+  fallback, plus explicit typed WriteProperty with priority feature gates.
+- Split the optional rich client demo into WiFi and WT32-ETH01 Ethernet
+  projects while retaining a single shared BACnet/UI application.
 
-## 0.31.0
+## 0.24.1 - 0.24.2
 
-- Added sequential multi-interface auto-discovery for the native Windows
-  discovery CLI and a `compile-windows-binaries.cmd` Release/Debug helper.
+Published checkpoint: `0.24.2`.
 
-## 0.30.0
-
-- Added client-side SubscribeCOV registration, renewal, and notification routing
-  through the existing property subscription cache and callback path.
-- Retained source-compatible polling subscriptions and automatically falls back
-  to polling when SubscribeCOV fails, is rejected, aborts, or times out.
-
-## 0.29.0
-
-- Added the productive native Windows `bacnet-discover` and `bacnet-client`
-  executables for device discovery, filtered Object List output, and one
-  ReadProperty value at a time.
-- Added native CLI parsing for BACnet object selectors and property aliases,
-  direct target addressing, and CI smoke coverage for the productive tools.
-
-## 0.28.0
-
-- Added a native Windows Winsock UDP transport, monotonic clock, and console
-  log sink for the portable BACnet client foundation.
-- Added native CMake targets, localhost-only transport tests, and the
-  `bacnet-discover-smoke` Who-Is/I-Am validation program. Property reads,
-  object-list scans, and the complete discovery CLI remain planned for #75 and
-  #76.
-
-## 0.27.0
-
-- Separated portable client and server imports from Arduino/ESP32 adapters.
-- Added Arduino UDP transport, monotonic clock, endpoint conversion, and Serial
-  log-output adapters without adding a server runtime.
-- Added role-specific Arduino import compile fixtures and retained `EspBacnet.h`
-  as the legacy combined Arduino umbrella.
-
-## 0.26.0
-
-- Extracted Arduino-free BACnet protocol types, BVLC/NPDU/APDU codecs, and
-  common value/object display helpers into portable modules.
-- Added portable endpoint, datagram transport, monotonic-clock, and logging
-  boundaries while keeping the existing Arduino `BacnetClient` API as a
-  compatibility layer.
-- Added a CMake portable compile smoke target that builds the protocol modules
-  without Arduino or ESP32 headers. This is compile coverage only; native
-  Windows transport and CLI support remain planned work.
-- Made the WiFi demo's existing `ESP.h` compatibility wrapper available to
-  external PlatformIO dependencies so the pinned ConfigManager build remains
-  case-sensitive filesystem compatible.
-
-## 0.25.0
-
-- Split the optional client demo into explicit WiFi and WT32-ETH01 V1.4
-  Ethernet projects while keeping the shared BACnet/UI application in one
-  example-only source tree.
-- Added reusable WT32-ETH01 Ethernet startup support and `eth` build
-  environments for the basic client, WAGO HIL runner, and server demo.
-- Updated optional demo integration to ConfigManager V4.4.0 and documented the
-  local COM6/GPIO0 serial flashing workflow.
-- Kept BACnet UDP port behavior, Who-Is/I-Am discovery, and the existing WiFi
-  environments unchanged.
-- Stabilized the shared client demo's BACnet request ownership, aligned the
-  default WAGO Device instance, and retained configured AV/BV/MSV reference
-  objects when the bounded object-list preview fills before every category.
-
-## 0.24.2
-
-- Reduced stack pressure in BACnet value parsing paths in `BacnetClient` by
-  replacing `snprintf`-heavy numeric formatting with lightweight fixed-buffer
-  formatting helpers in hot read-property decode paths.
-- Increased loop task stack for
-  `examples/hil-wago-client-acceptance` (`ARDUINO_LOOP_STACK_SIZE=16384`) to
-  keep local HIL acceptance scenarios stable under larger runtime call chains.
-- Kept library and example version references aligned at `0.24.2`.
-
-## 0.24.1
-
-- Reduced `examples/client-demo` JSON/RAM pressure by limiting displayed
-  analog, binary, and multi-state object previews to three entries each,
-  shrinking the corresponding scan buffer, and compacting the watched Analog
-  Value card's default live payload.
-- Reduced additional heap churn in `examples/client-demo` by keeping BACnet
-  preview data source-backed where practical and filling BACnet runtime JSON
-  through grouped providers instead of per-field `String` callbacks.
-- Split the watched Analog Value object name and description in the compact
-  runtime card and shortened metadata output by avoiding repeated units.
-- Removed the inactive BME280 live sensor card from `examples/client-demo`,
-  moved its future BACnet-server draft into `examples/server-demo` behind a
-  disabled build block, and moved fallback object type defaults out of the main
-  client sketch.
-- Moved `examples/client-demo` BACnet logging bridge code out of the main
-  sketch, added a reusable BACnet log-level prefix helper, added a demo logging
-  compile switch, and limited the demo logger output slots to the single output
-  it uses.
-- Made the watched Analog Value metadata runtime field optional so the default
-  client demo payload avoids rebuilding and transferring that detail string on
-  each refresh.
-- Added small reusable BACnet helpers for fixed-buffer object names, scanned
-  labels, numeric value range checks, and object status predicates.
-- Documented the planned known-point client ergonomics direction without adding
-  a large new client facade or write API.
-- Kept object descriptions visible in compact object rows when they differ from
-  the selected display label.
-- Kept library and example version references aligned at `0.24.1`.
+- Reduced client-demo JSON, heap, and loop-stack pressure with bounded object
+  previews, compact runtime output, and fixed-buffer formatting.
+- Stabilized local HIL acceptance flows under larger client runtime chains.
 
 ## 0.24.0
 
-- Added read-only BACnet process-object convenience helpers, Analog Value
-  metadata helpers, reusable BACnet display text helpers, and a watched Analog
-  Value card in `examples/client-demo`.
-- Kept library and example version references aligned at `0.24.0` for the next
-  published release.
+- Added read-only BACnet process-object and Analog Value metadata helpers,
+  reusable display text, and the first watched Analog Value demo card.
 
 ## 0.19.0 - 0.23.0
 
-- Added `BacnetDeviceSession::fromEndpoint()` and `fromIAm()`, client-side
-  property cache storage/access helpers, and
-  `readAllAdvertisedProperties()` support for property-list-driven read-all
-  flows.
-- Established `examples/client-object-list-scan-basic` as the canonical
-  serial-only client example and aligned `examples/client-demo` labels,
-  diagnostics, read-only browser behavior, and `Scan / Rescan` flow with the
-  current client scope.
-- Introduced compile-time write feature gates and kept library/example version
-  references aligned through the published `0.23.0` release.
+Published checkpoint: `0.23.0`.
+
+- Added `BacnetDeviceSession` endpoint/I-Am construction, property cache
+  access, advertised-property reads, and the canonical basic Object List
+  client example.
+- Introduced compile-time write feature gates and aligned the early demo scan,
+  diagnostics, and read-only browser behavior with the client scope.
 
 ## 0.13.0 - 0.18.0
 
-- Added fallback-polled property subscriptions, reusable BACnet display/status
-  helpers, non-blocking and blocking object-list scan flows, and common
-  process-object present-value/status coverage for AI/AO/AV, BI/BO/BV, and
-  MI/MO/MSV.
-- Added safe property-list discovery/read-all support, the first read-only
-  object health view in `examples/client-demo`, and release backcheck tooling
-  for the published `0.18.0` PlatformIO package.
-- Extended the local WAGO HIL acceptance runner with `S01` object-list scan,
-  `S02` common process present-value reads, and `S03` common process status
-  reads while keeping write paths disabled by default.
+Published checkpoint: `0.18.0`.
+
+- Added polling subscriptions, object-list scans, common process-object value
+  and status helpers, and safe Property List discovery/read-all behavior.
+- Extended local WAGO HIL coverage for scans, common value reads, and object
+  health while retaining write paths disabled by default.
 
 ## 0.1.0 - 0.12.0
 
 - Built the initial BACnet/IP client foundation: discovery, generic
-  `ReadProperty`, logging, `BacnetDeviceSession`, `BacnetRemoteObject`,
-  `BacnetProperty`, blocking Device `object-list` scan support, and the first
-  serial-only object-list validation example.
-- Established the ESP32/PlatformIO project scaffold with examples, tests,
-  documentation, and the early BACnet client demo validation flow.
+  ReadProperty, logging, `BacnetDeviceSession`, `BacnetRemoteObject`,
+  `BacnetProperty`, and the first serial Object List example.
+- Established the ESP32/PlatformIO project scaffold, tests, documentation, and
+  early client-demo validation flow.

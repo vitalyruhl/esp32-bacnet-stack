@@ -9,6 +9,7 @@
 
 class BacnetDeviceSession;
 class BacnetObjectListScanJob;
+class BacnetPropertyReadJob;
 class BacnetProcessObject;
 class BacnetProperty;
 class BacnetRemoteObject;
@@ -336,7 +337,12 @@ struct BacnetPropertyReadResult {
   BacnetPropertyId propertyId = BacnetPropertyId::ObjectName;
   BacnetPropertyReadStatus status = BacnetPropertyReadStatus::Skipped;
   BacnetValue value;
+  uint32_t errorClass = 0;
+  uint32_t errorCode = 0;
 };
+
+bool bacnetPropertyIdFromPropertyListValue(const BacnetValue& value,
+                                           BacnetPropertyId& propertyId);
 
 inline const char* bacnetPropertyReadStatusText(
   const BacnetPropertyReadResult& result) {
@@ -481,7 +487,9 @@ public:
   static BacnetDeviceSession fromIAm(
     BacnetClient& client,
     const BacnetIAmDevice& device,
-    uint16_t port = BacnetClient::kDefaultPort);
+    // Preserve the endpoint observed in I-Am unless a caller explicitly
+    // supplies a non-zero override.
+    uint16_t portOverride = 0);
 
   BacnetClient& client();
   const BacnetClient& client() const;
@@ -583,6 +591,8 @@ public:
     uint32_t arrayIndex = kBacnetNoArrayIndex) const;
   size_t cachedPropertyCount() const;
   bool isBusy() const;
+  // Advances an existing transaction only. It never starts a new request.
+  void pollInFlight(uint32_t nowMs = kUseClientClock);
   BacnetObjectScanResult scanObjectList(
     const BacnetObjectScanOptions& options,
     BacnetScannedObject* results,
@@ -595,6 +605,13 @@ public:
   void pollObjectListScan(BacnetObjectListScanJob& job,
                           uint32_t nowMs = kUseClientClock);
   void cancelObjectListScan(BacnetObjectListScanJob& job);
+  bool beginPropertyRead(BacnetPropertyReadJob& job,
+                         const BacnetPropertyRequest& request,
+                         uint32_t timeoutMs = kDefaultReadTimeoutMs,
+                         uint32_t nowMs = kUseClientClock);
+  void pollPropertyRead(const BacnetPropertyReadJob& job,
+                        uint32_t nowMs = kUseClientClock);
+  void cancelPropertyRead(BacnetPropertyReadJob& job);
   void poll(BacnetPropertySubscription& subscription,
             uint32_t nowMs = kUseClientClock);
   void poll(BacnetPropertySubscription* subscriptions,
@@ -604,6 +621,7 @@ public:
 private:
   friend class BacnetPropertySubscription;
   friend class BacnetObjectListScanJob;
+  friend class BacnetPropertyReadJob;
 #if defined(UNIT_TEST)
   friend void test_bacnet_property_cache_keeps_value_after_failed_refresh();
 #endif
@@ -644,6 +662,14 @@ private:
   void failObjectListScan(BacnetObjectListScanJob& job,
                           BacnetDeviceSessionReadStatus status);
   void releaseObjectListScan(BacnetObjectListScanJob& job);
+  void pollInFlightPropertyRead(uint32_t nowMs);
+  void finishPropertyRead(BacnetPropertyReadJob& job,
+                          BacnetPropertyReadStatus status,
+                          const BacnetValue* value,
+                          uint32_t nowMs,
+                          uint32_t errorClass = 0,
+                          uint32_t errorCode = 0);
+  void releasePropertyRead(BacnetPropertyReadJob& job);
   void pollInFlightSubscription(uint32_t nowMs);
   bool tryStartCovSubscription(BacnetPropertySubscription& subscription,
                                uint32_t nowMs);
@@ -665,6 +691,7 @@ private:
   uint8_t nextInvokeId_ = 1;
   BacnetPropertySubscription* inFlightSubscription_ = nullptr;
   BacnetObjectListScanJob* inFlightObjectListScan_ = nullptr;
+  BacnetPropertyReadJob* inFlightPropertyRead_ = nullptr;
   size_t roundRobinSubscriptionIndex_ = 0;
   BacnetCachedProperty propertyCache_[kMaxCachedProperties];
   bool propertyCacheUsed_[kMaxCachedProperties] = {};
@@ -843,4 +870,93 @@ private:
   size_t currentStoreIndex_ = 0;
   bool hasCurrentStoreIndex_ = false;
   bool truncationLogged_ = false;
+};
+
+// A single non-blocking ReadProperty operation. It intentionally owns no
+// transport or storage outside its one typed BACnet value, so callers can
+// compose bounded state machines without duplicating protocol handling.
+enum class BacnetPropertyReadJobStatus : uint8_t {
+  Idle,
+  Active,
+  Complete,
+  Failed,
+  Cancelled,
+};
+
+inline const char* bacnetPropertyReadJobStatusText(
+  BacnetPropertyReadJobStatus status) {
+  switch (status) {
+    case BacnetPropertyReadJobStatus::Idle:
+      return "idle";
+    case BacnetPropertyReadJobStatus::Active:
+      return "active";
+    case BacnetPropertyReadJobStatus::Complete:
+      return "complete";
+    case BacnetPropertyReadJobStatus::Failed:
+      return "failed";
+    case BacnetPropertyReadJobStatus::Cancelled:
+      return "cancelled";
+  }
+  return "unknown";
+}
+
+class BacnetPropertyReadJob {
+public:
+  BacnetPropertyReadJob() = default;
+
+  BacnetPropertyReadJob(const BacnetPropertyReadJob&) = delete;
+  BacnetPropertyReadJob& operator=(const BacnetPropertyReadJob&) = delete;
+
+  BacnetPropertyReadJobStatus status() const {
+    return status_;
+  }
+  bool isIdle() const {
+    return status_ == BacnetPropertyReadJobStatus::Idle;
+  }
+  bool isActive() const {
+    return status_ == BacnetPropertyReadJobStatus::Active;
+  }
+  bool isComplete() const {
+    return status_ == BacnetPropertyReadJobStatus::Complete;
+  }
+  bool isFailed() const {
+    return status_ == BacnetPropertyReadJobStatus::Failed;
+  }
+  bool isCancelled() const {
+    return status_ == BacnetPropertyReadJobStatus::Cancelled;
+  }
+  bool isTerminal() const {
+    return isComplete() || isFailed() || isCancelled();
+  }
+  const BacnetPropertyRequest& request() const {
+    return request_;
+  }
+  BacnetPropertyReadStatus readStatus() const {
+    return readStatus_;
+  }
+  const BacnetValue& value() const {
+    return value_;
+  }
+  uint32_t errorClass() const {
+    return errorClass_;
+  }
+  uint32_t errorCode() const {
+    return errorCode_;
+  }
+
+private:
+  friend class BacnetDeviceSession;
+
+  void clear();
+
+  BacnetDeviceSession* session_ = nullptr;
+  BacnetPropertyReadJobStatus status_ = BacnetPropertyReadJobStatus::Idle;
+  BacnetPropertyRequest request_;
+  BacnetPropertyReadStatus readStatus_ = BacnetPropertyReadStatus::Busy;
+  BacnetValue value_;
+  uint32_t errorClass_ = 0;
+  uint32_t errorCode_ = 0;
+  uint32_t timeoutMs_ = 0;
+  uint8_t invokeId_ = 0;
+  uint32_t startedAtMs_ = 0;
 };
