@@ -41,6 +41,8 @@ target_compile_features(bacnet-write-hil PRIVATE cxx_std_17)
 target_compile_definitions(bacnet-write-hil PRIVATE
   ESP_BACNET_ENABLE_WRITE_PROPERTY=1
   ESP_BACNET_ENABLE_PRIORITY_WRITE=1)
+target_include_directories(bacnet-write-hil PRIVATE
+  ${CMAKE_CURRENT_LIST_DIR}/../../examples/common)
 target_link_libraries(bacnet-write-hil PRIVATE
   bacnet_client_priority_enabled bacnet_cli_common bacnet_windows)
 
@@ -134,7 +136,8 @@ target_compile_definitions(bacnet_write_hil_tests PRIVATE
   ESP_BACNET_ENABLE_PRIORITY_WRITE=1)
 target_include_directories(bacnet_write_hil_tests PRIVATE
   ${CMAKE_CURRENT_LIST_DIR}/../../src
-  ${CMAKE_CURRENT_LIST_DIR}/cli)
+  ${CMAKE_CURRENT_LIST_DIR}/cli
+  ${CMAKE_CURRENT_LIST_DIR}/../../examples/common)
 target_link_libraries(bacnet_write_hil_tests PRIVATE bacnet_portable)
 
 if(BUILD_TESTING)

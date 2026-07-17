@@ -97,7 +97,7 @@ This changelog is a curated overview.
 - Kept BACnet UDP port behavior, Who-Is/I-Am discovery, and the existing WiFi
   environments unchanged.
 - Stabilized the shared client demo's BACnet request ownership, aligned the
-  default WAGO Device instance, and retained configured AV/BV/MV reference
+  default WAGO Device instance, and retained configured AV/BV/MSV reference
   objects when the bounded object-list preview fills before every category.
 
 ## 0.24.2
@@ -166,7 +166,7 @@ This changelog is a curated overview.
 - Added fallback-polled property subscriptions, reusable BACnet display/status
   helpers, non-blocking and blocking object-list scan flows, and common
   process-object present-value/status coverage for AI/AO/AV, BI/BO/BV, and
-  MI/MO/MV.
+  MI/MO/MSV.
 - Added safe property-list discovery/read-all support, the first read-only
   object health view in `examples/client-demo`, and release backcheck tooling
   for the published `0.18.0` PlatformIO package.

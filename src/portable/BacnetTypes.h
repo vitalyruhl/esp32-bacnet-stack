@@ -113,6 +113,42 @@ enum class BacnetValueType : uint8_t {
   Unsupported,
 };
 
+// Stable technical names for BACnet values. Presentation layers may format a
+// value differently, but must not maintain a second mapping for its type.
+inline const char* bacnetValueTypeName(BacnetValueType type) {
+  switch (type) {
+    case BacnetValueType::Empty:
+      return "empty";
+    case BacnetValueType::Null:
+      return "null";
+    case BacnetValueType::Boolean:
+      return "boolean";
+    case BacnetValueType::Unsigned:
+      return "unsigned";
+    case BacnetValueType::Signed:
+      return "signed";
+    case BacnetValueType::Real:
+      return "real";
+    case BacnetValueType::BitString:
+      return "bit-string";
+    case BacnetValueType::Enumerated:
+      return "enumerated";
+    case BacnetValueType::CharacterString:
+      return "string";
+    case BacnetValueType::ObjectIdentifier:
+      return "object-id";
+    case BacnetValueType::ObjectIdentifierList:
+      return "object-id-list";
+    case BacnetValueType::Error:
+      return "error";
+    case BacnetValueType::NotCommandable:
+      return "not-commandable";
+    case BacnetValueType::Unsupported:
+      return "unsupported";
+  }
+  return "unknown";
+}
+
 struct BacnetValue {
   static constexpr size_t kMaxTextLength = 512;
   BacnetValueType type = BacnetValueType::Empty;

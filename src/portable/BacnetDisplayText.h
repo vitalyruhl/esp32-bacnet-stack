@@ -68,7 +68,7 @@ inline const char* bacnetObjectTypePrefix(uint16_t objectType) {
     case BacnetObjectType::MultiStateOutput:
       return "MO";
     case BacnetObjectType::MultiStateValue:
-      return "MV";
+      return "MSV";
     case BacnetObjectType::Device:
       return "DEV";
     default:
@@ -86,10 +86,18 @@ inline bool bacnetIsAnalogProcessObject(uint16_t objectType) {
          objectType == static_cast<uint16_t>(BacnetObjectType::AnalogValue);
 }
 
+inline bool bacnetIsAnalogProcessObject(BacnetObjectType objectType) {
+  return bacnetIsAnalogProcessObject(static_cast<uint16_t>(objectType));
+}
+
 inline bool bacnetIsBinaryProcessObject(uint16_t objectType) {
   return objectType == static_cast<uint16_t>(BacnetObjectType::BinaryInput) ||
          objectType == static_cast<uint16_t>(BacnetObjectType::BinaryOutput) ||
          objectType == static_cast<uint16_t>(BacnetObjectType::BinaryValue);
+}
+
+inline bool bacnetIsBinaryProcessObject(BacnetObjectType objectType) {
+  return bacnetIsBinaryProcessObject(static_cast<uint16_t>(objectType));
 }
 
 inline bool bacnetIsMultiStateProcessObject(uint16_t objectType) {
@@ -98,10 +106,18 @@ inline bool bacnetIsMultiStateProcessObject(uint16_t objectType) {
          objectType == static_cast<uint16_t>(BacnetObjectType::MultiStateValue);
 }
 
+inline bool bacnetIsMultiStateProcessObject(BacnetObjectType objectType) {
+  return bacnetIsMultiStateProcessObject(static_cast<uint16_t>(objectType));
+}
+
 inline bool bacnetIsProcessObject(uint16_t objectType) {
   return bacnetIsAnalogProcessObject(objectType) ||
          bacnetIsBinaryProcessObject(objectType) ||
          bacnetIsMultiStateProcessObject(objectType);
+}
+
+inline bool bacnetIsProcessObject(BacnetObjectType objectType) {
+  return bacnetIsProcessObject(static_cast<uint16_t>(objectType));
 }
 
 inline bool bacnetValueAsFloat(const BacnetValue& value, float& output) {

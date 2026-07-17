@@ -474,6 +474,7 @@ void test_bacnet_engineering_unit_symbol_mapping_is_small_and_safe() {
   TEST_ASSERT_FALSE(bacnetEngineeringUnitId(value, unitId));
 
   TEST_ASSERT_EQUAL_STRING("AV", bacnetObjectTypePrefix(BacnetObjectType::AnalogValue));
+  TEST_ASSERT_EQUAL_STRING("MSV", bacnetObjectTypePrefix(BacnetObjectType::MultiStateValue));
   TEST_ASSERT_EQUAL_STRING("DEV", bacnetObjectTypePrefix(BacnetObjectType::Device));
   TEST_ASSERT_EQUAL_STRING("OBJ", bacnetObjectTypePrefix(9999));
   TEST_ASSERT_TRUE(bacnetIsAnalogProcessObject(
@@ -504,6 +505,39 @@ void test_bacnet_engineering_unit_symbol_mapping_is_small_and_safe() {
   TEST_ASSERT_EQUAL_STRING("changed", bacnetSubscriptionReasonText(notification));
   notification.firstValue = true;
   TEST_ASSERT_EQUAL_STRING("first", bacnetSubscriptionReasonText(notification));
+}
+
+void test_bacnet_value_type_names_are_complete() {
+  TEST_ASSERT_EQUAL_STRING("empty", bacnetValueTypeName(BacnetValueType::Empty));
+  TEST_ASSERT_EQUAL_STRING("null", bacnetValueTypeName(BacnetValueType::Null));
+  TEST_ASSERT_EQUAL_STRING("boolean", bacnetValueTypeName(BacnetValueType::Boolean));
+  TEST_ASSERT_EQUAL_STRING("unsigned", bacnetValueTypeName(BacnetValueType::Unsigned));
+  TEST_ASSERT_EQUAL_STRING("signed", bacnetValueTypeName(BacnetValueType::Signed));
+  TEST_ASSERT_EQUAL_STRING("real", bacnetValueTypeName(BacnetValueType::Real));
+  TEST_ASSERT_EQUAL_STRING("bit-string", bacnetValueTypeName(BacnetValueType::BitString));
+  TEST_ASSERT_EQUAL_STRING("enumerated", bacnetValueTypeName(BacnetValueType::Enumerated));
+  TEST_ASSERT_EQUAL_STRING("string", bacnetValueTypeName(BacnetValueType::CharacterString));
+  TEST_ASSERT_EQUAL_STRING("object-id", bacnetValueTypeName(BacnetValueType::ObjectIdentifier));
+  TEST_ASSERT_EQUAL_STRING("object-id-list", bacnetValueTypeName(BacnetValueType::ObjectIdentifierList));
+  TEST_ASSERT_EQUAL_STRING("error", bacnetValueTypeName(BacnetValueType::Error));
+  TEST_ASSERT_EQUAL_STRING("not-commandable", bacnetValueTypeName(BacnetValueType::NotCommandable));
+  TEST_ASSERT_EQUAL_STRING("unsupported", bacnetValueTypeName(BacnetValueType::Unsupported));
+  TEST_ASSERT_EQUAL_STRING("unknown", bacnetValueTypeName(static_cast<BacnetValueType>(255)));
+}
+
+void test_bacnet_write_status_names_are_complete() {
+  TEST_ASSERT_EQUAL_STRING("ack", bacnetWriteStatusText(BacnetDeviceSessionWriteStatus::Ack));
+  TEST_ASSERT_EQUAL_STRING("error", bacnetWriteStatusText(BacnetDeviceSessionWriteStatus::Error));
+  TEST_ASSERT_EQUAL_STRING("not-commandable", bacnetWriteStatusText(BacnetDeviceSessionWriteStatus::NotCommandable));
+  TEST_ASSERT_EQUAL_STRING("reject", bacnetWriteStatusText(BacnetDeviceSessionWriteStatus::Reject));
+  TEST_ASSERT_EQUAL_STRING("abort", bacnetWriteStatusText(BacnetDeviceSessionWriteStatus::Abort));
+  TEST_ASSERT_EQUAL_STRING("timeout", bacnetWriteStatusText(BacnetDeviceSessionWriteStatus::Timeout));
+  TEST_ASSERT_EQUAL_STRING("send-failed", bacnetWriteStatusText(BacnetDeviceSessionWriteStatus::SendFailed));
+  TEST_ASSERT_EQUAL_STRING("disabled", bacnetWriteStatusText(BacnetDeviceSessionWriteStatus::Disabled));
+  TEST_ASSERT_EQUAL_STRING("invalid-argument", bacnetWriteStatusText(BacnetDeviceSessionWriteStatus::InvalidArgument));
+  TEST_ASSERT_EQUAL_STRING("unsupported-value", bacnetWriteStatusText(BacnetDeviceSessionWriteStatus::UnsupportedValue));
+  TEST_ASSERT_EQUAL_STRING("busy", bacnetWriteStatusText(BacnetDeviceSessionWriteStatus::Busy));
+  TEST_ASSERT_EQUAL_STRING("unknown", bacnetWriteStatusText(static_cast<BacnetDeviceSessionWriteStatus>(255)));
 }
 
 void test_bacnet_display_value_and_status_helpers() {
@@ -2021,6 +2055,8 @@ void setup() {
   RUN_TEST(test_bacnet_client_builds_ai_present_value_request_with_type_zero);
   RUN_TEST(test_bacnet_property_ids_cover_generic_access_slice);
   RUN_TEST(test_bacnet_engineering_unit_symbol_mapping_is_small_and_safe);
+  RUN_TEST(test_bacnet_value_type_names_are_complete);
+  RUN_TEST(test_bacnet_write_status_names_are_complete);
   RUN_TEST(test_bacnet_display_value_and_status_helpers);
   RUN_TEST(test_bacnet_client_builds_mv_present_value_request);
   RUN_TEST(test_bacnet_client_builds_generic_property_request);

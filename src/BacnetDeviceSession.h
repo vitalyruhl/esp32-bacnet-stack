@@ -102,6 +102,34 @@ enum class BacnetDeviceSessionWriteStatus : uint8_t {
   Busy,
 };
 
+inline const char* bacnetWriteStatusText(BacnetDeviceSessionWriteStatus status) {
+  switch (status) {
+    case BacnetDeviceSessionWriteStatus::Ack:
+      return "ack";
+    case BacnetDeviceSessionWriteStatus::Error:
+      return "error";
+    case BacnetDeviceSessionWriteStatus::NotCommandable:
+      return "not-commandable";
+    case BacnetDeviceSessionWriteStatus::Reject:
+      return "reject";
+    case BacnetDeviceSessionWriteStatus::Abort:
+      return "abort";
+    case BacnetDeviceSessionWriteStatus::Timeout:
+      return "timeout";
+    case BacnetDeviceSessionWriteStatus::SendFailed:
+      return "send-failed";
+    case BacnetDeviceSessionWriteStatus::Disabled:
+      return "disabled";
+    case BacnetDeviceSessionWriteStatus::InvalidArgument:
+      return "invalid-argument";
+    case BacnetDeviceSessionWriteStatus::UnsupportedValue:
+      return "unsupported-value";
+    case BacnetDeviceSessionWriteStatus::Busy:
+      return "busy";
+  }
+  return "unknown";
+}
+
 inline const char* bacnetReadStatusText(BacnetDeviceSessionReadStatus status) {
   switch (status) {
     case BacnetDeviceSessionReadStatus::Ack:

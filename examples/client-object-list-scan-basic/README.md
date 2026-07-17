@@ -11,7 +11,7 @@ The sketch demonstrates:
 - known-target `BacnetDeviceSession::fromEndpoint()` creation
 - one simple Device `object-name` read through `BacnetProperty`
 - object-list scan through `BacnetDeviceSession::scanObjectList()` limited to
-  common AI/AO/AV, BI/BO/BV, and MI/MO/MV process objects
+  common AI/AO/AV, BI/BO/BV, and MI/MO/MSV process objects
 - one fallback-polled `present-value` subscription chosen from scanned process
   objects
 
@@ -45,3 +45,7 @@ pio run -d examples/client-object-list-scan-basic -e eth
 The optional `eth-com6` environment adds the current local upload/monitor port.
 COM6 is not assumed on other systems. Hold GPIO0 low during reset to enter the
 WT32-ETH01 bootloader and use a stable supply for the ESP32 and Ethernet PHY.
+
+WiFi startup uses the reusable ESP32-only
+`examples/common/Esp32WiFiNetwork.h` helper. Transport and BACnet session
+creation remain directly visible in the example.

@@ -16,6 +16,7 @@
 #include <ExampleEthernet.h>
 #else
 #include <WiFi.h>
+#include <Esp32WiFiNetwork.h>
 #endif
 
 #include <cstddef>
@@ -77,29 +78,6 @@ bool parseIp(const char* text, IPAddress& address) {
   return text != nullptr && address.fromString(text);
 }
 
-#if !EXAMPLE_USE_ETHERNET
-bool configureStaticIp() {
-#if MY_USE_DHCP
-  return true;
-#else
-  IPAddress localIp;
-  IPAddress gateway;
-  IPAddress subnet;
-  IPAddress dns;
-  if (!parseIp(MY_WIFI_IP, localIp) || !parseIp(MY_GATEWAY_IP, gateway) ||
-      !parseIp(MY_SUBNET_MASK, subnet) || !parseIp(MY_DNS_IP, dns)) {
-    Serial.println("[E] Invalid static WiFi IP configuration");
-    return false;
-  }
-  if (!WiFi.config(localIp, gateway, subnet, dns)) {
-    Serial.println("[E] WiFi static IP configuration failed");
-    return false;
-  }
-  return true;
-#endif
-}
-#endif
-
 bool connectNetwork() {
 #if EXAMPLE_USE_ETHERNET
   const bacnet_example::EthernetConfig config{
@@ -117,30 +95,9 @@ bool connectNetwork() {
   Serial.println(bacnet_example::EthernetNetwork::localIp());
   return true;
 #else
-  WiFi.mode(WIFI_STA);
-  if (!configureStaticIp()) {
-    return false;
-  }
-
-  Serial.println("[I] Connecting WiFi");
-  WiFi.begin(MY_WIFI_SSID, MY_WIFI_PASSWORD);
-
-  const uint32_t startedAt = millis();
-  while (WiFi.status() != WL_CONNECTED &&
-         millis() - startedAt < kNetworkConnectTimeoutMs) {
-    delay(kNetworkRetryDelayMs);
-    Serial.print(".");
-  }
-  Serial.println();
-
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("[E] WiFi connection timed out");
-    return false;
-  }
-  Serial.println("[I] WiFi connected");
-  Serial.print("[I] local WiFi IP ");
-  Serial.println(WiFi.localIP());
-  return true;
+  const bacnet_example::WiFiNetworkConfig config{
+    MY_USE_DHCP, MY_WIFI_SSID, MY_WIFI_PASSWORD, MY_WIFI_IP, MY_GATEWAY_IP, MY_SUBNET_MASK, MY_DNS_IP, kNetworkConnectTimeoutMs, kNetworkRetryDelayMs, true};
+  return bacnet_example::Esp32WiFiNetwork::begin(config);
 #endif
 }
 

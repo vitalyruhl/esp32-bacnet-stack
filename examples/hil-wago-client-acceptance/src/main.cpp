@@ -4,8 +4,13 @@
 #include <ArduinoBacnetClient.h>
 #include <BacnetClient.h>
 #include <BacnetDeviceSession.h>
+#include <BacnetDisplayText.h>
 #include <BacnetRemoteObject.h>
+#include <BacnetHilPrioritySupport.h>
 #include <WiFiUdp.h>
+
+#include "HilResultOutput.h"
+#include "HilScenarioRunner.h"
 
 #ifndef EXAMPLE_USE_ETHERNET
 #define EXAMPLE_USE_ETHERNET 0
@@ -16,6 +21,7 @@
 #include <ExampleEthernet.h>
 #else
 #include <WiFi.h>
+#include <Esp32WiFiNetwork.h>
 #endif
 
 #if __has_include("secret/secrets.h")
@@ -252,6 +258,8 @@
 
 namespace {
 
+using namespace bacnet_hil;
+
 constexpr uint32_t kNetworkConnectTimeoutMs = 30000;
 constexpr uint32_t kNetworkRetryDelayMs = 250;
 constexpr uint32_t kScanTimeoutMs = 90000;
@@ -262,21 +270,6 @@ constexpr uint8_t kPriorityWriteObservationCount = 3;
 constexpr uint8_t kPriorityWritePriority = 8;
 constexpr uint32_t kMaxObjectListEntries = 600;
 constexpr size_t kMaxScanResults = 40;
-enum class ScenarioOutcome : uint8_t {
-  Pass,
-  Fail,
-  Skip,
-};
-
-struct ScenarioSummary {
-  uint32_t total = 0;
-  uint32_t pass = 0;
-  uint32_t fail = 0;
-  uint32_t skip = 0;
-  uint32_t requiredEnabled = 0;
-  uint32_t requiredFailed = 0;
-};
-
 struct S02TargetSpec {
   const char* label = "";
   BacnetObjectType type = BacnetObjectType::AnalogValue;
@@ -290,66 +283,14 @@ struct PriorityWriteTarget {
   uint32_t instance = 0;
 };
 
-const char* scenarioOutcomeText(ScenarioOutcome outcome);
-
-const char* bacnetValueTypeText(BacnetValueType type) {
-  switch (type) {
-    case BacnetValueType::Empty:
-      return "empty";
-    case BacnetValueType::Null:
-      return "null";
-    case BacnetValueType::Boolean:
-      return "boolean";
-    case BacnetValueType::Unsigned:
-      return "unsigned";
-    case BacnetValueType::Signed:
-      return "signed";
-    case BacnetValueType::Real:
-      return "real";
-    case BacnetValueType::BitString:
-      return "bit-string";
-    case BacnetValueType::Enumerated:
-      return "enumerated";
-    case BacnetValueType::CharacterString:
-      return "string";
-    case BacnetValueType::ObjectIdentifier:
-      return "object-id";
-    case BacnetValueType::ObjectIdentifierList:
-      return "object-id-list";
-    case BacnetValueType::Error:
-      return "error";
-    case BacnetValueType::Unsupported:
-      return "unsupported";
-  }
-  return "unknown";
-}
-
-bool isAnalogProcessObjectType(BacnetObjectType type) {
-  return type == BacnetObjectType::AnalogInput ||
-         type == BacnetObjectType::AnalogOutput ||
-         type == BacnetObjectType::AnalogValue;
-}
-
-bool isBinaryProcessObjectType(BacnetObjectType type) {
-  return type == BacnetObjectType::BinaryInput ||
-         type == BacnetObjectType::BinaryOutput ||
-         type == BacnetObjectType::BinaryValue;
-}
-
-bool isMultiStateProcessObjectType(BacnetObjectType type) {
-  return type == BacnetObjectType::MultiStateInput ||
-         type == BacnetObjectType::MultiStateOutput ||
-         type == BacnetObjectType::MultiStateValue;
-}
-
 bool hasExpectedPresentValueType(BacnetObjectType type, const BacnetValue& value) {
-  if (isAnalogProcessObjectType(type)) {
+  if (bacnetIsAnalogProcessObject(type)) {
     return value.type == BacnetValueType::Real;
   }
-  if (isBinaryProcessObjectType(type)) {
+  if (bacnetIsBinaryProcessObject(type)) {
     return value.type == BacnetValueType::Enumerated;
   }
-  if (isMultiStateProcessObjectType(type)) {
+  if (bacnetIsMultiStateProcessObject(type)) {
     return value.type == BacnetValueType::Unsigned ||
            value.type == BacnetValueType::Enumerated;
   }
@@ -357,13 +298,13 @@ bool hasExpectedPresentValueType(BacnetObjectType type, const BacnetValue& value
 }
 
 const char* expectedPresentValueTypeText(BacnetObjectType type) {
-  if (isAnalogProcessObjectType(type)) {
+  if (bacnetIsAnalogProcessObject(type)) {
     return "real";
   }
-  if (isBinaryProcessObjectType(type)) {
+  if (bacnetIsBinaryProcessObject(type)) {
     return "enumerated";
   }
-  if (isMultiStateProcessObjectType(type)) {
+  if (bacnetIsMultiStateProcessObject(type)) {
     return "unsigned-or-enumerated";
   }
   return "unknown";
@@ -390,7 +331,7 @@ void printS02ObjectLine(ScenarioOutcome outcome, const S02TargetSpec& target, Ba
     Serial.print(" value=");
     Serial.print(value->displayText());
     Serial.print(" type=");
-    Serial.print(bacnetValueTypeText(value->type));
+    Serial.print(bacnetValueTypeName(value->type));
     if (!expectedTypeOk) {
       Serial.print(" expected=");
       Serial.print(expectedPresentValueTypeText(target.type));
@@ -409,102 +350,9 @@ bool completed = false;
 bool runtimeReady = false;
 IPAddress targetAddress;
 
-const char* scenarioOutcomeText(ScenarioOutcome outcome) {
-  switch (outcome) {
-    case ScenarioOutcome::Pass:
-      return "PASS";
-    case ScenarioOutcome::Fail:
-      return "FAIL";
-    default:
-      return "SKIP";
-  }
-}
-
 bool parseIp(const char* text, IPAddress& address) {
   return text != nullptr && address.fromString(text);
 }
-
-void printResult(const char* status, const char* message) {
-  Serial.print("[");
-  Serial.print(status);
-  Serial.print("] ");
-  Serial.println(message);
-}
-
-void printScenarioLine(ScenarioOutcome outcome, const char* id, const char* scenarioName, const char* detail) {
-  Serial.print("[");
-  Serial.print(scenarioOutcomeText(outcome));
-  Serial.print("] ");
-  Serial.print(id);
-  Serial.print(" ");
-  Serial.print(scenarioName);
-  if (detail != nullptr && detail[0] != '\0') {
-    Serial.print(" - ");
-    Serial.print(detail);
-  }
-  Serial.println();
-}
-
-void recordScenario(ScenarioSummary& summary, ScenarioOutcome outcome, bool required, bool enabled) {
-  ++summary.total;
-  if (enabled && required) {
-    ++summary.requiredEnabled;
-  }
-  if (outcome == ScenarioOutcome::Pass) {
-    ++summary.pass;
-    return;
-  }
-  if (outcome == ScenarioOutcome::Fail) {
-    ++summary.fail;
-    if (enabled && required) {
-      ++summary.requiredFailed;
-    }
-    return;
-  }
-  ++summary.skip;
-}
-
-void printFinalSummary(const ScenarioSummary& summary,
-                       ScenarioOutcome finalOutcome) {
-  Serial.print("[HIL] summary total=");
-  Serial.print(summary.total);
-  Serial.print(" pass=");
-  Serial.print(summary.pass);
-  Serial.print(" fail=");
-  Serial.print(summary.fail);
-  Serial.print(" skip=");
-  Serial.println(summary.skip);
-
-  Serial.print("[HIL] required-enabled=");
-  Serial.print(summary.requiredEnabled);
-  Serial.print(" required-failed=");
-  Serial.println(summary.requiredFailed);
-
-  printResult(scenarioOutcomeText(finalOutcome), "client acceptance complete");
-}
-
-#if !EXAMPLE_USE_ETHERNET
-bool configureStaticIp() {
-#if MY_USE_DHCP
-  return true;
-#else
-  IPAddress localIp;
-  IPAddress gateway;
-  IPAddress subnet;
-  IPAddress dns;
-  if (!parseIp(MY_WIFI_IP, localIp) || !parseIp(MY_GATEWAY_IP, gateway) ||
-      !parseIp(MY_SUBNET_MASK, subnet) || !parseIp(MY_DNS_IP, dns)) {
-    printResult("FAIL", "invalid static WiFi IP configuration");
-    return false;
-  }
-  if (!WiFi.config(localIp, gateway, subnet, dns)) {
-    printResult("FAIL", "WiFi static IP configuration failed");
-    return false;
-  }
-  return true;
-#endif
-}
-#endif
 
 bool connectNetwork() {
 #if EXAMPLE_USE_ETHERNET
@@ -525,26 +373,12 @@ bool connectNetwork() {
   printResult("PASS", "Ethernet connected");
   return true;
 #else
-  WiFi.mode(WIFI_STA);
-  if (!configureStaticIp()) {
+  const bacnet_example::WiFiNetworkConfig config{
+    MY_USE_DHCP, MY_WIFI_SSID, MY_WIFI_PASSWORD, MY_WIFI_IP, MY_GATEWAY_IP, MY_SUBNET_MASK, MY_DNS_IP, kNetworkConnectTimeoutMs, kNetworkRetryDelayMs, false};
+  if (!bacnet_example::Esp32WiFiNetwork::begin(config)) {
+    printResult("FAIL", "WiFi connection failed");
     return false;
   }
-
-  Serial.println("[HIL] Connecting WiFi");
-  WiFi.begin(MY_WIFI_SSID, MY_WIFI_PASSWORD);
-
-  const uint32_t startedAt = millis();
-  while (WiFi.status() != WL_CONNECTED &&
-         millis() - startedAt < kNetworkConnectTimeoutMs) {
-    delay(kNetworkRetryDelayMs);
-    yield();
-  }
-
-  if (WiFi.status() != WL_CONNECTED) {
-    printResult("FAIL", "WiFi connection timed out");
-    return false;
-  }
-
   printResult("PASS", "WiFi connected");
   return true;
 #endif
@@ -1000,46 +834,8 @@ ScenarioOutcome runWritePropertyScenario() {
   return ScenarioOutcome::Fail;
 }
 
-const char* priorityWriteStatusText(BacnetDeviceSessionWriteStatus status) {
-  switch (status) {
-    case BacnetDeviceSessionWriteStatus::Ack:
-      return "ack";
-    case BacnetDeviceSessionWriteStatus::Error:
-      return "error";
-    case BacnetDeviceSessionWriteStatus::NotCommandable:
-      return "not-commandable";
-    case BacnetDeviceSessionWriteStatus::Reject:
-      return "reject";
-    case BacnetDeviceSessionWriteStatus::Abort:
-      return "abort";
-    case BacnetDeviceSessionWriteStatus::Timeout:
-      return "timeout";
-    case BacnetDeviceSessionWriteStatus::SendFailed:
-      return "send-failed";
-    case BacnetDeviceSessionWriteStatus::Disabled:
-      return "disabled";
-    case BacnetDeviceSessionWriteStatus::InvalidArgument:
-      return "invalid-argument";
-    case BacnetDeviceSessionWriteStatus::UnsupportedValue:
-      return "unsupported-value";
-    case BacnetDeviceSessionWriteStatus::Busy:
-      return "busy";
-  }
-  return "unknown";
-}
-
 bool priorityWriteValueEquals(const BacnetValue& left, const BacnetValue& right) {
-  if (left.type != right.type) {
-    return false;
-  }
-  if (left.type == BacnetValueType::Real) {
-    return fabsf(left.realValue - right.realValue) < 0.001F;
-  }
-  if (left.type == BacnetValueType::Enumerated ||
-      left.type == BacnetValueType::Unsigned) {
-    return left.unsignedValue == right.unsignedValue;
-  }
-  return left.type == BacnetValueType::Null;
+  return bacnet_example::hil::valuesEqual(left, right);
 }
 
 void printPriorityWriteValue(const PriorityWriteTarget& target,
@@ -1059,7 +855,7 @@ void printPriorityWriteValue(const PriorityWriteTarget& target,
   Serial.print(" value=");
   Serial.print(value.displayText());
   Serial.print(" type=");
-  Serial.println(bacnetValueTypeText(value.type));
+  Serial.println(bacnetValueTypeName(value.type));
 }
 
 void printPriorityWritePropertyStatus(const PriorityWriteTarget& target,
@@ -1111,7 +907,7 @@ void printPriorityWriteStatus(const PriorityWriteTarget& target,
   Serial.print(" ");
   Serial.print(stage);
   Serial.print(" status=");
-  Serial.println(priorityWriteStatusText(status));
+  Serial.println(bacnetWriteStatusText(status));
 }
 
 bool cleanupPriorityWrite(BacnetRemoteObject& object,
@@ -1138,7 +934,7 @@ void printPriorityWriteReset(const PriorityWriteTarget& target,
   Serial.print("[HIL] priority-write ");
   Serial.print(target.label);
   Serial.print(" reset status=");
-  Serial.print(priorityWriteStatusText(result.status));
+  Serial.print(bacnetWriteStatusText(result.status));
   Serial.print(" mode=");
   Serial.print(mode);
   Serial.print(" completed=");
@@ -1165,36 +961,8 @@ bool makePriorityWriteValue(BacnetRemoteObject& object,
                             const PriorityWriteTarget& target,
                             const BacnetValue& current,
                             BacnetValue& value) {
-  value = BacnetValue{};
-  if (target.type == BacnetObjectType::AnalogValue) {
-    value.type = BacnetValueType::Real;
-    value.realValue = 12.5F;
-    return true;
-  }
-  if (target.type == BacnetObjectType::BinaryValue &&
-      (current.type == BacnetValueType::Enumerated ||
-       current.type == BacnetValueType::Unsigned) &&
-      current.unsignedValue <= 1) {
-    value.type = current.type;
-    value.unsignedValue = current.unsignedValue == 0 ? 1 : 0;
-    return true;
-  }
-  if (target.type == BacnetObjectType::MultiStateValue &&
-      (current.type == BacnetValueType::Enumerated ||
-       current.type == BacnetValueType::Unsigned)) {
-    BacnetValue states;
-    if (object.readProperty(BacnetPropertyId::NumberOfStates, states, kScanReadTimeoutMs) != BacnetDeviceSessionReadStatus::Ack ||
-        (states.type != BacnetValueType::Enumerated &&
-         states.type != BacnetValueType::Unsigned) ||
-        states.unsignedValue < 2 ||
-        current.unsignedValue == 0 || current.unsignedValue > states.unsignedValue) {
-      return false;
-    }
-    value.type = current.type;
-    value.unsignedValue = current.unsignedValue == 1 ? 2 : 1;
-    return true;
-  }
-  return false;
+  return bacnet_example::hil::selectTemporaryValue(
+    object, target.type, current, kScanReadTimeoutMs, value);
 }
 
 bool observePriorityWriteValue(BacnetRemoteObject& object,
@@ -1487,27 +1255,6 @@ ScenarioOutcome runPresentValuePriorityWriteScenario() {
     }
   }
   return ScenarioOutcome::Pass;
-}
-
-void runScenario(ScenarioSummary& summary, const char* id, const char* scenarioName, bool enabled, bool required, ScenarioOutcome (*scenarioRunner)(), const char* skipReason) {
-  if (!enabled) {
-    printScenarioLine(ScenarioOutcome::Skip, id, scenarioName, skipReason);
-    recordScenario(summary, ScenarioOutcome::Skip, required, false);
-    return;
-  }
-
-  const ScenarioOutcome outcome = scenarioRunner();
-  const char* detail = nullptr;
-  if (outcome == ScenarioOutcome::Pass) {
-    detail = "completed";
-  } else if (outcome == ScenarioOutcome::Fail) {
-    detail = "failed";
-  } else {
-    detail = "skipped";
-  }
-
-  printScenarioLine(outcome, id, scenarioName, detail);
-  recordScenario(summary, outcome, required, true);
 }
 
 ScenarioOutcome runAcceptanceRunner() {
