@@ -26,6 +26,7 @@
 #endif
 
 #include "BacnetDemoFallbackObjects.h"
+#include "BacnetDemoBinaryValueStatus.h"
 #include "BacnetDemoFormat.h"
 #include "BacnetDemoLogging.h"
 #include "BacnetDemoWatchedAnalogValue.h"
@@ -85,17 +86,17 @@ extern ConfigManagerClass ConfigManager;
 static cm::CoreSettings& coreSettings = cm::CoreSettings::instance();
 static cm::CoreSystemSettings& systemSettings = coreSettings.system;
 static cm::CoreNtpSettings& ntpSettings = coreSettings.ntp;
+static Config<int> bacnetWritePriority{ConfigOptions<int>{.key = "BacnetWritePriority", .name = "Write Priority", .category = "BACnet Override", .defaultValue = 8, .showInWeb = true, .sortOrder = 10}};
+static Config<int> bacnetOverrideAvInstance{ConfigOptions<int>{.key = "BacnetOverrideAV", .name = "AV Override Instance", .category = "BACnet Override", .defaultValue = 200, .showInWeb = true, .sortOrder = 20}};
+static Config<int> bacnetPollingAvInstance{ConfigOptions<int>{.key = "BacnetPollingAV", .name = "AV Polling Instance", .category = "BACnet Override", .defaultValue = 201, .showInWeb = true, .sortOrder = 30}};
+static Config<int> bacnetOverrideBvInstance{ConfigOptions<int>{.key = "BacnetOverrideBV", .name = "BV Override Instance", .category = "BACnet Override", .defaultValue = 320, .showInWeb = true, .sortOrder = 40}};
+static Config<int> bacnetCovLifetime{ConfigOptions<int>{.key = "BacnetCovLifetime", .name = "COV Lifetime Seconds", .category = "BACnet Override", .defaultValue = 120, .showInWeb = true, .sortOrder = 50}};
 #if BACNET_DEMO_USE_ETHERNET
 static Config<String> ethernetIp{ConfigOptions<String>{.key = "EthIP", .name = "IP Address", .category = "Ethernet", .defaultValue = String(""), .showInWeb = true, .sortOrder = 1}};
 static Config<String> ethernetSubnet{ConfigOptions<String>{.key = "EthSubnet", .name = "Subnet Mask", .category = "Ethernet", .defaultValue = String(""), .showInWeb = true, .sortOrder = 2}};
 static Config<String> ethernetGateway{ConfigOptions<String>{.key = "EthGateway", .name = "Gateway", .category = "Ethernet", .defaultValue = String(""), .showInWeb = true, .sortOrder = 3}};
 static Config<String> ethernetDns{ConfigOptions<String>{.key = "EthDNS", .name = "Primary DNS", .category = "Ethernet", .defaultValue = String(""), .showInWeb = true, .sortOrder = 4}};
 static Config<String> settingsPassword{ConfigOptions<String>{.key = "SettingsPass", .name = "Settings Password", .category = "System", .defaultValue = String(""), .showInWeb = true, .isPassword = true, .sortOrder = 2}};
-static Config<int> bacnetWritePriority{ConfigOptions<int>{.key = "BacnetWritePriority", .name = "Write Priority", .category = "BACnet Override", .defaultValue = 8, .showInWeb = true, .sortOrder = 10}};
-static Config<int> bacnetOverrideAvInstance{ConfigOptions<int>{.key = "BacnetOverrideAV", .name = "AV Override Instance", .category = "BACnet Override", .defaultValue = 200, .showInWeb = true, .sortOrder = 20}};
-static Config<int> bacnetPollingAvInstance{ConfigOptions<int>{.key = "BacnetPollingAV", .name = "AV Polling Instance", .category = "BACnet Override", .defaultValue = 201, .showInWeb = true, .sortOrder = 30}};
-static Config<int> bacnetOverrideBvInstance{ConfigOptions<int>{.key = "BacnetOverrideBV", .name = "BV Override Instance", .category = "BACnet Override", .defaultValue = 320, .showInWeb = true, .sortOrder = 40}};
-static Config<int> bacnetCovLifetime{ConfigOptions<int>{.key = "BacnetCovLifetime", .name = "COV Lifetime Seconds", .category = "BACnet Override", .defaultValue = 120, .showInWeb = true, .sortOrder = 50}};
 static bool ethernetWasConnected = false;
 static bool ethernetServicesStarted = false;
 #else
@@ -237,6 +238,10 @@ static BacnetDemoWatchedAnalogValue polledAnalogValue(
   BACNET_WATCHED_ANALOG_VALUE_INSTANCE + 1,
   kWatchedAnalogValuePollMs,
   kBacnetScanReadTimeoutMs);
+static BacnetDemoBinaryValueStatus overrideBinaryValueStatus(
+  BACNET_FALLBACK_BINARY_OBJECT_INSTANCE,
+  kWatchedAnalogValuePollMs,
+  kBacnetScanReadTimeoutMs);
 static float bacnetOverrideAnalogInput = 0.0F;
 static String bacnetOverrideStatus = "No manual action yet";
 static BacnetScannedObject scanBuffer[kBacnetScanResultCapacity];
@@ -346,6 +351,7 @@ static void resetBacnetPreviews() {
   bacnetStatusPreview = BacnetObjectStatusPreview{};
   watchedAnalogValue.reset("not read");
   polledAnalogValue.reset("not read");
+  overrideBinaryValueStatus.reset();
   activeBacnetVendorId = 0;
   bacnetScanStatus = "Scan not started";
   bacnetRescanSource = "";
@@ -790,11 +796,20 @@ static void fillWatchedAnalogRuntime(JsonObject& data) {
   data["polledAv_refresh"] = polledAnalogValue.refreshSummary();
   data["watchedAv_mode"] = watchedAnalogValue.updateModeSummary();
   data["polledAv_mode"] = polledAnalogValue.updateModeSummary();
+  String overrideBvObject = "BV";
+  overrideBvObject += String(overrideBinaryValueStatus.objectInstance());
+  data["override_bv_object"] = overrideBvObject;
+  String overrideBvState = overrideBinaryValueStatus.stateText();
+  if (overrideBinaryValueStatus.state() == BacnetDemoBinaryValueState::Unknown) {
+    overrideBvState += " (";
+    overrideBvState += overrideBinaryValueStatus.detailText();
+    overrideBvState += ")";
+  }
+  data["override_bv_state"] = overrideBvState;
   data["override_status"] = bacnetOverrideStatus;
 }
 
 static bool validOverrideConfiguration(uint8_t& priority) {
-#if BACNET_DEMO_USE_ETHERNET
   const int configured = bacnetWritePriority.get();
   if (configured < 1 || configured > 16) {
     bacnetOverrideStatus = "Invalid Write Priority: use 1..16";
@@ -802,11 +817,6 @@ static bool validOverrideConfiguration(uint8_t& priority) {
   }
   priority = static_cast<uint8_t>(configured);
   return activeBacnetSession != nullptr;
-#else
-  priority = 0;
-  bacnetOverrideStatus = "Feature unavailable outside the Ethernet demo";
-  return false;
-#endif
 }
 
 static void setOverrideWriteStatus(const char* action,
@@ -814,6 +824,15 @@ static void setOverrideWriteStatus(const char* action,
   bacnetOverrideStatus = action;
   bacnetOverrideStatus += ": ";
   bacnetOverrideStatus += bacnetWriteStatusText(status);
+}
+
+static void refreshOverrideBvStatusAfterWrite(
+  BacnetDeviceSessionWriteStatus writeStatus) {
+  if (!activeBacnetSession) {
+    return;
+  }
+  overrideBinaryValueStatus.readBackAfterWrite(
+    *activeBacnetSession, writeStatus);
 }
 
 static void writeOverrideAv() {
@@ -853,10 +872,18 @@ static void writeOverrideBv(bool active) {
   uint8_t priority = 0;
   if (!validOverrideConfiguration(priority))
     return;
+  overrideBinaryValueStatus.configure(
+    static_cast<uint32_t>(bacnetOverrideBvInstance.get()));
   BacnetValue value;
   value.type = BacnetValueType::Enumerated;
   value.unsignedValue = active ? 1U : 0U;
-  setOverrideWriteStatus(active ? "BV set 1" : "BV set 0", activeBacnetSession->object(BacnetObjectType::BinaryValue, static_cast<uint32_t>(bacnetOverrideBvInstance.get())).writePresentValue(value, priority, kBacnetScanReadTimeoutMs));
+  const BacnetDeviceSessionWriteStatus writeStatus =
+    activeBacnetSession->object(
+                         BacnetObjectType::BinaryValue,
+                         static_cast<uint32_t>(bacnetOverrideBvInstance.get()))
+      .writePresentValue(value, priority, kBacnetScanReadTimeoutMs);
+  setOverrideWriteStatus(active ? "BV set 1" : "BV set 0", writeStatus);
+  refreshOverrideBvStatusAfterWrite(writeStatus);
 #else
   bacnetOverrideStatus = "WriteProperty/Priority feature unavailable";
 #endif
@@ -868,7 +895,15 @@ static void relinquishOverrideBv() {
   uint8_t priority = 0;
   if (!validOverrideConfiguration(priority))
     return;
-  setOverrideWriteStatus("BV relinquish", activeBacnetSession->object(BacnetObjectType::BinaryValue, static_cast<uint32_t>(bacnetOverrideBvInstance.get())).relinquishPresentValue(priority, kBacnetScanReadTimeoutMs));
+  overrideBinaryValueStatus.configure(
+    static_cast<uint32_t>(bacnetOverrideBvInstance.get()));
+  const BacnetDeviceSessionWriteStatus writeStatus =
+    activeBacnetSession->object(
+                         BacnetObjectType::BinaryValue,
+                         static_cast<uint32_t>(bacnetOverrideBvInstance.get()))
+      .relinquishPresentValue(priority, kBacnetScanReadTimeoutMs);
+  setOverrideWriteStatus("BV relinquish", writeStatus);
+  refreshOverrideBvStatusAfterWrite(writeStatus);
 #else
   bacnetOverrideStatus = "WriteProperty/Priority feature unavailable";
 #endif
@@ -1016,7 +1051,6 @@ static void setupRuntimeUI() {
     .button("watchedAv_details", "Log to Serial", []() { logWatchedAnalogDetails(); })
     .order(50);
 
-#if BACNET_DEMO_USE_ETHERNET
   auto overrideGroup = ConfigManager.liveGroup("bacnetWatch")
                          .page("Sensors", 10)
                          .card("Manual Priority Overrides", 40)
@@ -1024,11 +1058,19 @@ static void setupRuntimeUI() {
   overrideGroup.floatInput("override_av_value", "AV Value", -1000000.0F, 1000000.0F, 0.0F, 3, []() { return bacnetOverrideAnalogInput; }, [](float value) { bacnetOverrideAnalogInput = value; }).order(10);
   overrideGroup.button("override_av_write", "Write AV", []() { writeOverrideAv(); }).order(20);
   overrideGroup.button("override_av_relinquish", "Relinquish AV", []() { relinquishOverrideAv(); }).order(21);
+  overrideGroup.boolValue("override_bv_active", []() {
+                 return overrideBinaryValueStatus.isActive();
+               })
+    .label("BV Active")
+    .onLabel("active")
+    .offLabel("inactive / unavailable")
+    .order(25);
+  addRuntimeTextField("bacnetWatch", "override_bv_object", "BV Object", "Sensors", "Manual Priority Overrides", "Explicit Actions", 26);
+  addRuntimeTextField("bacnetWatch", "override_bv_state", "BV Present Value", "Sensors", "Manual Priority Overrides", "Explicit Actions", 27);
   overrideGroup.button("override_bv_0", "BV Set 0", []() { writeOverrideBv(false); }).order(30);
   overrideGroup.button("override_bv_1", "BV Set 1", []() { writeOverrideBv(true); }).order(31);
   overrideGroup.button("override_bv_relinquish", "BV Relinquish", []() { relinquishOverrideBv(); }).order(32);
   addRuntimeTextField("bacnetWatch", "override_status", "Last Result", "Sensors", "Manual Priority Overrides", "Explicit Actions", 40);
-#endif
 }
 
 static void sendWhoIs() {
@@ -1514,6 +1556,17 @@ static void pollBacnetSubscriptions() {
 
   watchedAnalogValue.poll(*activeBacnetSession, now);
   polledAnalogValue.poll(*activeBacnetSession, now);
+  overrideBinaryValueStatus.configure(
+    static_cast<uint32_t>(bacnetOverrideBvInstance.get()));
+  overrideBinaryValueStatus.poll(*activeBacnetSession, now);
+}
+
+static void registerBacnetOverrideSettings() {
+  ConfigManager.addSetting(&bacnetWritePriority);
+  ConfigManager.addSetting(&bacnetOverrideAvInstance);
+  ConfigManager.addSetting(&bacnetPollingAvInstance);
+  ConfigManager.addSetting(&bacnetOverrideBvInstance);
+  ConfigManager.addSetting(&bacnetCovLifetime);
 }
 
 #if BACNET_DEMO_USE_ETHERNET
@@ -1528,11 +1581,6 @@ static void registerEthernetSettings() {
   ConfigManager.addSetting(&ethernetGateway);
   ConfigManager.addSetting(&ethernetDns);
   ConfigManager.addSetting(&settingsPassword);
-  ConfigManager.addSetting(&bacnetWritePriority);
-  ConfigManager.addSetting(&bacnetOverrideAvInstance);
-  ConfigManager.addSetting(&bacnetPollingAvInstance);
-  ConfigManager.addSetting(&bacnetOverrideBvInstance);
-  ConfigManager.addSetting(&bacnetCovLifetime);
 }
 
 static void startEthernetServices() {
@@ -1588,6 +1636,8 @@ void setup() {
   demoLogging.setup();
   configureBacnetAddresses();
 
+  registerBacnetOverrideSettings();
+
 #if BACNET_DEMO_USE_ETHERNET
   registerEthernetSettings();
 #else
@@ -1597,12 +1647,12 @@ void setup() {
   coreSettings.attachNtp(ConfigManager);
 
   ConfigManager.loadAll();
-#if BACNET_DEMO_USE_ETHERNET
   watchedAnalogValue.configure(
     static_cast<uint32_t>(bacnetOverrideAvInstance.get()), true, static_cast<uint32_t>(bacnetCovLifetime.get()));
   polledAnalogValue.configure(
     static_cast<uint32_t>(bacnetPollingAvInstance.get()), false, 0);
-#endif
+  overrideBinaryValueStatus.configure(
+    static_cast<uint32_t>(bacnetOverrideBvInstance.get()));
   setupNetworkDefaults();
 
   setupRuntimeUI();
