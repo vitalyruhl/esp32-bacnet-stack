@@ -16,15 +16,21 @@ target_compile_features(bacnet_cli_common PUBLIC cxx_std_17)
 target_include_directories(bacnet_cli_common PUBLIC
   ${CMAKE_CURRENT_LIST_DIR}/../../src
   ${CMAKE_CURRENT_LIST_DIR}/cli)
-target_link_libraries(bacnet_cli_common PUBLIC bacnet_client bacnet_windows iphlpapi)
+target_link_libraries(bacnet_cli_common PUBLIC bacnet_windows iphlpapi)
 
 add_executable(bacnet-discover cli/bacnet_discover.cpp)
 target_compile_features(bacnet-discover PRIVATE cxx_std_17)
-target_link_libraries(bacnet-discover PRIVATE bacnet_cli_common)
+target_link_libraries(bacnet-discover PRIVATE bacnet_cli_common bacnet_client)
 
-add_executable(bacnet-client cli/bacnet_client.cpp)
+add_executable(bacnet-client
+  cli/bacnet_client.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/../../src/BacnetDeviceSession.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/../../src/BacnetRemoteObject.cpp)
 target_compile_features(bacnet-client PRIVATE cxx_std_17)
-target_link_libraries(bacnet-client PRIVATE bacnet_cli_common)
+target_compile_definitions(bacnet-client PRIVATE
+  ESP_BACNET_ENABLE_WRITE_PROPERTY=1
+  ESP_BACNET_ENABLE_PRIORITY_WRITE=1)
+target_link_libraries(bacnet-client PRIVATE bacnet_cli_common bacnet_client_priority_enabled)
 
 add_executable(bacnet-write-hil
   cli/bacnet_write_hil.cpp
@@ -36,7 +42,7 @@ target_compile_definitions(bacnet-write-hil PRIVATE
   ESP_BACNET_ENABLE_WRITE_PROPERTY=1
   ESP_BACNET_ENABLE_PRIORITY_WRITE=1)
 target_link_libraries(bacnet-write-hil PRIVATE
-  bacnet_client_write_enabled bacnet_cli_common bacnet_windows)
+  bacnet_client_priority_enabled bacnet_cli_common bacnet_windows)
 
 add_executable(bacnet_cli_smoke cli/bacnet_cli_smoke.cpp)
 target_compile_features(bacnet_cli_smoke PRIVATE cxx_std_17)
@@ -63,6 +69,16 @@ target_compile_features(bacnet_client_write_enabled PUBLIC cxx_std_17)
 target_compile_definitions(bacnet_client_write_enabled PRIVATE ESP_BACNET_ENABLE_WRITE_PROPERTY=1)
 target_include_directories(bacnet_client_write_enabled PUBLIC ${CMAKE_CURRENT_LIST_DIR}/../../src)
 target_link_libraries(bacnet_client_write_enabled PUBLIC bacnet_portable)
+
+add_library(bacnet_client_priority_enabled STATIC
+  ${CMAKE_CURRENT_LIST_DIR}/../../src/BacnetClient.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/../../src/BacnetLogger.cpp)
+target_compile_features(bacnet_client_priority_enabled PUBLIC cxx_std_17)
+target_compile_definitions(bacnet_client_priority_enabled PRIVATE
+  ESP_BACNET_ENABLE_WRITE_PROPERTY=1
+  ESP_BACNET_ENABLE_PRIORITY_WRITE=1)
+target_include_directories(bacnet_client_priority_enabled PUBLIC ${CMAKE_CURRENT_LIST_DIR}/../../src)
+target_link_libraries(bacnet_client_priority_enabled PUBLIC bacnet_portable)
 
 add_executable(bacnet_write_property_tests test/write_property_tests.cpp)
 target_compile_features(bacnet_write_property_tests PRIVATE cxx_std_17)
@@ -136,5 +152,13 @@ if(BUILD_TESTING)
   add_test(NAME bacnet_client_help COMMAND bacnet-client --help)
   add_test(NAME bacnet_client_list_help COMMAND bacnet-client list --help)
   add_test(NAME bacnet_client_read_help COMMAND bacnet-client read --help)
+  add_test(NAME bacnet_client_subscribe_invalid_type COMMAND bacnet-client --bind 127.0.0.1 --target 127.0.0.1 --device-id 1 subscribe BV1)
+  set_tests_properties(bacnet_client_subscribe_invalid_type PROPERTIES WILL_FAIL TRUE)
+  add_test(NAME bacnet_client_priority_invalid_instance COMMAND bacnet-client --bind 127.0.0.1 --target 127.0.0.1 --device-id 1 priority-slot BV4194304 --priority 8)
+  set_tests_properties(bacnet_client_priority_invalid_instance PROPERTIES WILL_FAIL TRUE)
+  add_test(NAME bacnet_client_priority_invalid_priority COMMAND bacnet-client --bind 127.0.0.1 --target 127.0.0.1 --device-id 1 priority-slot BV1 --priority 0)
+  set_tests_properties(bacnet_client_priority_invalid_priority PROPERTIES WILL_FAIL TRUE)
+  add_test(NAME bacnet_client_priority_missing_execute COMMAND bacnet-client --bind 127.0.0.1 --target 127.0.0.1 --device-id 1 write-bv-priority BV1 active --priority 8)
+  set_tests_properties(bacnet_client_priority_missing_execute PROPERTIES WILL_FAIL TRUE)
   add_test(NAME bacnet_write_hil_help COMMAND bacnet-write-hil --help)
 endif()

@@ -242,6 +242,16 @@ struct BacnetSubscribeOptions {
   bool notifyOnStatusChange = true;
 };
 
+enum class BacnetCovSubscriptionStatus : uint8_t {
+  Pending,
+  Active,
+  Error,
+  Reject,
+  Abort,
+  Timeout,
+  SendFailed,
+};
+
 enum class BacnetSubscriptionNotificationReason : uint8_t {
   None = 0,
   FirstValue = 1,
@@ -352,6 +362,7 @@ public:
   BacnetDeviceSessionReadStatus lastStatus() const;
   uint32_t lastUpdateMs() const;
   BacnetSubscriptionNotificationReason lastNotificationReason() const;
+  BacnetCovSubscriptionStatus covStatus() const;
 
   void stop();
   void requestRefresh();
@@ -403,6 +414,7 @@ private:
   Operation inFlightOperation_ = Operation::None;
   bool covActive_ = false;
   bool covFallback_ = false;
+  BacnetCovSubscriptionStatus covStatus_ = BacnetCovSubscriptionStatus::Pending;
   uint32_t covRenewAtMs_ = 0;
 };
 

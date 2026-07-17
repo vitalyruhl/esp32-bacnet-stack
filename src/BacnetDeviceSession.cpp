@@ -332,6 +332,10 @@ BacnetPropertySubscription::lastNotificationReason() const {
   return lastNotificationReason_;
 }
 
+BacnetCovSubscriptionStatus BacnetPropertySubscription::covStatus() const {
+  return covStatus_;
+}
+
 void BacnetPropertySubscription::stop() {
   if (!active_) {
     return;
@@ -1640,6 +1644,7 @@ void BacnetDeviceSession::pollInFlightSubscription(uint32_t nowMs) {
       const uint32_t lifetime = subscription.options_.covLifetimeSeconds;
       subscription.covActive_ = true;
       subscription.covFallback_ = false;
+      subscription.covStatus_ = BacnetCovSubscriptionStatus::Active;
       subscription.covRenewAtMs_ = nowMs +
                                    (lifetime > renewBefore ? lifetime - renewBefore : lifetime) * 1000UL;
       subscription.clearInFlightState();
@@ -1651,6 +1656,20 @@ void BacnetDeviceSession::pollInFlightSubscription(uint32_t nowMs) {
         nowMs - subscription.inFlightStartedAt_ >= subscription.options_.timeoutMs) {
       subscription.covActive_ = false;
       subscription.covFallback_ = true;
+      switch (covStatus) {
+        case BacnetSubscribeCovResponseKind::Error:
+          subscription.covStatus_ = BacnetCovSubscriptionStatus::Error;
+          break;
+        case BacnetSubscribeCovResponseKind::Reject:
+          subscription.covStatus_ = BacnetCovSubscriptionStatus::Reject;
+          break;
+        case BacnetSubscribeCovResponseKind::Abort:
+          subscription.covStatus_ = BacnetCovSubscriptionStatus::Abort;
+          break;
+        default:
+          subscription.covStatus_ = BacnetCovSubscriptionStatus::Timeout;
+          break;
+      }
       subscription.initialReadPending_ = true;
       subscription.clearInFlightState();
       inFlightSubscription_ = nullptr;
@@ -1745,6 +1764,7 @@ bool BacnetDeviceSession::tryStartCovSubscription(
   const uint8_t invokeId = allocateInvokeId();
   if (!client_.sendSubscribeCov(endpoint_, invokeId, subscription.objectId_, subscription.options_.covLifetimeSeconds, invokeId)) {
     subscription.covFallback_ = true;
+    subscription.covStatus_ = BacnetCovSubscriptionStatus::SendFailed;
     client_.logger().warn("BACnet/COV", "SubscribeCOV send failed; polling fallback");
     return false;
   }

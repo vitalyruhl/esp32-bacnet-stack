@@ -285,9 +285,16 @@ The executables are in the MSVC multi-config output directory
 Winsock runtime and transport only; the transport test uses local UDP loopback
 on `127.0.0.1` and sends no broadcasts.
 
-To validate a real BACnet/IP network, supply the local interface and its
-broadcast address at runtime; do not store site-specific addresses in the
-repository:
+Small PowerShell examples for the productive native tools are in
+[`tools/native/examples`](tools/native/examples/README.md). They cover
+Who-Is/I-Am discovery, AV/BV/MSV reads, SubscribeCOV, Analog Value listing, and
+an explicitly authorized Binary Value priority-8 toggle followed by a separate
+relinquish step. Edit their documented `settings.ps1` test-environment values
+before a parameterless invocation, or use explicit script parameters for a
+one-off target.
+
+To validate a real BACnet/IP network, configure the local interface and its
+broadcast address in the examples settings or pass them at runtime:
 
 `bacnet-discover` can also be run without network arguments. It sequentially
 tries suitable active IPv4 interfaces and writes each selected bind/broadcast

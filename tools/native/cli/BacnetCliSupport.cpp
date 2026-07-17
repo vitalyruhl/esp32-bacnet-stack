@@ -74,6 +74,10 @@ const char* bacnetCliExitCodeText(BacnetCliExitCode code) {
       return "abort";
     case BacnetCliExitCode::DecodeError:
       return "decode error";
+    case BacnetCliExitCode::FeatureDisabled:
+      return "feature disabled";
+    case BacnetCliExitCode::WriteNotAuthorized:
+      return "write not authorized";
   }
   return "unknown";
 }
