@@ -1,9 +1,21 @@
 # ESP32 BACnet Stack
 
-ESP32 BACnet Stack provides a portable BACnet/IP protocol core and public
-client/server roles for native and embedded applications. Arduino/PlatformIO
-on ESP32 and native Windows applications use the same platform-independent
-core through dedicated platform adapters.
+ESP32 BACnet Stack provides a platform-neutral BACnet/IP client core in C++.
+ESP32 Arduino/PlatformIO and native Windows applications use the same portable
+core through dedicated platform adapters. BACnet server support is planned and
+is not implemented as a usable server feature.
+Native Windows CLI tools provide Who-Is/I-Am discovery and property reads.
+
+| Target platform | Status | Integration |
+| --- | --- | --- |
+| ESP32 WiFi | Available | Arduino/PlatformIO |
+| ESP32 Ethernet | Available | Arduino/PlatformIO |
+| Windows | Available | CMake/Winsock |
+| BACnet Server | Planned | Not implemented |
+
+Start with the [ESP32 WiFi and Ethernet examples](#wifi-and-ethernet-examples)
+for PlatformIO projects, or use the [native Windows build and CLI tools](#native-windows-foundation)
+for CMake/Winsock applications.
 
 The project is published as open-source work in progress. APIs and protocol
 coverage are still evolving.
@@ -81,7 +93,8 @@ Additional status notes:
 ## Goals
 
 - Provide one portable public `BacnetClient` role for BACnet/IP client workflows.
-- Provide one portable public `BacnetServer` role for BACnet/IP server workflows.
+- Plan a future portable `BacnetServer` role without presenting its placeholder
+  as a usable server implementation.
 - Keep the BACnet protocol core independent from Arduino, ESP32, Windows, and
   transport-specific APIs.
 - Support Arduino/PlatformIO through dedicated ESP32 adapters.
@@ -167,12 +180,10 @@ WiFiUDP udp;
 ArduinoUdpDatagramTransport transport(udp);
 ArduinoMonotonicClock clock;
 BacnetClient client(transport, &clock);
-BacnetServer server;
 
 void setup() {
   client.begin();
   client.sendWhoIs(BacnetIpEndpoint(255, 255, 255, 255));
-  server.begin(1234);
 }
 
 void loop() {
