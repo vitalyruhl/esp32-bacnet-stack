@@ -17,9 +17,16 @@ defaults. The tracked WAGO test target uses Device instance `1682101` at
 ## Monitoring and manual overrides
 
 The monitoring card shows AV200 through SubscribeCOV and AV201 through polling.
-SubscribeCOV has no polling fallback; a subscription error remains visible while
-AV201 polling continues. The settings page provides the object instances, COV
-lifetime, and Write Priority (`1..16`).
+SubscribeCOV retains its subscription handle and uses the configured polling
+fallback when registration fails, is rejected, aborts, times out, or cannot be
+sent. The settings page provides the object instances, COV lifetime, and Write
+Priority (`1..16`).
+
+The bounded Property Browser reads up to eight advertised properties from a
+correctly addressed Device, AV, or MSV object. A small known-property profile
+is used only when that object's `Property_List` is explicitly unsupported.
+Each row preserves its typed value or its individual failure status, so an
+unsupported property does not block the remaining rows.
 
 The shared **Manual Priority Overrides** card contains a numeric AV input,
 AV write/relinquish actions, and BV Set 0, Set 1, and relinquish actions. It
@@ -28,9 +35,10 @@ an explicit `active`, `inactive`, or `unknown` Present Value status. The status
 uses the normal controlled polling interval and performs one actual
 `Present_Value` readback after an acknowledged BV action; it never assumes the
 requested write became the current value. Each button sends at most one request
-and only after an explicit user click. The Ethernet build enables `ESP_BACNET_ENABLE_WRITE_PROPERTY` and
-`ESP_BACNET_ENABLE_PRIORITY_WRITE`; other demo environments retain disabled
-write features. A successful override remains active until relinquished.
+and only after an explicit user click. Both rich client demos enable
+`ESP_BACNET_ENABLE_WRITE_PROPERTY` and `ESP_BACNET_ENABLE_PRIORITY_WRITE`;
+the library itself remains read-only unless consumers opt in. A successful
+override remains active until relinquished.
 
 ## Build, upload, and monitor
 

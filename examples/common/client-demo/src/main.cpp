@@ -29,8 +29,10 @@
 #include "BacnetDemoBinaryValueStatus.h"
 #include "BacnetDemoFormat.h"
 #include "BacnetDemoLogging.h"
+#include "BacnetDemoPropertyBrowser.h"
 #include "BacnetDemoWatchedAnalogValue.h"
 
+#include <algorithm>
 #include <cstdarg>
 #include <cmath>
 #include <cstdio>
@@ -45,7 +47,7 @@
 #endif
 
 #ifndef APP_VERSION
-#define APP_VERSION "0.33.0"
+#define APP_VERSION "0.34.0"
 #endif
 #ifndef APP_NAME
 #if BACNET_DEMO_USE_ETHERNET
@@ -91,6 +93,9 @@ static Config<int> bacnetOverrideAvInstance{ConfigOptions<int>{.key = "BacnetOve
 static Config<int> bacnetPollingAvInstance{ConfigOptions<int>{.key = "BacnetPollingAV", .name = "AV Polling Instance", .category = "BACnet Override", .defaultValue = 201, .showInWeb = true, .sortOrder = 30}};
 static Config<int> bacnetOverrideBvInstance{ConfigOptions<int>{.key = "BacnetOverrideBV", .name = "BV Override Instance", .category = "BACnet Override", .defaultValue = 320, .showInWeb = true, .sortOrder = 40}};
 static Config<int> bacnetCovLifetime{ConfigOptions<int>{.key = "BacnetCovLifetime", .name = "COV Lifetime Seconds", .category = "BACnet Override", .defaultValue = 120, .showInWeb = true, .sortOrder = 50}};
+static Config<int> bacnetBrowserObjectType{ConfigOptions<int>{.key = "BacnetBrowserObjectType", .name = "Object Type", .category = "BACnet Property Browser", .defaultValue = static_cast<int>(BacnetObjectType::Device), .showInWeb = true, .sortOrder = 10}};
+static Config<int> bacnetBrowserObjectInstance{ConfigOptions<int>{.key = "BacnetBrowserObjectInstance", .name = "Object Instance", .category = "BACnet Property Browser", .defaultValue = 0, .showInWeb = true, .sortOrder = 20}};
+static Config<int> bacnetBrowserPropertyRow{ConfigOptions<int>{.key = "BacnetBrowserPropertyRow", .name = "Property Row (1..8)", .category = "BACnet Property Browser", .defaultValue = 1, .showInWeb = true, .sortOrder = 30}};
 #if BACNET_DEMO_USE_ETHERNET
 static Config<String> ethernetIp{ConfigOptions<String>{.key = "EthIP", .name = "IP Address", .category = "Ethernet", .defaultValue = String(""), .showInWeb = true, .sortOrder = 1}};
 static Config<String> ethernetSubnet{ConfigOptions<String>{.key = "EthSubnet", .name = "Subnet Mask", .category = "Ethernet", .defaultValue = String(""), .showInWeb = true, .sortOrder = 2}};
@@ -244,6 +249,10 @@ static BacnetDemoBinaryValueStatus overrideBinaryValueStatus(
   kBacnetScanReadTimeoutMs);
 static float bacnetOverrideAnalogInput = 0.0F;
 static String bacnetOverrideStatus = "No manual action yet";
+static BacnetDemoPropertyBrowser propertyBrowser;
+static String propertyBrowserStatus = "Load a scanned object on demand";
+static bool propertyBrowserLoadQueued = false;
+static BacnetObjectId propertyBrowserQueuedObject;
 static BacnetScannedObject scanBuffer[kBacnetScanResultCapacity];
 static BacnetScannedObject fallbackScanBuffer[3];
 static BacnetObjectListScanJob scanJob;
@@ -352,6 +361,10 @@ static void resetBacnetPreviews() {
   watchedAnalogValue.reset("not read");
   polledAnalogValue.reset("not read");
   overrideBinaryValueStatus.reset();
+  propertyBrowser.reset();
+  propertyBrowserStatus = "Load a scanned object on demand";
+  propertyBrowserLoadQueued = false;
+  propertyBrowserQueuedObject = BacnetObjectId{};
   activeBacnetVendorId = 0;
   bacnetScanStatus = "Scan not started";
   bacnetRescanSource = "";
@@ -363,6 +376,142 @@ static void resetBacnetPreviews() {
   bacnetScanRequested = false;
   bacnetScanRunning = false;
   bacnetScanFinished = false;
+}
+
+static bool isDisplayedBacnetObject(BacnetObjectId object) {
+  if (!activeBacnetSession) {
+    return false;
+  }
+  if (object.type == static_cast<uint16_t>(BacnetObjectType::Device) &&
+      object.instance == activeBacnetSession->deviceInstance()) {
+    return true;
+  }
+  // The two bounded watch objects are intentionally available to the browser
+  // as well.  They are configured demo inputs, not arbitrary user-supplied
+  // object IDs, and remain useful when a device does not implement ObjectList.
+  if (object.type == static_cast<uint16_t>(BacnetObjectType::AnalogValue) &&
+      (object.instance == BACNET_WATCHED_ANALOG_VALUE_INSTANCE ||
+       object.instance == BACNET_WATCHED_ANALOG_VALUE_INSTANCE + 1)) {
+    return true;
+  }
+  const BacnetValueObjectPreview* groups[] = {
+    analogValues, binaryValues, multiStateValues};
+  for (const BacnetValueObjectPreview* group : groups) {
+    if (std::any_of(group,
+                    group + kBacnetMaxFoundObjectsToDisplay,
+                    [object](const BacnetValueObjectPreview& preview) {
+                      return preview.discovered && preview.object.type == object.type &&
+                             preview.object.instance == object.instance;
+                    })) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static bool configuredPropertyBrowserObject(BacnetObjectId& object) {
+  if (!activeBacnetSession) {
+    propertyBrowserStatus = "No device selected";
+    return false;
+  }
+  const int configuredType = bacnetBrowserObjectType.get();
+  const int configuredInstance = bacnetBrowserObjectInstance.get();
+  if (configuredType < 0 || configuredType > 1023 ||
+      configuredInstance < 0 || configuredInstance > 0x3FFFFF) {
+    propertyBrowserStatus = "Invalid object type or instance";
+    return false;
+  }
+  if (configuredType == static_cast<int>(BacnetObjectType::Device)) {
+    object = activeBacnetSession->deviceObject();
+  } else {
+    object = BacnetObjectId{static_cast<uint16_t>(configuredType),
+                            static_cast<uint32_t>(configuredInstance)};
+  }
+  if (!isDisplayedBacnetObject(object)) {
+    propertyBrowserStatus = "Object is not in the bounded scan results";
+    return false;
+  }
+  return true;
+}
+
+static void loadPropertyBrowser() {
+  if (bacnetScanRunning) {
+    propertyBrowserStatus = "Scan is running";
+    return;
+  }
+  BacnetObjectId object;
+  if (!configuredPropertyBrowserObject(object)) {
+    return;
+  }
+  propertyBrowser.stopSubscription();
+  propertyBrowserLoadQueued = true;
+  propertyBrowserQueuedObject = object;
+  propertyBrowserStatus = "Load queued";
+}
+
+static void finishPropertyBrowserLoad() {
+  propertyBrowser.load(
+    *activeBacnetSession, propertyBrowserQueuedObject, kBacnetScanReadTimeoutMs);
+  const BacnetPropertyReadAllResult& summary = propertyBrowser.result();
+  if (!propertyBrowser.loaded()) {
+    propertyBrowserStatus = "Property-list: ";
+    propertyBrowserStatus +=
+      bacnetPropertyReadStatusText(summary.propertyListStatus);
+    return;
+  }
+  if (propertyBrowser.usingFallbackProperties()) {
+    propertyBrowserStatus = "Loaded bounded known properties: ";
+  } else {
+    propertyBrowserStatus = "Loaded ";
+  }
+  propertyBrowserStatus += String(static_cast<unsigned>(propertyBrowser.rowCount()));
+  if (!propertyBrowser.usingFallbackProperties()) {
+    propertyBrowserStatus += " of ";
+    propertyBrowserStatus += String(static_cast<unsigned long>(summary.advertised));
+    propertyBrowserStatus += " advertised properties";
+  }
+  if (summary.truncated) {
+    propertyBrowserStatus += " (bounded)";
+  }
+}
+
+static void subscribeSelectedPropertyBrowserProperty() {
+  if (!activeBacnetSession || !propertyBrowser.loaded()) {
+    propertyBrowserStatus = "Load properties before subscribing";
+    return;
+  }
+  const int configuredRow = bacnetBrowserPropertyRow.get();
+  if (configuredRow < 1 ||
+      configuredRow > static_cast<int>(BacnetDemoPropertyBrowser::kMaxProperties) ||
+      !propertyBrowser.select(static_cast<size_t>(configuredRow - 1))) {
+    propertyBrowserStatus = "Invalid or unavailable property row";
+    return;
+  }
+  const int configuredLifetime = bacnetCovLifetime.get();
+  if (configuredLifetime < 1) {
+    propertyBrowserStatus = "Invalid COV lifetime";
+    return;
+  }
+  BacnetSubscribeOptions options;
+  options.preferCov = true;
+  options.covLifetimeSeconds = static_cast<uint32_t>(configuredLifetime);
+  options.fallbackPollMs = kBacnetSubscriptionFallbackPollMs;
+  options.timeoutMs = kBacnetScanReadTimeoutMs;
+  options.immediateFirstRead = true;
+  options.notifyOnStatusChange = true;
+  if (!propertyBrowser.subscribe(*activeBacnetSession, options)) {
+    propertyBrowserStatus = "Subscription creation failed";
+    return;
+  }
+  const BacnetPropertyReadResult* row = propertyBrowser.selectedRow();
+  propertyBrowserStatus = "Subscription: ";
+  propertyBrowserStatus +=
+    row != nullptr ? bacnetPropertyName(row->propertyId) : "unknown";
+}
+
+static void stopPropertyBrowserSubscription() {
+  propertyBrowser.stopSubscription();
+  propertyBrowserStatus = "Subscription disabled";
 }
 
 static void formatBacnetDeviceSummary(FixedTextBuffer& out) {
@@ -396,7 +545,7 @@ static void formatBacnetPropertySummary(size_t propertyIndex,
     out.append(property.value.displayText());
     return;
   }
-  out.append(bacnetReadStatusText(property.status));
+  out.append(bacnetReadStatusText(property.status, property.value));
 }
 
 static const char* valueObjectPresentValueText(
@@ -484,6 +633,81 @@ static void formatBacnetValueObjectsSummary(
   }
   out.append(bacnetScanStatus.length() ? bacnetScanStatus.c_str()
                                        : "Waiting for scan");
+}
+
+static void formatPropertyBrowserObject(FixedTextBuffer& out) {
+  if (!activeBacnetSession) {
+    out.append("No device selected");
+    return;
+  }
+  const BacnetObjectId object = propertyBrowser.objectId();
+  if (!propertyBrowser.loaded()) {
+    out.append(propertyBrowserStatus.c_str());
+    return;
+  }
+  bacnetAppendObjectDisplayName(out, object);
+  out.append(" | ");
+  out.append(propertyBrowserStatus.c_str());
+}
+
+static void formatPropertyBrowserRows(FixedTextBuffer& out) {
+  if (!propertyBrowser.loaded()) {
+    out.append(propertyBrowserStatus.c_str());
+    return;
+  }
+  const BacnetPropertySubscription* subscription = propertyBrowser.subscription();
+  for (size_t i = 0; i < propertyBrowser.rowCount(); ++i) {
+    const BacnetPropertyReadResult* row = propertyBrowser.row(i);
+    if (row == nullptr) {
+      continue;
+    }
+    if (!out.empty()) {
+      out.append('\n');
+    }
+    out.appendFormat("%u. ", static_cast<unsigned>(i + 1));
+    const char* propertyName = bacnetPropertyName(row->propertyId);
+    if (std::strcmp(propertyName, "property") == 0) {
+      out.appendFormat(
+        "property-%lu: ", static_cast<unsigned long>(row->propertyId));
+    } else {
+      out.append(propertyName);
+      out.append(": ");
+    }
+    const bool selected = propertyBrowser.hasSelection() &&
+                          propertyBrowser.selectedIndex() == i;
+    if (selected && subscription != nullptr && subscription->hasValue()) {
+      out.append(subscription->lastValue().displayText());
+      out.append(" [");
+      out.append(bacnetReadStatusText(subscription->lastStatus()));
+      out.append("]");
+    } else if (row->status == BacnetPropertyReadStatus::Ack) {
+      out.append(row->value.displayText());
+      out.append(" [");
+      out.append(bacnetValueTypeName(row->value.type));
+      out.append("]");
+    } else {
+      out.append(bacnetPropertyReadStatusText(*row));
+    }
+  }
+  if (out.empty()) {
+    out.append("No properties collected");
+  }
+}
+
+static void formatPropertyBrowserSubscription(FixedTextBuffer& out) {
+  const BacnetPropertyReadResult* row = propertyBrowser.selectedRow();
+  if (row == nullptr) {
+    out.append("disabled");
+    return;
+  }
+  out.append(bacnetPropertyName(row->propertyId));
+  out.append(": ");
+  out.append(propertyBrowser.subscriptionModeText());
+  const BacnetPropertySubscription* subscription = propertyBrowser.subscription();
+  if (subscription != nullptr && subscription->hasValue()) {
+    out.append(" value=");
+    out.append(subscription->lastValue().displayText());
+  }
 }
 
 static void logWatchedAnalogDetails() {
@@ -781,6 +1005,24 @@ static void fillBacnetRuntime(JsonObject& data) {
   data["device0_objectHealth"] = healthOut.data;
 }
 
+static void fillPropertyBrowserRuntime(JsonObject& data) {
+  char object[192] = {};
+  FixedTextBuffer objectOut(object, sizeof(object));
+  formatPropertyBrowserObject(objectOut);
+  data["propertyBrowser_object"] = objectOut.data;
+
+  char rows[(BacnetValue::kMaxTextLength + 80) *
+            BacnetDemoPropertyBrowser::kMaxProperties] = {};
+  FixedTextBuffer rowsOut(rows, sizeof(rows));
+  formatPropertyBrowserRows(rowsOut);
+  data["propertyBrowser_rows"] = rowsOut.data;
+
+  char subscription[BacnetValue::kMaxTextLength + 96] = {};
+  FixedTextBuffer subscriptionOut(subscription, sizeof(subscription));
+  formatPropertyBrowserSubscription(subscriptionOut);
+  data["propertyBrowser_subscription"] = subscriptionOut.data;
+}
+
 static void fillWatchedAnalogRuntime(JsonObject& data) {
   data["watchedAv_object"] = watchedAnalogValue.objectSummary();
   data["watchedAv_label"] = watchedAnalogValue.labelSummary();
@@ -806,7 +1048,12 @@ static void fillWatchedAnalogRuntime(JsonObject& data) {
     overrideBvState += ")";
   }
   data["override_bv_state"] = overrideBvState;
+#if defined(ESP_BACNET_ENABLE_WRITE_PROPERTY) && ESP_BACNET_ENABLE_WRITE_PROPERTY && \
+  defined(ESP_BACNET_ENABLE_PRIORITY_WRITE) && ESP_BACNET_ENABLE_PRIORITY_WRITE
   data["override_status"] = bacnetOverrideStatus;
+#else
+  data["override_status"] = "WriteProperty/Priority feature unavailable";
+#endif
 }
 
 static bool validOverrideConfiguration(uint8_t& priority) {
@@ -983,6 +1230,50 @@ static void setupRuntimeUI() {
                       70,
                       true);
 
+  auto propertyBrowserGroup = ConfigManager.liveGroup("bacnetPropertyBrowser")
+                                .page("Sensors", 10)
+                                .card("BACnet Property Browser", 25)
+                                .group("Bounded On-Demand Read", 1);
+  ConfigManager.getRuntime().addRuntimeProvider(
+    "bacnetPropertyBrowser", fillPropertyBrowserRuntime, 25);
+  addRuntimeTextField("bacnetPropertyBrowser",
+                      "propertyBrowser_object",
+                      "Configured Object",
+                      "Sensors",
+                      "BACnet Property Browser",
+                      "Bounded On-Demand Read",
+                      10);
+  propertyBrowserGroup
+    .button("propertyBrowser_load", "Load Properties", []() {
+      loadPropertyBrowser();
+    })
+    .order(20);
+  addRuntimeTextField("bacnetPropertyBrowser",
+                      "propertyBrowser_rows",
+                      "Properties (max. 8)",
+                      "Sensors",
+                      "BACnet Property Browser",
+                      "Bounded On-Demand Read",
+                      30,
+                      true);
+  propertyBrowserGroup
+    .button("propertyBrowser_subscribe", "Subscribe Selected Row", []() {
+      subscribeSelectedPropertyBrowserProperty();
+    })
+    .order(40);
+  propertyBrowserGroup
+    .button("propertyBrowser_stop", "Stop Subscription", []() {
+      stopPropertyBrowserSubscription();
+    })
+    .order(41);
+  addRuntimeTextField("bacnetPropertyBrowser",
+                      "propertyBrowser_subscription",
+                      "Subscription Mode",
+                      "Sensors",
+                      "BACnet Property Browser",
+                      "Bounded On-Demand Read",
+                      50);
+
   auto watchedAnalogGroup = ConfigManager.liveGroup("bacnetWatch")
                               .page("Sensors", 10)
                               .card("Watched Analog Value", 30)
@@ -1055,6 +1346,8 @@ static void setupRuntimeUI() {
                          .page("Sensors", 10)
                          .card("Manual Priority Overrides", 40)
                          .group("Explicit Actions", 1);
+#if defined(ESP_BACNET_ENABLE_WRITE_PROPERTY) && ESP_BACNET_ENABLE_WRITE_PROPERTY && \
+  defined(ESP_BACNET_ENABLE_PRIORITY_WRITE) && ESP_BACNET_ENABLE_PRIORITY_WRITE
   overrideGroup.floatInput("override_av_value", "AV Value", -1000000.0F, 1000000.0F, 0.0F, 3, []() { return bacnetOverrideAnalogInput; }, [](float value) { bacnetOverrideAnalogInput = value; }).order(10);
   overrideGroup.button("override_av_write", "Write AV", []() { writeOverrideAv(); }).order(20);
   overrideGroup.button("override_av_relinquish", "Relinquish AV", []() { relinquishOverrideAv(); }).order(21);
@@ -1071,6 +1364,9 @@ static void setupRuntimeUI() {
   overrideGroup.button("override_bv_1", "BV Set 1", []() { writeOverrideBv(true); }).order(31);
   overrideGroup.button("override_bv_relinquish", "BV Relinquish", []() { relinquishOverrideBv(); }).order(32);
   addRuntimeTextField("bacnetWatch", "override_status", "Last Result", "Sensors", "Manual Priority Overrides", "Explicit Actions", 40);
+#else
+  addRuntimeTextField("bacnetWatch", "override_status", "Write Feature", "Sensors", "Manual Priority Overrides", "Explicit Actions", 10);
+#endif
 }
 
 static void sendWhoIs() {
@@ -1093,6 +1389,10 @@ static void readDeviceProperties(BacnetDeviceSession& session) {
     property.status =
       session.object(session.deviceObject())
         .readProperty(property.id, property.value, kBacnetScanReadTimeoutMs);
+    demoLogging.log(BacnetDemoLogging::Level::Info,
+                    "device property %s: %s",
+                    property.name,
+                    bacnetReadStatusText(property.status, property.value));
   }
 }
 
@@ -1537,7 +1837,18 @@ static void pollBacnetDiscovery() {
 }
 
 static void pollBacnetSubscriptions() {
-  if (!activeBacnetSession || bacnetScanRunning) {
+  // The initial Object-List scan owns the session.  Starting a COV request or
+  // fallback poll before it has finished would make the scan reject itself as
+  // busy and leave the bounded browser without discovered objects.
+  if (!activeBacnetSession || bacnetScanRunning || !bacnetScanFinished) {
+    return;
+  }
+
+  if (propertyBrowserLoadQueued) {
+    if (!activeBacnetSession->isBusy()) {
+      propertyBrowserLoadQueued = false;
+      finishPropertyBrowserLoad();
+    }
     return;
   }
 
@@ -1556,17 +1867,24 @@ static void pollBacnetSubscriptions() {
 
   watchedAnalogValue.poll(*activeBacnetSession, now);
   polledAnalogValue.poll(*activeBacnetSession, now);
+  propertyBrowser.poll(*activeBacnetSession, now);
   overrideBinaryValueStatus.configure(
     static_cast<uint32_t>(bacnetOverrideBvInstance.get()));
   overrideBinaryValueStatus.poll(*activeBacnetSession, now);
 }
 
 static void registerBacnetOverrideSettings() {
+#if defined(ESP_BACNET_ENABLE_WRITE_PROPERTY) && ESP_BACNET_ENABLE_WRITE_PROPERTY && \
+  defined(ESP_BACNET_ENABLE_PRIORITY_WRITE) && ESP_BACNET_ENABLE_PRIORITY_WRITE
   ConfigManager.addSetting(&bacnetWritePriority);
   ConfigManager.addSetting(&bacnetOverrideAvInstance);
-  ConfigManager.addSetting(&bacnetPollingAvInstance);
   ConfigManager.addSetting(&bacnetOverrideBvInstance);
+#endif
+  ConfigManager.addSetting(&bacnetPollingAvInstance);
   ConfigManager.addSetting(&bacnetCovLifetime);
+  ConfigManager.addSetting(&bacnetBrowserObjectType);
+  ConfigManager.addSetting(&bacnetBrowserObjectInstance);
+  ConfigManager.addSetting(&bacnetBrowserPropertyRow);
 }
 
 #if BACNET_DEMO_USE_ETHERNET

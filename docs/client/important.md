@@ -33,7 +33,10 @@
 ## Subscription And Fallback Behavior
 
 - `BacnetProperty::subscribe()` provides a property subscription abstraction.
-- The current implementation uses fallback polling, not BACnet SubscribeCOV.
+- Set `BacnetSubscribeOptions::preferCov` to request SubscribeCOV. A successful
+  registration routes COV notifications; Error, Reject, Abort, timeout, or
+  send failure retains the same subscription handle and uses its configured
+  polling fallback.
 - `fallbackPollMs = 0` disables periodic fallback polling.
 - `requestRefresh()` schedules an immediate one-shot refresh when the subscription is idle.
 - One session processes at most one subscription read in flight.
@@ -47,6 +50,12 @@
   them explicitly. See [Command priority reset semantics](../bacnet-command-priority.md).
 - The library must remain vendor-neutral and must not hardcode WAGO-specific assumptions in reusable APIs.
 - ConfigManager is optional demo infrastructure and is not a library dependency.
+- The rich client demo keeps object/property presentation bounded. After an
+  explicit browser action it reads up to eight advertised properties; a small
+  known-property profile is only a compatibility path for a correctly addressed
+  object that explicitly reports `Property_List` unsupported. It never writes
+  during startup, discovery, scan, refresh, polling, COV handling, reconnect,
+  resubscription, or settings persistence.
 
 ## Transport Scope
 

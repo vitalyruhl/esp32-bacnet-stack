@@ -63,7 +63,13 @@ bool bacnetNativeParseObjectSelector(const char* text, BacnetObjectSelector& sel
   if (prefixLength == 0 || text[prefixLength] == '\0') return false;
   BacnetObjectType type;
   uint32_t instance = 0;
-  if (!parseObjectType(text, prefixLength, type) || !bacnetCliParseUnsigned(text + prefixLength, instance) || instance > kMaximumDeviceInstance) return false;
+  const char* instanceText = text + prefixLength;
+  if (*instanceText == ',') {
+    ++instanceText;
+  }
+  if (!parseObjectType(text, prefixLength, type) ||
+      !bacnetCliParseUnsigned(instanceText, instance) ||
+      instance > kMaximumDeviceInstance) return false;
   selector.object = BacnetObjectId{static_cast<uint16_t>(type), instance};
   return true;
 }
@@ -71,18 +77,35 @@ bool bacnetNativeParseObjectSelector(const char* text, BacnetObjectSelector& sel
 bool bacnetNativeParseProperty(const char* text, BacnetPropertyId& property) {
   struct Property { const char* name; BacnetPropertyId id; };
   static constexpr Property properties[] = {
+    {"object-identifier", BacnetPropertyId::ObjectIdentifier}, {"objectIdentifier", BacnetPropertyId::ObjectIdentifier},
     {"object-name", BacnetPropertyId::ObjectName}, {"objectName", BacnetPropertyId::ObjectName},
     {"description", BacnetPropertyId::Description}, {"present-value", BacnetPropertyId::PresentValue}, {"presentValue", BacnetPropertyId::PresentValue},
     {"status-flags", BacnetPropertyId::StatusFlags}, {"statusFlags", BacnetPropertyId::StatusFlags}, {"event-state", BacnetPropertyId::EventState},
     {"reliability", BacnetPropertyId::Reliability}, {"out-of-service", BacnetPropertyId::OutOfService}, {"outOfService", BacnetPropertyId::OutOfService},
-    {"vendor-name", BacnetPropertyId::VendorName}, {"vendor-id", BacnetPropertyId::VendorIdentifier}, {"model-name", BacnetPropertyId::ModelName},
-    {"firmware-revision", BacnetPropertyId::FirmwareRevision}, {"application-software-version", BacnetPropertyId::ApplicationSoftwareVersion},
-    {"protocol-version", BacnetPropertyId::ProtocolVersion}, {"protocol-revision", BacnetPropertyId::ProtocolRevision}, {"object-list", BacnetPropertyId::ObjectList}};
+    {"priority-array", BacnetPropertyId::PriorityArray}, {"priorityArray", BacnetPropertyId::PriorityArray},
+    {"vendor-name", BacnetPropertyId::VendorName}, {"vendorName", BacnetPropertyId::VendorName},
+    {"vendor-id", BacnetPropertyId::VendorIdentifier}, {"vendorIdentifier", BacnetPropertyId::VendorIdentifier},
+    {"model-name", BacnetPropertyId::ModelName}, {"modelName", BacnetPropertyId::ModelName},
+    {"firmware-revision", BacnetPropertyId::FirmwareRevision}, {"firmwareRevision", BacnetPropertyId::FirmwareRevision},
+    {"application-software-version", BacnetPropertyId::ApplicationSoftwareVersion}, {"applicationSoftwareVersion", BacnetPropertyId::ApplicationSoftwareVersion},
+    {"object-type", BacnetPropertyId::ObjectType}, {"objectType", BacnetPropertyId::ObjectType},
+    {"protocol-version", BacnetPropertyId::ProtocolVersion}, {"protocolVersion", BacnetPropertyId::ProtocolVersion},
+    {"protocol-revision", BacnetPropertyId::ProtocolRevision}, {"protocolRevision", BacnetPropertyId::ProtocolRevision},
+    {"object-list", BacnetPropertyId::ObjectList}, {"objectList", BacnetPropertyId::ObjectList},
+    {"property-list", BacnetPropertyId::PropertyList}, {"propertyList", BacnetPropertyId::PropertyList}};
   for (const Property& candidate : properties) if (equalsIgnoreCase(text, candidate.name)) { property = candidate.id; return true; }
   return false;
 }
 
 bool bacnetNativeParseObjectPropertySelector(const char* text, BacnetObjectSelector& selector, BacnetPropertyId& property) {
+  uint32_t arrayIndex = kBacnetNoArrayIndex;
+  return bacnetNativeParseObjectPropertySelector(text, selector, property, arrayIndex);
+}
+
+bool bacnetNativeParseObjectPropertySelector(const char* text,
+                                             BacnetObjectSelector& selector,
+                                             BacnetPropertyId& property,
+                                             uint32_t& arrayIndex) {
   if (text == nullptr) return false;
   const char* separator = std::strchr(text, '.');
   if (separator == nullptr || separator == text || separator[1] == '\0') return false;
@@ -90,7 +113,30 @@ bool bacnetNativeParseObjectPropertySelector(const char* text, BacnetObjectSelec
   const size_t length = static_cast<size_t>(separator - text);
   if (length >= sizeof(object)) return false;
   std::memcpy(object, text, length);
-  return bacnetNativeParseObjectSelector(object, selector) && bacnetNativeParseProperty(separator + 1, property);
+  const char* propertyText = separator + 1;
+  const char* bracket = std::strchr(propertyText, '[');
+  arrayIndex = kBacnetNoArrayIndex;
+  if (bracket == nullptr) {
+    return bacnetNativeParseObjectSelector(object, selector) &&
+           bacnetNativeParseProperty(propertyText, property);
+  }
+
+  const char* closing = std::strchr(bracket + 1, ']');
+  if (closing == nullptr || closing[1] != '\0') return false;
+  char propertyName[48] = {};
+  const size_t propertyLength = static_cast<size_t>(bracket - propertyText);
+  if (propertyLength == 0 || propertyLength >= sizeof(propertyName)) return false;
+  std::memcpy(propertyName, propertyText, propertyLength);
+  uint32_t parsedIndex = 0;
+  char indexText[16] = {};
+  const size_t indexLength = static_cast<size_t>(closing - bracket - 1);
+  if (indexLength == 0 || indexLength >= sizeof(indexText)) return false;
+  std::memcpy(indexText, bracket + 1, indexLength);
+  if (!bacnetNativeParseObjectSelector(object, selector) ||
+      !bacnetNativeParseProperty(propertyName, property) ||
+      !bacnetCliParseUnsigned(indexText, parsedIndex)) return false;
+  arrayIndex = parsedIndex;
+  return true;
 }
 
 const char* bacnetNativeObjectToken(BacnetObjectId object, char* buffer, size_t capacity) {

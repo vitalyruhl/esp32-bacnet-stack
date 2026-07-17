@@ -51,6 +51,8 @@ Current public responsibilities:
   then attempt every collected property without aborting on one property failure
 - inspect the latest collected/read property cache through `cachedProperty()`
 	and `cachedPropertyCount()`
+- inspect whether a session-owned scan or subscription request is in flight
+  through `isBusy()`
 - create `BacnetRemoteObject` wrappers through `object()`
 - run blocking object-list scans through `scanObjectList()`
 - run non-blocking object-list scans through `beginObjectListScan()`, `pollObjectListScan()`, and `cancelObjectListScan()`
@@ -78,7 +80,11 @@ Current public responsibilities:
 
 ## Common Result Types
 
-- `BacnetValue`: typed value holder used by scalar ReadProperty and scan helpers
+- `BacnetValue`: typed value holder used by scalar ReadProperty and scan helpers;
+  decoded BACnet errors retain canonical text such as
+  `unknown-object (object/31)`
+- `bacnetErrorClassName()` and `bacnetErrorCodeName()`: canonical portable
+  BACnet error-name mappings used by protocol decoding and presentation layers
 - `BacnetPriorityArray`: complete 16-slot typed `priority-array` result;
   `slots[0]` through `slots[15]` correspond to BACnet priorities `1` through
   `16`
@@ -95,7 +101,7 @@ Current public responsibilities:
 	metadata for one session/object/property/array-index entry
 - `BacnetScannedObject`, `BacnetObjectScanOptions`, `BacnetObjectScanResult`, and `BacnetObjectListScanJob`: object-list scan support types
 - `BacnetPropertyReadResult`, `BacnetPropertyListReadResult`, and `BacnetPropertyReadAllResult`: property-list and safe read-all support types
-- `BacnetSubscribeOptions`, `BacnetPropertySubscription`, and `BacnetSubscriptionNotification`: fallback-poll subscription support
+- `BacnetSubscribeOptions`, `BacnetPropertySubscription`, and `BacnetSubscriptionNotification`: SubscribeCOV with polling-fallback subscription support
 
 ## Not Implemented
 

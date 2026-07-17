@@ -2,6 +2,25 @@
 
 This changelog is a curated overview.
 
+## Unreleased
+
+## 0.34.0
+
+- Added a bounded on-demand Property Browser to the shared WiFi/Ethernet client
+  demo. It reads up to eight advertised Device, AV, or MSV properties of a
+  bounded discovered/configured object; its known-property profile is used only
+  when the correctly addressed object explicitly reports `Property_List` as
+  unsupported. It preserves typed values and per-property statuses, including
+  canonical BACnet error names, and can subscribe to one explicitly selected
+  property with visible SubscribeCOV or polling-fallback state.
+- Added canonical portable BACnet error class/code names for known
+  ReadProperty errors such as `unknown-object (object/31)`,
+  `unknown-property (property/32)`, and `invalid-array-index`.
+- Aligned the canonical WiFi `usb` and Ethernet `eth` rich client demos: both
+  explicitly enable the existing WriteProperty and priority-write gates, while
+  the library itself remains read-only by default. Each manual priority action
+  remains a single explicit request and must be relinquished explicitly.
+
 ## 0.33.0
 
 - Extended the Ethernet client demo with AV200 SubscribeCOV monitoring, AV201

@@ -40,6 +40,10 @@ bool bacnetNativeParseProperty(const char* text, BacnetPropertyId& property);
 bool bacnetNativeParseObjectPropertySelector(const char* text,
                                              BacnetObjectSelector& selector,
                                              BacnetPropertyId& property);
+bool bacnetNativeParseObjectPropertySelector(const char* text,
+                                             BacnetObjectSelector& selector,
+                                             BacnetPropertyId& property,
+                                             uint32_t& arrayIndex);
 const char* bacnetNativeObjectToken(BacnetObjectId object, char* buffer, size_t capacity);
 const char* bacnetNativeReadStatusText(BacnetNativeReadStatus status);
 BacnetCliExitCode bacnetNativeReadExitCode(BacnetNativeReadStatus status);

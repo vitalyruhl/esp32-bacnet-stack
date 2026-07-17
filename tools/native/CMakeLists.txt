@@ -69,6 +69,11 @@ add_executable(bacnet_subscribe_cov_protocol_tests
 target_compile_features(bacnet_subscribe_cov_protocol_tests PRIVATE cxx_std_17)
 target_link_libraries(bacnet_subscribe_cov_protocol_tests PRIVATE bacnet_portable)
 
+add_executable(bacnet_device_read_protocol_tests
+  test/device_read_protocol_tests.cpp)
+target_compile_features(bacnet_device_read_protocol_tests PRIVATE cxx_std_17)
+target_link_libraries(bacnet_device_read_protocol_tests PRIVATE bacnet_portable)
+
 add_library(bacnet_client_write_enabled STATIC
   ${CMAKE_CURRENT_LIST_DIR}/../../src/BacnetClient.cpp
   ${CMAKE_CURRENT_LIST_DIR}/../../src/BacnetLogger.cpp)
@@ -132,6 +137,16 @@ target_include_directories(bacnet_demo_binary_value_status_tests PRIVATE
   ${CMAKE_CURRENT_LIST_DIR}/../../examples/common/client-demo/src)
 target_link_libraries(bacnet_demo_binary_value_status_tests PRIVATE bacnet_client)
 
+add_executable(bacnet_demo_property_browser_tests
+  test/demo_property_browser_tests.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/../../examples/common/client-demo/src/BacnetDemoPropertyBrowser.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/../../src/BacnetDeviceSession.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/../../src/BacnetRemoteObject.cpp)
+target_compile_features(bacnet_demo_property_browser_tests PRIVATE cxx_std_17)
+target_include_directories(bacnet_demo_property_browser_tests PRIVATE
+  ${CMAKE_CURRENT_LIST_DIR}/../../examples/common/client-demo/src)
+target_link_libraries(bacnet_demo_property_browser_tests PRIVATE bacnet_client)
+
 add_executable(bacnet_write_hil_tests
   test/write_hil_tests.cpp
   cli/BacnetWriteHil.cpp
@@ -154,12 +169,16 @@ if(BUILD_TESTING)
   add_test(NAME bacnet_cli_support_tests COMMAND bacnet_cli_support_tests)
   add_test(NAME bacnet_subscribe_cov_protocol_tests
     COMMAND bacnet_subscribe_cov_protocol_tests)
+  add_test(NAME bacnet_device_read_protocol_tests
+    COMMAND bacnet_device_read_protocol_tests)
   add_test(NAME bacnet_write_property_tests COMMAND bacnet_write_property_tests)
   add_test(NAME bacnet_write_property_disabled_tests COMMAND bacnet_write_property_disabled_tests)
   add_test(NAME bacnet_priority_write_disabled_tests COMMAND bacnet_priority_write_disabled_tests)
   add_test(NAME bacnet_priority_helpers_tests COMMAND bacnet_priority_helpers_tests)
   add_test(NAME bacnet_demo_binary_value_status_tests
     COMMAND bacnet_demo_binary_value_status_tests)
+  add_test(NAME bacnet_demo_property_browser_tests
+    COMMAND bacnet_demo_property_browser_tests)
   add_test(NAME bacnet_write_hil_tests COMMAND bacnet_write_hil_tests)
   add_test(NAME bacnet_cli_help COMMAND bacnet_cli_smoke --help)
   add_test(NAME bacnet_cli_self_test COMMAND bacnet_cli_smoke --self-test)

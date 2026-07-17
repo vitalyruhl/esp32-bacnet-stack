@@ -1413,10 +1413,14 @@ bool BacnetProtocol::parseReadPropertyError(const uint8_t* buffer, size_t length
   size_t used = 0;
   if (readApplicationValue(buffer, length, offset, kApplicationTagEnumerated, parsedErrorClass) &&
       readApplicationValue(buffer, length, offset, kApplicationTagEnumerated, parsedErrorCode)) {
-    if (!appendText(text, sizeof(text), used, "error class ") ||
-        !appendUnsignedDecimal(text, sizeof(text), used, parsedErrorClass) ||
-        !appendText(text, sizeof(text), used, " code ") ||
+    if (!appendText(text, sizeof(text), used, bacnetErrorCodeName(parsedErrorCode)) ||
+        !appendText(text, sizeof(text), used, " (") ||
+        !appendText(text, sizeof(text), used, bacnetErrorClassName(parsedErrorClass)) ||
+        !appendText(text, sizeof(text), used, "/") ||
         !appendUnsignedDecimal(text, sizeof(text), used, parsedErrorCode)) {
+      return false;
+    }
+    if (!appendText(text, sizeof(text), used, ")")) {
       return false;
     }
     if (errorClass != nullptr) {

@@ -32,6 +32,7 @@ enum class Command {
 struct CommandOptions {
   BacnetObjectSelector selector;
   BacnetPropertyId property = BacnetPropertyId::ObjectName;
+  uint32_t arrayIndex = kBacnetNoArrayIndex;
   uint32_t maximum = 20;
   uint32_t lifetimeSeconds = 60;
   uint32_t durationSeconds = 0;
@@ -59,7 +60,7 @@ void printHelp(FILE* output = stdout) {
     "  bacnet-client --bind <local-ip> --device-id <id> --target <ip[:port]> [--timeout-ms <milliseconds>] priority-slot <BV-instance> --priority <1..16>\n"
     "  bacnet-client --bind <local-ip> --device-id <id> --target <ip[:port]> [--timeout-ms <milliseconds>] write-bv-priority <BV-instance> <active|inactive> --priority <1..16> --execute\n"
     "  bacnet-client --bind <local-ip> --device-id <id> --target <ip[:port]> [--timeout-ms <milliseconds>] relinquish-bv-priority <BV-instance> --priority <1..16> --execute\n"
-    "\nObject selectors use AV, BV, and MSV prefixes (for example AV200). Priority writes require compile-time WriteProperty and priority-write gates. A confirmed priority write remains active until relinquished.\n"
+    "\nObject selectors use AV, BV, MSV, and DEVICE prefixes (for example AV200 or device,1682101). Read selectors accept property[index] for indexed BACnet arrays. Priority writes require compile-time WriteProperty and priority-write gates. A confirmed priority write remains active until relinquished.\n"
     "Exit codes: 0 success, 1 runtime/error, 2 timeout, 3 invalid arguments, 4 reject, 5 abort, 6 decode error, 7 feature disabled, 8 missing --execute.\n",
     output);
 }
@@ -110,7 +111,11 @@ bool parseArguments(int argc,
   options.broadcastEndpoint.port = BacnetClient::kDefaultPort;
   const bool hasEndpoint = options.hasBroadcast || options.hasTarget;
   if (!options.hasBind || !options.hasDeviceId || !hasEndpoint || selectorText == nullptr) return false;
-  if (command == Command::Read) return bacnetNativeParseObjectPropertySelector(selectorText, commandOptions.selector, commandOptions.property);
+  if (command == Command::Read) return bacnetNativeParseObjectPropertySelector(
+    selectorText,
+    commandOptions.selector,
+    commandOptions.property,
+    commandOptions.arrayIndex);
   if (!bacnetNativeParseObjectSelector(selectorText, commandOptions.selector)) return false;
   const BacnetObjectType type = static_cast<BacnetObjectType>(commandOptions.selector.object.type);
   if (command == Command::List) return true;
@@ -138,8 +143,25 @@ int writeExitCode(BacnetDeviceSessionWriteStatus status) {
 
 int runRead(BacnetClient& client, const BacnetIpEndpoint& endpoint, const BacnetNativeCliOptions& options, const CommandOptions& commandOptions) {
   BacnetValue value;
-  const BacnetNativeReadStatus status = bacnetNativeReadProperty(client, endpoint, BacnetPropertyRequest{commandOptions.selector.object, commandOptions.property}, options.timeoutMs, value);
-  if (status != BacnetNativeReadStatus::Ack) { std::fprintf(stderr, "[E] read %s failed: %s\n", bacnetPropertyName(commandOptions.property), bacnetNativeReadStatusText(status)); return resultExitCode(status); }
+  const BacnetNativeReadStatus status = bacnetNativeReadProperty(
+    client,
+    endpoint,
+    BacnetPropertyRequest{
+      commandOptions.selector.object, commandOptions.property, commandOptions.arrayIndex},
+    options.timeoutMs,
+    value);
+  if (status != BacnetNativeReadStatus::Ack) {
+    const char* detail = status == BacnetNativeReadStatus::Error &&
+                           value.type == BacnetValueType::Error &&
+                           value.textLength > 0
+                         ? value.displayText()
+                         : bacnetNativeReadStatusText(status);
+    std::fprintf(stderr,
+                 "[E] read %s failed: %s\n",
+                 bacnetPropertyName(commandOptions.property),
+                 detail);
+    return resultExitCode(status);
+  }
   char text[BacnetValue::kMaxTextLength] = {};
   if (options.verbose) { char object[24] = {}; std::printf("object=%s\nproperty=%s\nvalue=", bacnetNativeObjectToken(commandOptions.selector.object, object, sizeof(object)), bacnetPropertyName(commandOptions.property)); }
   if (commandOptions.selector.object.type == static_cast<uint16_t>(BacnetObjectType::BinaryValue) &&

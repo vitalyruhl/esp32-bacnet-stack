@@ -62,8 +62,8 @@ priority helpers remain explicit compile-time opt-ins.
 | Writes | Single priority relinquish | ✅ Implemented | `relinquishPresentValue()` writes `Present_Value = Null` at an explicit priority. |
 | Writes | Strict and writable priority reset | ✅ Implemented | Strict reset covers `1..16`; writable reset documents and skips priority `6`. |
 | Examples / validation | `examples/client-object-list-scan-basic` | ✅ Implemented | Canonical serial-only basic client example for known-target property read, object-list scan, and fallback polling. |
-| Examples / validation | `examples/client-demo-wifi` | ✅ Implemented | Preserved WiFi client demo with discovery, scan, process-value updates, a read-only value/status browser view, and a watched Analog Value card. |
-| Examples / validation | `examples/client-demo-ETH` | ✅ Implemented | WT32-ETH01 V1.4 Ethernet variant of the full client demo with ConfigManager V4.4.0. |
+| Examples / validation | `examples/client-demo-wifi` | ✅ Implemented | WiFi client demo with discovery, bounded on-demand property browsing, selected-property subscriptions, and explicitly gated priority writes. |
+| Examples / validation | `examples/client-demo-ETH` | ✅ Implemented | WT32-ETH01 V1.4 Ethernet variant of the same shared demo with identical BACnet features. |
 | Examples / validation | `examples/hil-wago-client-acceptance` | 🧪 Local HIL validated | Local hardware acceptance runner for client scenarios. |
 | Examples / validation | HIL scenario S01 non-blocking object-list scan | 🧪 Local HIL validated | Validated on local ESP32/BACnet-IP target setup. |
 | Examples / validation | HIL scenario S02 common process present-value reads | 🧪 Local HIL validated | Validated on local ESP32/WAGO BACnet-IP target setup. |

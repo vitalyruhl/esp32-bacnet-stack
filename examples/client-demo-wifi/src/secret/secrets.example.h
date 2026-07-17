@@ -27,7 +27,7 @@
 // Optional BACnet validation target. Keep real local values in secrets.h.
 #define BACNET_WHOIS_DESTINATION "192.0.2.255"
 #define BACNET_TARGET_ADDRESS "192.0.2.101"
-// #define BACNET_TARGET_DEVICE_INSTANCE 9001
+// #define BACNET_TARGET_DEVICE_INSTANCE 1682101
 // #define BACNET_TARGET_PORT 47808
 // Optional read-only object status snapshot shown in the browser.
 // Leave instance unset/0 to use the first discovered process object.

@@ -148,6 +148,14 @@ inline const char* bacnetReadStatusText(BacnetDeviceSessionReadStatus status) {
   return "unknown";
 }
 
+inline const char* bacnetReadStatusText(BacnetDeviceSessionReadStatus status,
+                                        const BacnetValue& value) {
+  return status == BacnetDeviceSessionReadStatus::Error &&
+             value.type == BacnetValueType::Error && value.textLength > 0
+           ? value.displayText()
+           : bacnetReadStatusText(status);
+}
+
 enum class BacnetPropertyReadStatus : uint8_t {
   Ack,
   UnsupportedProperty,
@@ -329,6 +337,15 @@ struct BacnetPropertyReadResult {
   BacnetPropertyReadStatus status = BacnetPropertyReadStatus::Skipped;
   BacnetValue value;
 };
+
+inline const char* bacnetPropertyReadStatusText(
+  const BacnetPropertyReadResult& result) {
+  return result.status == BacnetPropertyReadStatus::Error &&
+             result.value.type == BacnetValueType::Error &&
+             result.value.textLength > 0
+           ? result.value.displayText()
+           : bacnetPropertyReadStatusText(result.status);
+}
 
 struct BacnetPropertyReadAllResult {
   BacnetPropertyReadStatus propertyListStatus = BacnetPropertyReadStatus::Skipped;
@@ -565,6 +582,7 @@ public:
     BacnetCachedProperty& cached,
     uint32_t arrayIndex = kBacnetNoArrayIndex) const;
   size_t cachedPropertyCount() const;
+  bool isBusy() const;
   BacnetObjectScanResult scanObjectList(
     const BacnetObjectScanOptions& options,
     BacnetScannedObject* results,

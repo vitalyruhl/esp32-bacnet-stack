@@ -33,7 +33,7 @@
 #endif
 
 #ifndef APP_VERSION
-#define APP_VERSION "0.33.0"
+#define APP_VERSION "0.34.0"
 #endif
 
 #ifndef MY_USE_DHCP
