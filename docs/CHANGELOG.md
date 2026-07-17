@@ -2,6 +2,21 @@
 
 This changelog is a curated overview.
 
+## Unreleased
+
+## 0.34.0
+
+- Added a bounded on-demand Property Browser to the shared WiFi/Ethernet client
+  demo. It reads at most eight known Device, AV, or MSV properties of a bounded
+  discovered/configured object, preserves typed values and per-property
+  statuses, and can subscribe to one explicitly selected property with visible
+  SubscribeCOV or polling-fallback state.
+- Added an explicit `usb_write` WiFi HIL environment. The normal WiFi `usb`
+  environment remains read-only; the opt-in environment only enables the
+  existing manual priority controls.
+- Kept manual priority writes in the existing override card. Read-only builds
+  show no active write actions and do not enable the related settings.
+
 ## 0.33.0
 
 - Extended the Ethernet client demo with AV200 SubscribeCOV monitoring, AV201

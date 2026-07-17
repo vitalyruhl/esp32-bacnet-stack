@@ -897,6 +897,10 @@ size_t BacnetDeviceSession::cachedPropertyCount() const {
   return propertyCacheCount_;
 }
 
+bool BacnetDeviceSession::isBusy() const {
+  return inFlightSubscription_ != nullptr || inFlightObjectListScan_ != nullptr;
+}
+
 BacnetPropertyListReadResult BacnetDeviceSession::readPropertyList(
   BacnetObjectId objectId,
   BacnetPropertyId* properties,

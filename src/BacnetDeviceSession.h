@@ -565,6 +565,7 @@ public:
     BacnetCachedProperty& cached,
     uint32_t arrayIndex = kBacnetNoArrayIndex) const;
   size_t cachedPropertyCount() const;
+  bool isBusy() const;
   BacnetObjectScanResult scanObjectList(
     const BacnetObjectScanOptions& options,
     BacnetScannedObject* results,

@@ -30,11 +30,18 @@ It demonstrates:
 - Who-Is / I-Am discovery
 - session creation for the configured or first discovered BACnet target
 - non-blocking object-list scanning
+- bounded on-demand Property Browser for a discovered or configured Device, AV,
+  or MSV object (at most eight known properties, each retaining its own value
+  or failure status)
+- selected-property SubscribeCOV with visible polling-fallback state
 - read-only value and status presentation
 - BACnet logger forwarding into the demo GUI log
 - runtime rescan action support
 
 The demo remains an example layer. BACnet protocol behavior should stay in the reusable library APIs.
+The default WiFi `usb` build exposes no active WriteProperty controls. The
+separate `usb_write` environment is an explicit HIL-only opt-in that enables
+the existing manual priority controls without changing the default.
 
 ## `examples/client-demo-ETH`
 
@@ -42,6 +49,11 @@ This project builds the same shared BACnet/UI application for the Wireless-Tag
 WT32-ETH01 V1.4 and its LAN8720 Ethernet interface. ConfigManager WiFi support
 is compiled out; Ethernet address settings are persisted and the WebUI and
 BACnet client start after Ethernet has an IP address.
+
+It uses the same shared Property Browser and subscription behavior as the WiFi
+demo. Its existing manual priority controls are the only write surface; they
+remain explicit, require both compile-time write gates, and issue at most one
+request per button action.
 
 Build with `pio run -d examples/client-demo-ETH -e eth`. The local
 `eth-com6` environment adds the current COM6 upload/monitor port without making
