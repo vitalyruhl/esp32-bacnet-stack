@@ -16,6 +16,10 @@ This changelog is a curated overview.
 
 ## 0.33.0
 
+- Extended the Ethernet client demo with AV200 SubscribeCOV monitoring, AV201
+  polling, and explicitly user-triggered Priority WriteProperty controls for
+  AV and BV. The Ethernet environment alone enables the write gates; no action
+  performs automatic writes or direct `priority-array` writes.
 - Added optional WriteProperty priority encoding for BACnet priorities `1..16`.
 - A missing priority retains the existing WriteProperty APDU shape; invalid
   priority values are rejected before a datagram is sent.

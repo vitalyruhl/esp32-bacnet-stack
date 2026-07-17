@@ -11,8 +11,22 @@ The tracked first-run default is `192.168.2.127/24`; copy
 `src/secret/secrets.example.h` to `src/secret/secrets.h` to use other local
 defaults. The tracked WAGO test target uses Device instance `1682101` at
 `192.168.2.101:47808`. If the bounded object-list preview fills before a value
-category is stored, the demo probes its configured AV220, BV320, or MV2020
-reference object for that missing category.
+ category is stored, the demo probes its configured AV220, BV320, or MSV2020
+ reference object for that missing category.
+
+## Monitoring and manual overrides
+
+The monitoring card shows AV200 through SubscribeCOV and AV201 through polling.
+SubscribeCOV has no polling fallback; a subscription error remains visible while
+AV201 polling continues. The settings page provides the object instances, COV
+lifetime, and Write Priority (`1..16`).
+
+The separate **Manual Priority Overrides** card contains a numeric AV input,
+AV write/relinquish actions, and BV Set 0, Set 1, and relinquish actions. Each
+button sends at most one request and only after an explicit user click. The
+Ethernet build enables `ESP_BACNET_ENABLE_WRITE_PROPERTY` and
+`ESP_BACNET_ENABLE_PRIORITY_WRITE`; other demo environments retain disabled
+write features. A successful override remains active until relinquished.
 
 ## Build, upload, and monitor
 

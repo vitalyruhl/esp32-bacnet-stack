@@ -6,7 +6,9 @@
 
 namespace bacnet_hil {
 
-enum class ScenarioOutcome : uint8_t { Pass, Fail, Skip };
+enum class ScenarioOutcome : uint8_t { Pass,
+                                       Fail,
+                                       Skip };
 
 struct ScenarioSummary {
   uint32_t total = 0;
@@ -32,4 +34,4 @@ void runScenario(ScenarioSummary& summary,
                  ScenarioFunction scenarioRunner,
                  const char* skipReason);
 
-}  // namespace bacnet_hil
+} // namespace bacnet_hil

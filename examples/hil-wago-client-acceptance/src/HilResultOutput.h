@@ -14,4 +14,4 @@ void printScenarioLine(ScenarioOutcome outcome,
 void printFinalSummary(const ScenarioSummary& summary,
                        ScenarioOutcome finalOutcome);
 
-}  // namespace bacnet_hil
+} // namespace bacnet_hil

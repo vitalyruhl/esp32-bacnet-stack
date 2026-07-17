@@ -22,12 +22,14 @@ void recordScenario(ScenarioSummary& summary,
                     bool required,
                     bool enabled) {
   ++summary.total;
-  if (enabled && required) ++summary.requiredEnabled;
+  if (enabled && required)
+    ++summary.requiredEnabled;
   if (outcome == ScenarioOutcome::Pass) {
     ++summary.pass;
   } else if (outcome == ScenarioOutcome::Fail) {
     ++summary.fail;
-    if (enabled && required) ++summary.requiredFailed;
+    if (enabled && required)
+      ++summary.requiredFailed;
   } else {
     ++summary.skip;
   }
@@ -46,10 +48,11 @@ void runScenario(ScenarioSummary& summary,
     return;
   }
   const ScenarioOutcome outcome = scenarioRunner();
-  const char* detail = outcome == ScenarioOutcome::Pass ? "completed"
-    : outcome == ScenarioOutcome::Fail ? "failed" : "skipped";
+  const char* detail = outcome == ScenarioOutcome::Pass   ? "completed"
+                       : outcome == ScenarioOutcome::Fail ? "failed"
+                                                          : "skipped";
   printScenarioLine(outcome, id, scenarioName, detail);
   recordScenario(summary, outcome, required, true);
 }
 
-}  // namespace bacnet_hil
+} // namespace bacnet_hil

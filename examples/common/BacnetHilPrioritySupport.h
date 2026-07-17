@@ -11,7 +11,8 @@ namespace bacnet_example::hil {
 // Internal HIL semantics shared by the Arduino and native runners. Callers
 // retain explicit write, readback, timing, output, and cleanup control.
 inline bool valuesEqual(const BacnetValue& left, const BacnetValue& right) {
-  if (left.type != right.type) return false;
+  if (left.type != right.type)
+    return false;
   if (left.type == BacnetValueType::Real) {
     return std::fabs(left.realValue - right.realValue) < 0.001F;
   }
@@ -56,4 +57,4 @@ inline bool selectTemporaryValue(BacnetRemoteObject& object,
   return true;
 }
 
-}  // namespace bacnet_example::hil
+} // namespace bacnet_example::hil
