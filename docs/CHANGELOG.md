@@ -2,23 +2,6 @@
 
 This changelog is a curated overview.
 
-## Unreleased
-
-- Added a read-only current Binary Value status indicator to the shared client
-  demo priority-override card. It uses the existing controlled polling path and
-  confirmed Present Value readbacks after an acknowledged BV action; it does
-  not send automatic writes or infer the displayed state from a requested write.
-
-- Added native Windows PowerShell examples for Who-Is/I-Am discovery, AV/BV/MSV
-  reads, SubscribeCOV, Analog Value listing, and one explicit Binary Value
-  priority-8 toggle/relinquish flow.
-- Added central example settings with optional local and explicit-file overrides
-  so discovery, read, list, and SubscribeCOV examples can run without a long
-  parameter list after one test-environment configuration step.
-- Extended `bacnet-client` with focused SubscribeCOV, priority-slot, and
-  explicitly authorized Binary Value priority commands. These remain bounded,
-  use the existing client/session APIs, and do not claim BACnet certification.
-
 ## 0.33.0
 
 - Extended the Ethernet client demo with AV200 SubscribeCOV monitoring, AV201
@@ -34,6 +17,19 @@ This changelog is a curated overview.
 - Added local ESP32 and Windows HIL evidence for priority writes. Failed HIL
   relinquish operations retain the primary status and make one bounded cleanup
   attempt without claiming BACnet certification.
+- Added native Windows PowerShell examples for Who-Is/I-Am discovery, AV/BV/MSV
+  reads, SubscribeCOV, Analog Value listing, and one explicit Binary Value
+  priority-8 toggle/relinquish flow.
+- Added central example settings with optional local and explicit-file overrides
+  so discovery, read, list, and SubscribeCOV examples can run without a long
+  parameter list after one test-environment configuration step.
+- Extended `bacnet-client` with focused SubscribeCOV, priority-slot, and
+  explicitly authorized Binary Value priority commands. These remain bounded,
+  use the existing client/session APIs, and do not claim BACnet certification.
+- Added a read-only current Binary Value status indicator to the shared client
+  demo priority-override card. It uses the existing controlled polling path and
+  confirmed Present Value readbacks after an acknowledged BV action; it does
+  not send automatic writes or infer the displayed state from a requested write.
 
 ## 0.32.0
 
