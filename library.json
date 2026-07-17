@@ -52,16 +52,25 @@
       "**/.pioenvs/**",
       "**/.piolibdeps",
       "**/.piolibdeps/**",
+      ".Temp",
+      ".Temp/**",
+      "**/.Temp",
+      "**/.Temp/**",
       ".vscode",
       ".vscode/**",
       ".idea",
       ".idea/**",
       "*.code-workspace",
+      "tools/native/build",
+      "tools/native/build/**",
+      "tools/portable-smoke/build",
+      "tools/portable-smoke/build/**",
       "src/main.cpp",
       "**/secret/secrets.h",
       "**/secret/wifiSecret.h",
       "**/secrets.h",
-      "**/wifiSecret.h"
+      "**/wifiSecret.h",
+      "**/settings.local.ps1"
     ]
   }
 }
