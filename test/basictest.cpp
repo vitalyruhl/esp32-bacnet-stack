@@ -387,6 +387,71 @@ void test_bacnet_client_builds_read_property_request() {
   TEST_ASSERT_EQUAL_UINT8_ARRAY(expected, request, sizeof(expected));
 }
 
+void test_bacnet_client_builds_device_1682101_read_requests() {
+  uint8_t request[BacnetClient::kMaxReadPropertyRequestSize] = {};
+  const BacnetObjectId device{
+    static_cast<uint16_t>(BacnetObjectType::Device), 1682101};
+  const uint8_t objectNameExpected[] = {
+    0x81,
+    0x0A,
+    0x00,
+    0x11,
+    0x01,
+    0x04,
+    0x00,
+    0x05,
+    0x5A,
+    0x0C,
+    0x0C,
+    0x02,
+    0x19,
+    0xAA,
+    0xB5,
+    0x19,
+    0x4D,
+  };
+  const uint8_t objectListCountExpected[] = {
+    0x81,
+    0x0A,
+    0x00,
+    0x13,
+    0x01,
+    0x04,
+    0x00,
+    0x05,
+    0x5B,
+    0x0C,
+    0x0C,
+    0x02,
+    0x19,
+    0xAA,
+    0xB5,
+    0x19,
+    0x4C,
+    0x29,
+    0x00,
+  };
+
+  TEST_ASSERT_EQUAL_UINT32(
+    sizeof(objectNameExpected),
+    BacnetProtocol::buildReadPropertyRequest(
+      request, sizeof(request), device, BacnetPropertyId::ObjectName, 0x5A));
+  TEST_ASSERT_EQUAL_UINT8_ARRAY(
+    objectNameExpected, request, sizeof(objectNameExpected));
+
+  TEST_ASSERT_EQUAL_UINT32(
+    sizeof(objectListCountExpected),
+    BacnetProtocol::buildReadPropertyRequest(
+      request,
+      sizeof(request),
+      device,
+      BacnetPropertyId::ObjectList,
+      0x5B,
+      0));
+  TEST_ASSERT_EQUAL_UINT8_ARRAY(
+    objectListCountExpected, request, sizeof(objectListCountExpected));
+}
+
 void test_bacnet_client_builds_ai_present_value_request_with_type_zero() {
   uint8_t request[BacnetClient::kMaxReadPropertyRequestSize] = {};
   const uint8_t expected[] = {
@@ -429,10 +494,14 @@ void test_bacnet_property_ids_cover_generic_access_slice() {
                            static_cast<uint32_t>(BacnetPropertyId::MaxPresentValue));
   TEST_ASSERT_EQUAL_UINT32(69,
                            static_cast<uint32_t>(BacnetPropertyId::MinPresentValue));
+  TEST_ASSERT_EQUAL_UINT32(
+    75, static_cast<uint32_t>(BacnetPropertyId::ObjectIdentifier));
   TEST_ASSERT_EQUAL_UINT32(76,
                            static_cast<uint32_t>(BacnetPropertyId::ObjectList));
   TEST_ASSERT_EQUAL_UINT32(77,
                            static_cast<uint32_t>(BacnetPropertyId::ObjectName));
+  TEST_ASSERT_EQUAL_UINT32(79,
+                           static_cast<uint32_t>(BacnetPropertyId::ObjectType));
   TEST_ASSERT_EQUAL_UINT32(81,
                            static_cast<uint32_t>(BacnetPropertyId::OutOfService));
   TEST_ASSERT_EQUAL_UINT32(85,
@@ -1042,7 +1111,7 @@ void test_bacnet_client_parses_read_property_error() {
                                                           sizeof(response),
                                                           4,
                                                           value));
-  TEST_ASSERT_EQUAL_STRING("error class 2 code 32", value.text);
+  TEST_ASSERT_EQUAL_STRING("unknown-property (property/32)", value.text);
   TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetValueType::Error),
                           static_cast<uint8_t>(value.type));
 }
@@ -1075,6 +1144,36 @@ void test_bacnet_client_parses_read_property_error_codes() {
                                                         &errorCode));
   TEST_ASSERT_EQUAL_UINT32(2, errorClass);
   TEST_ASSERT_EQUAL_UINT32(32, errorCode);
+}
+
+void test_bacnet_client_formats_known_read_property_errors() {
+  const uint8_t response[] = {
+    0x81,
+    0x0A,
+    0x00,
+    0x0D,
+    0x01,
+    0x00,
+    0x50,
+    0x04,
+    0x0C,
+    0x91,
+    0x01,
+    0x91,
+    0x1F,
+  };
+  BacnetValue value;
+
+  TEST_ASSERT_EQUAL_STRING("object", bacnetErrorClassName(1));
+  TEST_ASSERT_EQUAL_STRING("property", bacnetErrorClassName(2));
+  TEST_ASSERT_EQUAL_STRING("unknown-object", bacnetErrorCodeName(31));
+  TEST_ASSERT_EQUAL_STRING("unknown-property", bacnetErrorCodeName(32));
+  TEST_ASSERT_EQUAL_STRING(
+    "optional-functionality-not-supported", bacnetErrorCodeName(26));
+  TEST_ASSERT_EQUAL_STRING("invalid-array-index", bacnetErrorCodeName(42));
+  TEST_ASSERT_TRUE(BacnetProtocol::parseReadPropertyError(
+    response, sizeof(response), 4, value));
+  TEST_ASSERT_EQUAL_STRING("unknown-object (object/31)", value.text);
 }
 
 void test_bacnet_client_parses_property_list_count_ack() {
@@ -2052,6 +2151,7 @@ void setup() {
   RUN_TEST(test_bacnet_client_rejects_non_i_am_response);
   RUN_TEST(test_portable_protocol_classifies_reject_and_abort);
   RUN_TEST(test_bacnet_client_builds_read_property_request);
+  RUN_TEST(test_bacnet_client_builds_device_1682101_read_requests);
   RUN_TEST(test_bacnet_client_builds_ai_present_value_request_with_type_zero);
   RUN_TEST(test_bacnet_property_ids_cover_generic_access_slice);
   RUN_TEST(test_bacnet_engineering_unit_symbol_mapping_is_small_and_safe);
@@ -2071,6 +2171,7 @@ void setup() {
   RUN_TEST(test_bacnet_client_parses_object_list_ack);
   RUN_TEST(test_bacnet_client_parses_read_property_error);
   RUN_TEST(test_bacnet_client_parses_read_property_error_codes);
+  RUN_TEST(test_bacnet_client_formats_known_read_property_errors);
   RUN_TEST(test_bacnet_client_parses_property_list_count_ack);
   RUN_TEST(test_bacnet_client_parses_property_list_entry_ack);
   RUN_TEST(test_bacnet_device_session_keeps_remote_device_metadata);

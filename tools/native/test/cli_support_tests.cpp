@@ -46,6 +46,7 @@ int main() {
   BacnetIpEndpoint endpoint(0, 0, 0, 0, 47808);
   BacnetObjectSelector selector;
   BacnetPropertyId property = BacnetPropertyId::ObjectName;
+  uint32_t arrayIndex = kBacnetNoArrayIndex;
   if (!bacnetCliParseUnsigned("47808", value) || value != 47808 ||
       bacnetCliParseUnsigned("", value) || bacnetCliParseUnsigned("-1", value) ||
       bacnetCliParseUnsigned("4294967296", value) ||
@@ -60,10 +61,29 @@ int main() {
       !bacnetNativeParseObjectSelector("msv2000", selector) ||
       selector.object.type != static_cast<uint16_t>(BacnetObjectType::MultiStateValue) ||
       selector.object.instance != 2000 ||
+      !bacnetNativeParseObjectSelector("device,1682101", selector) ||
+      selector.object.type != static_cast<uint16_t>(BacnetObjectType::Device) ||
+      selector.object.instance != 1682101 ||
       bacnetNativeParseObjectSelector("AV", selector) ||
       bacnetNativeParseObjectSelector("AV4294967296", selector) ||
       !bacnetNativeParseObjectPropertySelector("AV200.presentValue", selector, property) ||
       property != BacnetPropertyId::PresentValue ||
+      !bacnetNativeParseObjectPropertySelector(
+        "device,1682101.objectList[0]", selector, property, arrayIndex) ||
+      property != BacnetPropertyId::ObjectList || arrayIndex != 0 ||
+      selector.object.type != static_cast<uint16_t>(BacnetObjectType::Device) ||
+      selector.object.instance != 1682101 ||
+      !bacnetNativeParseObjectPropertySelector(
+        "AV200.priorityArray[8]", selector, property, arrayIndex) ||
+      property != BacnetPropertyId::PriorityArray || arrayIndex != 8 ||
+      selector.object.type != static_cast<uint16_t>(BacnetObjectType::AnalogValue) ||
+      selector.object.instance != 200 ||
+      !bacnetNativeParseProperty("objectIdentifier", property) ||
+      property != BacnetPropertyId::ObjectIdentifier ||
+      !bacnetNativeParseProperty("protocolRevision", property) ||
+      property != BacnetPropertyId::ProtocolRevision ||
+      !bacnetNativeParseProperty("property-list", property) ||
+      property != BacnetPropertyId::PropertyList ||
       !bacnetNativeParseProperty("statusFlags", property) ||
       property != BacnetPropertyId::StatusFlags ||
       bacnetNativeParseProperty("unknown-property", property) ||

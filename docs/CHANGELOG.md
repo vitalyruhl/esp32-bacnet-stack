@@ -7,15 +7,19 @@ This changelog is a curated overview.
 ## 0.34.0
 
 - Added a bounded on-demand Property Browser to the shared WiFi/Ethernet client
-  demo. It reads at most eight known Device, AV, or MSV properties of a bounded
-  discovered/configured object, preserves typed values and per-property
-  statuses, and can subscribe to one explicitly selected property with visible
-  SubscribeCOV or polling-fallback state.
-- Added an explicit `usb_write` WiFi HIL environment. The normal WiFi `usb`
-  environment remains read-only; the opt-in environment only enables the
-  existing manual priority controls.
-- Kept manual priority writes in the existing override card. Read-only builds
-  show no active write actions and do not enable the related settings.
+  demo. It reads up to eight advertised Device, AV, or MSV properties of a
+  bounded discovered/configured object; its known-property profile is used only
+  when the correctly addressed object explicitly reports `Property_List` as
+  unsupported. It preserves typed values and per-property statuses, including
+  canonical BACnet error names, and can subscribe to one explicitly selected
+  property with visible SubscribeCOV or polling-fallback state.
+- Added canonical portable BACnet error class/code names for known
+  ReadProperty errors such as `unknown-object (object/31)`,
+  `unknown-property (property/32)`, and `invalid-array-index`.
+- Aligned the canonical WiFi `usb` and Ethernet `eth` rich client demos: both
+  explicitly enable the existing WriteProperty and priority-write gates, while
+  the library itself remains read-only by default. Each manual priority action
+  remains a single explicit request and must be relinquished explicitly.
 
 ## 0.33.0
 

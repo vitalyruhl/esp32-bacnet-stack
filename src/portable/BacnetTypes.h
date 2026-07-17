@@ -63,6 +63,7 @@ enum class BacnetPropertyId : uint32_t {
   MinPresentValue = 69,
   ModelName = 70,
   NumberOfStates = 74,
+  ObjectIdentifier = 75,
   ObjectList = 76,
   ObjectName = 77,
   ObjectType = 79,
@@ -112,6 +113,35 @@ enum class BacnetValueType : uint8_t {
   NotCommandable,
   Unsupported,
 };
+
+// Stable BACnet error names used by protocol decoders and presentation layers.
+// Keep error class/code interpretation here so native and Arduino clients do
+// not describe the same protocol response differently.
+inline const char* bacnetErrorClassName(uint32_t errorClass) {
+  switch (errorClass) {
+    case 1:
+      return "object";
+    case 2:
+      return "property";
+    default:
+      return "error";
+  }
+}
+
+inline const char* bacnetErrorCodeName(uint32_t errorCode) {
+  switch (errorCode) {
+    case 26:
+      return "optional-functionality-not-supported";
+    case 31:
+      return "unknown-object";
+    case 32:
+      return "unknown-property";
+    case 42:
+      return "invalid-array-index";
+    default:
+      return "error";
+  }
+}
 
 // Stable technical names for BACnet values. Presentation layers may format a
 // value differently, but must not maintain a second mapping for its type.
@@ -246,6 +276,8 @@ inline const char* bacnetPropertyName(BacnetPropertyId property) {
       return "modelName";
     case BacnetPropertyId::NumberOfStates:
       return "numberOfStates";
+    case BacnetPropertyId::ObjectIdentifier:
+      return "objectIdentifier";
     case BacnetPropertyId::ObjectList:
       return "objectList";
     case BacnetPropertyId::ObjectName:

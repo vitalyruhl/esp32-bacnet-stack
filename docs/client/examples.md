@@ -31,17 +31,18 @@ It demonstrates:
 - session creation for the configured or first discovered BACnet target
 - non-blocking object-list scanning
 - bounded on-demand Property Browser for a discovered or configured Device, AV,
-  or MSV object (at most eight known properties, each retaining its own value
-  or failure status)
+  or MSV object (at most eight advertised properties; a known-property profile
+  is used only when the correctly addressed object's `Property_List` is
+  unsupported, and each row retains its own value or failure status)
 - selected-property SubscribeCOV with visible polling-fallback state
-- read-only value and status presentation
+- read-only value/status monitoring plus separately gated manual priority actions
 - BACnet logger forwarding into the demo GUI log
 - runtime rescan action support
 
 The demo remains an example layer. BACnet protocol behavior should stay in the reusable library APIs.
-The default WiFi `usb` build exposes no active WriteProperty controls. The
-separate `usb_write` environment is an explicit HIL-only opt-in that enables
-the existing manual priority controls without changing the default.
+The canonical WiFi `usb` and Ethernet `eth` builds enable the same existing
+manual priority controls. They are still compile-time opt-ins at the demo
+level, and every operation requires an explicit user action.
 
 ## `examples/client-demo-ETH`
 

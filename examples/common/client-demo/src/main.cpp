@@ -545,7 +545,7 @@ static void formatBacnetPropertySummary(size_t propertyIndex,
     out.append(property.value.displayText());
     return;
   }
-  out.append(bacnetReadStatusText(property.status));
+  out.append(bacnetReadStatusText(property.status, property.value));
 }
 
 static const char* valueObjectPresentValueText(
@@ -664,7 +664,15 @@ static void formatPropertyBrowserRows(FixedTextBuffer& out) {
     if (!out.empty()) {
       out.append('\n');
     }
-    out.appendFormat("%u. %s: ", static_cast<unsigned>(i + 1), bacnetPropertyName(row->propertyId));
+    out.appendFormat("%u. ", static_cast<unsigned>(i + 1));
+    const char* propertyName = bacnetPropertyName(row->propertyId);
+    if (std::strcmp(propertyName, "property") == 0) {
+      out.appendFormat(
+        "property-%lu: ", static_cast<unsigned long>(row->propertyId));
+    } else {
+      out.append(propertyName);
+      out.append(": ");
+    }
     const bool selected = propertyBrowser.hasSelection() &&
                           propertyBrowser.selectedIndex() == i;
     if (selected && subscription != nullptr && subscription->hasValue()) {
@@ -678,7 +686,7 @@ static void formatPropertyBrowserRows(FixedTextBuffer& out) {
       out.append(bacnetValueTypeName(row->value.type));
       out.append("]");
     } else {
-      out.append(bacnetPropertyReadStatusText(row->status));
+      out.append(bacnetPropertyReadStatusText(*row));
     }
   }
   if (out.empty()) {
@@ -1381,6 +1389,10 @@ static void readDeviceProperties(BacnetDeviceSession& session) {
     property.status =
       session.object(session.deviceObject())
         .readProperty(property.id, property.value, kBacnetScanReadTimeoutMs);
+    demoLogging.log(BacnetDemoLogging::Level::Info,
+                    "device property %s: %s",
+                    property.name,
+                    bacnetReadStatusText(property.status, property.value));
   }
 }
 
@@ -1832,9 +1844,11 @@ static void pollBacnetSubscriptions() {
     return;
   }
 
-  if (propertyBrowserLoadQueued && !activeBacnetSession->isBusy()) {
-    propertyBrowserLoadQueued = false;
-    finishPropertyBrowserLoad();
+  if (propertyBrowserLoadQueued) {
+    if (!activeBacnetSession->isBusy()) {
+      propertyBrowserLoadQueued = false;
+      finishPropertyBrowserLoad();
+    }
     return;
   }
 

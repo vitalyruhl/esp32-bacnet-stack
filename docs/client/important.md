@@ -50,10 +50,12 @@
   them explicitly. See [Command priority reset semantics](../bacnet-command-priority.md).
 - The library must remain vendor-neutral and must not hardcode WAGO-specific assumptions in reusable APIs.
 - ConfigManager is optional demo infrastructure and is not a library dependency.
-- The rich client demo keeps object/property presentation bounded and reads a
-  small known-property profile only after an explicit browser action. It never
-  writes during startup, discovery, scan, refresh, polling, COV handling,
-  reconnect, resubscription, or settings persistence.
+- The rich client demo keeps object/property presentation bounded. After an
+  explicit browser action it reads up to eight advertised properties; a small
+  known-property profile is only a compatibility path for a correctly addressed
+  object that explicitly reports `Property_List` unsupported. It never writes
+  during startup, discovery, scan, refresh, polling, COV handling, reconnect,
+  resubscription, or settings persistence.
 
 ## Transport Scope
 

@@ -64,6 +64,10 @@ const char* metadataValue(BacnetClient& client, const BacnetIpEndpoint& endpoint
   BacnetValue value;
   const BacnetNativeReadStatus status = bacnetNativeReadProperty(client, endpoint, BacnetPropertyRequest{BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::Device), deviceId}, property}, timeoutMs, value);
   if (status == BacnetNativeReadStatus::Ack) { std::snprintf(buffer, capacity, "%s", value.displayText()); }
+  else if (status == BacnetNativeReadStatus::Error &&
+           value.type == BacnetValueType::Error && value.textLength > 0) {
+    std::snprintf(buffer, capacity, "<%s>", value.displayText());
+  }
   else { std::snprintf(buffer, capacity, "<%s>", bacnetNativeReadStatusText(status)); }
   return buffer;
 }
@@ -144,7 +148,7 @@ int main(int argc, char* argv[]) {
     }
     for (size_t index = 0; index < deviceCount; ++index) {
       const BacnetIAmDevice& device = devices[index];
-      std::printf("device-id=%lu ip=%u.%u.%u.%u port=%u\n", static_cast<unsigned long>(device.deviceInstance), static_cast<unsigned>(device.endpoint.address[0]), static_cast<unsigned>(device.endpoint.address[1]), static_cast<unsigned>(device.endpoint.address[2]), static_cast<unsigned>(device.endpoint.address[3]), static_cast<unsigned>(device.endpoint.port));
+      std::printf("device-id=%lu ip=%u.%u.%u.%u port=%u max-apdu=%lu segmentation=%u\n", static_cast<unsigned long>(device.deviceInstance), static_cast<unsigned>(device.endpoint.address[0]), static_cast<unsigned>(device.endpoint.address[1]), static_cast<unsigned>(device.endpoint.address[2]), static_cast<unsigned>(device.endpoint.address[3]), static_cast<unsigned>(device.endpoint.port), static_cast<unsigned long>(device.maxApduLengthAccepted), static_cast<unsigned>(device.segmentationSupported));
     }
     return deviceCount > 0 ? 0 : (usedInterface ? 2 : 1);
   }
@@ -160,7 +164,7 @@ int main(int argc, char* argv[]) {
   while (client.nowMs() - start < options.timeoutMs) {
     BacnetIAmDevice device;
     if (client.pollIAm(device) && (!options.hasDeviceId || device.deviceInstance == options.deviceId)) {
-      std::printf("device-id=%lu\nip=%u.%u.%u.%u\nport=%u\n", static_cast<unsigned long>(device.deviceInstance), static_cast<unsigned>(device.endpoint.address[0]), static_cast<unsigned>(device.endpoint.address[1]), static_cast<unsigned>(device.endpoint.address[2]), static_cast<unsigned>(device.endpoint.address[3]), static_cast<unsigned>(device.endpoint.port));
+      std::printf("device-id=%lu\nip=%u.%u.%u.%u\nport=%u\nmax-apdu=%lu\nsegmentation=%u\n", static_cast<unsigned long>(device.deviceInstance), static_cast<unsigned>(device.endpoint.address[0]), static_cast<unsigned>(device.endpoint.address[1]), static_cast<unsigned>(device.endpoint.address[2]), static_cast<unsigned>(device.endpoint.address[3]), static_cast<unsigned>(device.endpoint.port), static_cast<unsigned long>(device.maxApduLengthAccepted), static_cast<unsigned>(device.segmentationSupported));
       printMetadata(client, device.endpoint, device.deviceInstance, options.timeoutMs);
       printObjectCounts(client, device.endpoint, device.deviceInstance, options.timeoutMs); found = true; break;
     }

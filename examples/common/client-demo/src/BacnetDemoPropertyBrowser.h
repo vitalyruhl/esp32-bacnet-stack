@@ -11,6 +11,10 @@
 class BacnetDemoPropertyBrowser {
 public:
   static constexpr size_t kMaxProperties = 8;
+  // Keep the discovery input bounded independently from the eight visible
+  // rows. This covers the currently observed Device/AV/MSV Property_Lists
+  // without moving large BacnetValue instances onto the Arduino loop stack.
+  static constexpr size_t kMaxAdvertisedProperties = 64;
 
   void reset();
   void load(BacnetDeviceSession& session,
@@ -42,6 +46,7 @@ public:
 private:
   BacnetObjectId object_;
   BacnetPropertyReadAllResult summary_;
+  BacnetPropertyId advertisedProperties_[kMaxAdvertisedProperties];
   BacnetPropertyReadResult rows_[kMaxProperties];
   size_t rowCount_ = 0;
   size_t selectedIndex_ = kMaxProperties;

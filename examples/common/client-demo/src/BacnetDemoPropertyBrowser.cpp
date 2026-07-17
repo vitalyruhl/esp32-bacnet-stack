@@ -6,14 +6,18 @@
 
 namespace {
 
-size_t fallbackPropertiesForObject(BacnetObjectId object,
-                                   BacnetPropertyId* properties,
-                                   size_t capacity) {
+size_t preferredPropertiesForObject(BacnetObjectId object,
+                                    BacnetPropertyId* properties,
+                                    size_t capacity) {
   static constexpr BacnetPropertyId kDeviceProperties[] = {
+    BacnetPropertyId::ObjectIdentifier,
     BacnetPropertyId::ObjectName,
+    BacnetPropertyId::ObjectType,
+    BacnetPropertyId::VendorIdentifier,
     BacnetPropertyId::VendorName,
     BacnetPropertyId::ModelName,
     BacnetPropertyId::FirmwareRevision,
+    BacnetPropertyId::ProtocolRevision,
   };
   static constexpr BacnetPropertyId kAnalogValueProperties[] = {
     BacnetPropertyId::ObjectName,
@@ -58,12 +62,56 @@ size_t fallbackPropertiesForObject(BacnetObjectId object,
   return count;
 }
 
-}  // namespace
+bool containsProperty(const BacnetPropertyId* properties,
+                      size_t count,
+                      BacnetPropertyId property) {
+  for (size_t i = 0; i < count; ++i) {
+    if (properties[i] == property) {
+      return true;
+    }
+  }
+  return false;
+}
+
+size_t selectAdvertisedProperties(BacnetObjectId object,
+                                  const BacnetPropertyId* advertised,
+                                  size_t advertisedCount,
+                                  BacnetPropertyId* selected,
+                                  size_t selectedCapacity) {
+  if (advertised == nullptr || selected == nullptr || selectedCapacity == 0) {
+    return 0;
+  }
+
+  BacnetPropertyId preferred[BacnetDemoPropertyBrowser::kMaxProperties] = {};
+  const size_t preferredCount = preferredPropertiesForObject(
+    object, preferred, BacnetDemoPropertyBrowser::kMaxProperties);
+  size_t selectedCount = 0;
+
+  // The UI remains bounded, but its rows are selected exclusively from the
+  // object-advertised Property_List. Common properties are shown first so a
+  // user can select Present_Value for a COV subscription when it is offered.
+  for (size_t i = 0; i < preferredCount && selectedCount < selectedCapacity; ++i) {
+    if (containsProperty(advertised, advertisedCount, preferred[i])) {
+      selected[selectedCount++] = preferred[i];
+    }
+  }
+  for (size_t i = 0; i < advertisedCount && selectedCount < selectedCapacity; ++i) {
+    if (!containsProperty(selected, selectedCount, advertised[i])) {
+      selected[selectedCount++] = advertised[i];
+    }
+  }
+  return selectedCount;
+}
+
+} // namespace
 
 void BacnetDemoPropertyBrowser::reset() {
   subscription_.reset();
   object_ = BacnetObjectId{};
   summary_ = BacnetPropertyReadAllResult{};
+  for (size_t i = 0; i < kMaxAdvertisedProperties; ++i) {
+    advertisedProperties_[i] = BacnetPropertyId::ObjectName;
+  }
   for (size_t i = 0; i < kMaxProperties; ++i) {
     rows_[i] = BacnetPropertyReadResult{};
   }
@@ -76,8 +124,43 @@ void BacnetDemoPropertyBrowser::load(BacnetDeviceSession& session,
                                      BacnetObjectId object,
                                      uint32_t timeoutMs) {
   BacnetPropertyId properties[kMaxProperties] = {};
-  BacnetPropertyReadResult rows[kMaxProperties] = {};
-  const size_t propertyCount = fallbackPropertiesForObject(
+  // BacnetValue retains a bounded display buffer. Keep the eight result rows
+  // in this browser's persistent storage instead of placing several kilobytes
+  // on the Arduino loop stack during a web-triggered browser load.
+  BacnetPropertyReadResult* const rows = rows_;
+
+  const BacnetPropertyListReadResult propertyList = session.object(object).readPropertyList(
+    advertisedProperties_, kMaxAdvertisedProperties, timeoutMs);
+  BacnetPropertyReadAllResult advertisedResult;
+  advertisedResult.propertyListStatus = propertyList.status;
+  advertisedResult.advertised = propertyList.advertised;
+  advertisedResult.collected = propertyList.stored;
+  advertisedResult.truncated = propertyList.truncated;
+
+  if (propertyList.status == BacnetPropertyReadStatus::Ack) {
+    const size_t propertyCount = selectAdvertisedProperties(
+      object, advertisedProperties_, propertyList.stored, properties, kMaxProperties);
+    BacnetPropertyReadAllResult operationResult = session.readAllProperties(
+      object, properties, propertyCount, rows, kMaxProperties, timeoutMs);
+    operationResult.propertyListStatus = propertyList.status;
+    operationResult.advertised = propertyList.advertised;
+    operationResult.collected = propertyList.stored;
+    operationResult.truncated = operationResult.truncated || propertyList.truncated ||
+                                propertyList.stored > propertyCount;
+    applyReadAllResult(object, operationResult, rows, operationResult.stored);
+    return;
+  }
+
+  // A bounded profile is only a compatibility path for an object that
+  // explicitly reports that Property_List is unsupported. It must never hide
+  // an addressing, timeout, or decode failure of the requested object.
+  if (advertisedResult.propertyListStatus !=
+      BacnetPropertyReadStatus::UnsupportedProperty) {
+    applyReadAllResult(object, advertisedResult, rows, advertisedResult.stored);
+    return;
+  }
+
+  const size_t propertyCount = preferredPropertiesForObject(
     object, properties, kMaxProperties);
   if (propertyCount > 0) {
     const BacnetPropertyReadAllResult operationResult = session.readAllProperties(
@@ -87,10 +170,8 @@ void BacnetDemoPropertyBrowser::load(BacnetDeviceSession& session,
     return;
   }
 
-  const BacnetPropertyReadAllResult operationResult =
-    session.object(object).readAllAdvertisedProperties(
-      properties, kMaxProperties, rows, kMaxProperties, timeoutMs);
-  applyReadAllResult(object, operationResult, rows, operationResult.stored);
+  applyReadAllResult(
+    object, advertisedResult, rows, advertisedResult.stored);
 }
 
 void BacnetDemoPropertyBrowser::applyReadAllResult(
@@ -138,8 +219,7 @@ bool BacnetDemoPropertyBrowser::subscribe(
   }
 
   subscription_.reset(new BacnetPropertySubscription(
-    session.object(object_).property(rows_[selectedIndex_].propertyId)
-      .subscribe(nullptr, nullptr, options)));
+    session.object(object_).property(rows_[selectedIndex_].propertyId).subscribe(nullptr, nullptr, options)));
   return subscription_ != nullptr && subscription_->active();
 }
 
