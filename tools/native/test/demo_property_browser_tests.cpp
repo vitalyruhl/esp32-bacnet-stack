@@ -17,6 +17,162 @@ bool expect(bool condition, const char* message) {
   return condition;
 }
 
+class FakeClock final : public BacnetMonotonicClock {
+public:
+  uint32_t nowMs() const override { return now; }
+
+  uint32_t now = 0;
+};
+
+class FakeTransport final : public BacnetDatagramTransport {
+public:
+  bool begin(uint16_t) override { return true; }
+  void end() override {}
+  bool send(const BacnetIpEndpoint&, const uint8_t*, size_t) override {
+    ++sendCount;
+    return true;
+  }
+  size_t receive(uint8_t* data, size_t capacity, BacnetIpEndpoint&) override {
+    if (responseSize == 0 || responseSize > capacity) {
+      return 0;
+    }
+    std::memcpy(data, response, responseSize);
+    const size_t size = responseSize;
+    responseSize = 0;
+    return size;
+  }
+  void idle() override {}
+
+  unsigned sendCount = 0;
+  uint8_t response[64] = {};
+  size_t responseSize = 0;
+};
+
+size_t buildReadAck(uint8_t* buffer,
+                    uint8_t invokeId,
+                    BacnetObjectId object,
+                    BacnetPropertyId property,
+                    uint32_t arrayIndex,
+                    const uint8_t* value,
+                    size_t valueLength) {
+  size_t offset = 0;
+  buffer[offset++] = 0x81;
+  buffer[offset++] = 0x0A;
+  buffer[offset++] = 0;
+  buffer[offset++] = 0;
+  buffer[offset++] = 0x01;
+  buffer[offset++] = 0x00;
+  buffer[offset++] = 0x30;
+  buffer[offset++] = invokeId;
+  buffer[offset++] = 0x0C;
+  buffer[offset++] = 0x0C;
+  buffer[offset++] = static_cast<uint8_t>(object.type >> 8);
+  buffer[offset++] = static_cast<uint8_t>(object.type << 6 | object.instance >> 16);
+  buffer[offset++] = static_cast<uint8_t>(object.instance >> 8);
+  buffer[offset++] = static_cast<uint8_t>(object.instance);
+  const uint32_t propertyValue = static_cast<uint32_t>(property);
+  if (propertyValue <= 0xFF) {
+    buffer[offset++] = 0x19;
+    buffer[offset++] = static_cast<uint8_t>(propertyValue);
+  } else {
+    buffer[offset++] = 0x1A;
+    buffer[offset++] = static_cast<uint8_t>(propertyValue >> 8);
+    buffer[offset++] = static_cast<uint8_t>(propertyValue);
+  }
+  if (arrayIndex != kBacnetNoArrayIndex) {
+    buffer[offset++] = 0x29;
+    buffer[offset++] = static_cast<uint8_t>(arrayIndex);
+  }
+  buffer[offset++] = 0x3E;
+  std::memcpy(buffer + offset, value, valueLength);
+  offset += valueLength;
+  buffer[offset++] = 0x3F;
+  buffer[2] = static_cast<uint8_t>(offset >> 8);
+  buffer[3] = static_cast<uint8_t>(offset);
+  return offset;
+}
+
+void testIncrementalLoadScheduling() {
+  FakeTransport transport;
+  FakeClock clock;
+  BacnetClient client(transport, &clock);
+  expect(client.begin(), "fake client must start");
+  const BacnetObjectId object{
+    static_cast<uint16_t>(BacnetObjectType::AnalogValue), 200};
+  BacnetDeviceSession session(client, 1234, BacnetIpEndpoint(192, 0, 2, 1));
+  BacnetDemoPropertyBrowser browser;
+
+  expect(browser.queueLoad(object, 100), "browser load must queue");
+  expect(browser.loadState() == BacnetDemoPropertyBrowser::LoadState::Queued,
+         "browser must expose queued before its first transaction");
+  browser.poll(session, clock.now);
+  expect(transport.sendCount == 1,
+         "first browser poll must start only the Property_List count request");
+  browser.poll(session, clock.now);
+  expect(transport.sendCount == 1,
+         "an in-flight request must not start another browser transaction");
+
+  const uint8_t countValue[] = {0x21, 0x01};
+  transport.responseSize = buildReadAck(
+    transport.response, 1, object, BacnetPropertyId::PropertyList, 0,
+    countValue, sizeof(countValue));
+  browser.poll(session, clock.now);
+  expect(transport.sendCount == 1,
+         "processing a completed request must not start another request in the same poll");
+  browser.poll(session, clock.now);
+  expect(transport.sendCount == 1,
+         "state transition must remain request-free");
+  browser.poll(session, clock.now);
+  expect(transport.sendCount == 2,
+         "the next Property_List entry starts on a later browser poll");
+}
+
+void testBusyAndCancelledLoad() {
+  FakeTransport transport;
+  FakeClock clock;
+  BacnetClient client(transport, &clock);
+  expect(client.begin(), "fake client must start");
+  const BacnetObjectId object{
+    static_cast<uint16_t>(BacnetObjectType::AnalogValue), 200};
+  BacnetDeviceSession session(client, 1234, BacnetIpEndpoint(192, 0, 2, 1));
+  BacnetPropertyReadJob blocker;
+  expect(session.beginPropertyRead(
+           blocker,
+           BacnetPropertyRequest{object, BacnetPropertyId::ObjectName},
+           100,
+           clock.now),
+         "test blocker must start");
+  BacnetDemoPropertyBrowser browser;
+  expect(browser.queueLoad(object, 100), "browser load must queue behind busy session");
+  browser.poll(session, clock.now);
+  expect(transport.sendCount == 1,
+         "a busy session must not let the browser start a second transaction");
+  browser.cancelLoad(session);
+  expect(browser.loadState() == BacnetDemoPropertyBrowser::LoadState::Cancelled,
+         "cancelling a queued browser job must leave no active browser job");
+  session.cancelPropertyRead(blocker);
+}
+
+void testTimedOutPropertyListFailsWithoutRetryLoop() {
+  FakeTransport transport;
+  FakeClock clock;
+  BacnetClient client(transport, &clock);
+  expect(client.begin(), "fake client must start");
+  BacnetDeviceSession session(client, 1234, BacnetIpEndpoint(192, 0, 2, 1));
+  BacnetDemoPropertyBrowser browser;
+  expect(browser.queueLoad(
+           BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::AnalogValue), 200},
+           10),
+         "browser load must queue");
+  browser.poll(session, 0);
+  browser.poll(session, 11);
+  browser.poll(session, 11);
+  expect(browser.loadState() == BacnetDemoPropertyBrowser::LoadState::Failed,
+         "a Property_List timeout must fail the browser job visibly");
+  expect(transport.sendCount == 1,
+         "a timed-out Property_List request must not enter a retry loop");
+}
+
 void testBoundedRowsAndSelection() {
   BacnetDemoPropertyBrowser browser;
   BacnetPropertyReadAllResult summary;
@@ -132,5 +288,8 @@ int main() {
   testBoundedRowsAndSelection();
   testPropertyFailureTextCoverage();
   testRowsSurvivePropertyListFailure();
+  testIncrementalLoadScheduling();
+  testBusyAndCancelledLoad();
+  testTimedOutPropertyListFailsWithoutRetryLoop();
   return failures == 0 ? 0 : 1;
 }

@@ -29,17 +29,6 @@ bool textEquals(const char* left, const char* right) {
   return std::strcmp(resolvedLeft, resolvedRight) == 0;
 }
 
-bool propertyIdFromPropertyListValue(const BacnetValue& value,
-                                     BacnetPropertyId& propertyId) {
-  if (value.type != BacnetValueType::Enumerated &&
-      value.type != BacnetValueType::Unsigned) {
-    return false;
-  }
-
-  propertyId = static_cast<BacnetPropertyId>(value.unsignedValue);
-  return true;
-}
-
 bool enumValueFromBacnetValue(const BacnetValue& value, uint32_t& output) {
   if (value.type != BacnetValueType::Enumerated &&
       value.type != BacnetValueType::Unsigned) {
@@ -118,6 +107,16 @@ BacnetPropertyReadStatus classifyDetailedReadStatus(
 }
 
 } // namespace
+
+bool bacnetPropertyIdFromPropertyListValue(const BacnetValue& value,
+                                           BacnetPropertyId& propertyId) {
+  if (value.type != BacnetValueType::Enumerated &&
+      value.type != BacnetValueType::Unsigned) {
+    return false;
+  }
+  propertyId = static_cast<BacnetPropertyId>(value.unsignedValue);
+  return true;
+}
 
 bool bacnetDecodeStatusFlags(const BacnetValue& value,
                              BacnetStatusFlags& flags) {
@@ -467,9 +466,11 @@ BacnetDeviceSession BacnetDeviceSession::fromEndpoint(BacnetClient& client,
 
 BacnetDeviceSession BacnetDeviceSession::fromIAm(BacnetClient& client,
                                                  const BacnetIAmDevice& device,
-                                                 uint16_t port) {
+                                                 uint16_t portOverride) {
   BacnetIpEndpoint discoveredEndpoint = device.endpoint;
-  discoveredEndpoint.port = port;
+  if (portOverride != 0) {
+    discoveredEndpoint.port = portOverride;
+  }
   return fromEndpoint(client, device.deviceInstance, discoveredEndpoint);
 }
 
@@ -573,7 +574,8 @@ BacnetPropertyReadStatus BacnetDeviceSession::readPriorityArray(
   value = BacnetPriorityArray{};
   const BacnetPropertyRequest request{
     objectId, BacnetPropertyId::PriorityArray, kBacnetNoArrayIndex};
-  if (inFlightSubscription_ != nullptr || inFlightObjectListScan_ != nullptr) {
+  if (inFlightSubscription_ != nullptr || inFlightObjectListScan_ != nullptr ||
+      inFlightPropertyRead_ != nullptr) {
     client_.logger().warn(
       "BACnet/ReadProperty",
       "ReadProperty %s,%lu priorityArray skipped: session busy",
@@ -622,7 +624,8 @@ BacnetDeviceSessionReadStatus BacnetDeviceSession::readProperty(
 
 BacnetDeviceSessionWriteStatus BacnetDeviceSession::writeProperty(
   BacnetObjectId objectId, BacnetPropertyId property, const BacnetValue& value, uint32_t timeoutMs, uint32_t arrayIndex) {
-  if (inFlightSubscription_ != nullptr || inFlightObjectListScan_ != nullptr) {
+  if (inFlightSubscription_ != nullptr || inFlightObjectListScan_ != nullptr ||
+      inFlightPropertyRead_ != nullptr) {
     return BacnetDeviceSessionWriteStatus::Busy;
   }
 #if !ESP_BACNET_ENABLE_WRITE_PROPERTY
@@ -687,7 +690,8 @@ BacnetDeviceSessionWriteStatus BacnetDeviceSession::writeProperty(
 
 BacnetDeviceSessionWriteStatus BacnetDeviceSession::writeProperty(
   BacnetObjectType objectType, uint32_t objectInstance, BacnetPropertyId property, const BacnetValue& value, const BacnetWritePropertyOptions& options, uint32_t timeoutMs) {
-  if (inFlightSubscription_ != nullptr || inFlightObjectListScan_ != nullptr) {
+  if (inFlightSubscription_ != nullptr || inFlightObjectListScan_ != nullptr ||
+      inFlightPropertyRead_ != nullptr) {
     return BacnetDeviceSessionWriteStatus::Busy;
   }
 #if !ESP_BACNET_ENABLE_WRITE_PROPERTY
@@ -819,7 +823,8 @@ BacnetPropertyReadStatus BacnetDeviceSession::readPropertyDetailed(
   errorClass = 0;
   errorCode = 0;
 
-  if (inFlightSubscription_ != nullptr || inFlightObjectListScan_ != nullptr) {
+  if (inFlightSubscription_ != nullptr || inFlightObjectListScan_ != nullptr ||
+      inFlightPropertyRead_ != nullptr) {
     client_.logger().warn(
       "BACnet/ReadProperty",
       "ReadProperty %s,%lu property=%lu skipped: session busy",
@@ -898,7 +903,21 @@ size_t BacnetDeviceSession::cachedPropertyCount() const {
 }
 
 bool BacnetDeviceSession::isBusy() const {
-  return inFlightSubscription_ != nullptr || inFlightObjectListScan_ != nullptr;
+  return inFlightSubscription_ != nullptr || inFlightObjectListScan_ != nullptr ||
+         inFlightPropertyRead_ != nullptr;
+}
+
+void BacnetDeviceSession::pollInFlight(uint32_t nowMs) {
+  if (nowMs == kUseClientClock) {
+    nowMs = client_.nowMs();
+  }
+  if (inFlightPropertyRead_ != nullptr) {
+    pollInFlightPropertyRead(nowMs);
+  } else if (inFlightObjectListScan_ != nullptr) {
+    pollInFlightObjectListScan(nowMs);
+  } else if (inFlightSubscription_ != nullptr) {
+    pollInFlightSubscription(nowMs);
+  }
 }
 
 BacnetPropertyListReadResult BacnetDeviceSession::readPropertyList(
@@ -945,7 +964,7 @@ BacnetPropertyListReadResult BacnetDeviceSession::readPropertyList(
     }
 
     BacnetPropertyId propertyId = BacnetPropertyId::ObjectName;
-    if (!propertyIdFromPropertyListValue(propertyValue, propertyId)) {
+    if (!bacnetPropertyIdFromPropertyListValue(propertyValue, propertyId)) {
       result.status = BacnetPropertyReadStatus::DecodeError;
       return result;
     }
@@ -1004,6 +1023,8 @@ BacnetPropertyReadAllResult BacnetDeviceSession::readAllProperties(
       timeoutMs,
       errorClass,
       errorCode);
+    entry.errorClass = errorClass;
+    entry.errorCode = errorCode;
 
     ++summary.attempted;
     ++summary.stored;
@@ -1106,6 +1127,7 @@ bool BacnetDeviceSession::beginObjectListScan(
   }
   BacnetLogger& logger = client_.logger();
   if (inFlightObjectListScan_ != nullptr || inFlightSubscription_ != nullptr ||
+      inFlightPropertyRead_ != nullptr ||
       job.isActive()) {
     logger.warn("BACnet/Scan", "scan start skipped: session busy");
     return false;
@@ -1165,6 +1187,57 @@ void BacnetDeviceSession::cancelObjectListScan(BacnetObjectListScanJob& job) {
   releaseObjectListScan(job);
   job.status_ = BacnetObjectListScanJobStatus::Cancelled;
   job.phase_ = BacnetObjectListScanPhase::Cancelled;
+}
+
+bool BacnetDeviceSession::beginPropertyRead(
+  BacnetPropertyReadJob& job,
+  const BacnetPropertyRequest& request,
+  uint32_t timeoutMs,
+  uint32_t nowMs) {
+  if (nowMs == kUseClientClock) {
+    nowMs = client_.nowMs();
+  }
+  if (isBusy() || job.isActive()) {
+    client_.logger().warn("BACnet/ReadProperty", "non-blocking read skipped: session busy");
+    return false;
+  }
+
+  job.clear();
+  job.session_ = this;
+  job.status_ = BacnetPropertyReadJobStatus::Active;
+  job.request_ = request;
+  job.timeoutMs_ = timeoutMs;
+  inFlightPropertyRead_ = &job;
+
+  const uint8_t invokeId = allocateInvokeId();
+  if (!client_.sendReadProperty(endpoint_, request, invokeId)) {
+    finishPropertyRead(
+      job, BacnetPropertyReadStatus::SendFailed, nullptr, nowMs);
+    return false;
+  }
+  job.invokeId_ = invokeId;
+  job.startedAtMs_ = nowMs;
+  return true;
+}
+
+void BacnetDeviceSession::pollPropertyRead(const BacnetPropertyReadJob& job,
+                                           uint32_t nowMs) {
+  if (nowMs == kUseClientClock) {
+    nowMs = client_.nowMs();
+  }
+  if (job.session_ != this || !job.isActive()) {
+    return;
+  }
+  pollInFlightPropertyRead(nowMs);
+}
+
+void BacnetDeviceSession::cancelPropertyRead(BacnetPropertyReadJob& job) {
+  if (job.session_ != this || !job.isActive()) {
+    return;
+  }
+  client_.logger().warn("BACnet/ReadProperty", "non-blocking read cancelled");
+  releasePropertyRead(job);
+  job.status_ = BacnetPropertyReadJobStatus::Cancelled;
 }
 
 bool BacnetDeviceSession::tryStartObjectListScanRead(
@@ -1458,6 +1531,55 @@ void BacnetDeviceSession::releaseObjectListScan(BacnetObjectListScanJob& job) {
   job.clearInFlightState();
 }
 
+void BacnetDeviceSession::pollInFlightPropertyRead(uint32_t nowMs) {
+  if (inFlightPropertyRead_ == nullptr) {
+    return;
+  }
+
+  BacnetPropertyReadJob& job = *inFlightPropertyRead_;
+  BacnetValue value;
+  uint32_t errorClass = 0;
+  uint32_t errorCode = 0;
+  const BacnetReadPropertyPollStatus pollStatus = client_.pollReadPropertyStatus(
+    value, job.invokeId_, job.request_, &errorClass, &errorCode);
+  if (pollStatus != BacnetReadPropertyPollStatus::None) {
+    const BacnetPropertyReadStatus status = classifyDetailedReadStatus(
+      pollStatus, value, errorClass, errorCode, job.request_.arrayIndex);
+    finishPropertyRead(job, status, &value, nowMs, errorClass, errorCode);
+    return;
+  }
+  if (nowMs - job.startedAtMs_ >= job.timeoutMs_) {
+    client_.logReadPropertyTimeout(job.invokeId_, job.request_);
+    finishPropertyRead(job, BacnetPropertyReadStatus::Timeout, nullptr, nowMs);
+  }
+}
+
+void BacnetDeviceSession::finishPropertyRead(BacnetPropertyReadJob& job,
+                                             BacnetPropertyReadStatus status,
+                                             const BacnetValue* value,
+                                             uint32_t nowMs,
+                                             uint32_t errorClass,
+                                             uint32_t errorCode) {
+  job.readStatus_ = status;
+  job.value_ = value != nullptr ? *value : BacnetValue{};
+  job.errorClass_ = errorClass;
+  job.errorCode_ = errorCode;
+  updatePropertyCache(job.request_, status, value, nowMs, errorClass, errorCode);
+  releasePropertyRead(job);
+  job.status_ = status == BacnetPropertyReadStatus::Ack ||
+                    status == BacnetPropertyReadStatus::EmptyValue
+                  ? BacnetPropertyReadJobStatus::Complete
+                  : BacnetPropertyReadJobStatus::Failed;
+}
+
+void BacnetDeviceSession::releasePropertyRead(BacnetPropertyReadJob& job) {
+  if (inFlightPropertyRead_ == &job) {
+    inFlightPropertyRead_ = nullptr;
+  }
+  job.invokeId_ = 0;
+  job.startedAtMs_ = 0;
+}
+
 void BacnetDeviceSession::poll(BacnetPropertySubscription& subscription,
                                uint32_t nowMs) {
   if (nowMs == kUseClientClock) {
@@ -1496,7 +1618,8 @@ void BacnetDeviceSession::poll(BacnetPropertySubscription* subscriptions,
     nowMs = client_.nowMs();
   }
   pollInFlightSubscription(nowMs);
-  if (inFlightSubscription_ != nullptr || subscriptions == nullptr || count == 0) {
+  if (inFlightSubscription_ != nullptr || inFlightPropertyRead_ != nullptr ||
+      subscriptions == nullptr || count == 0) {
     return;
   }
 
@@ -1632,6 +1755,10 @@ void BacnetDeviceSession::updatePropertyCache(
     entry->hasValue = true;
     entry->lastSuccessMs = attemptAtMs;
     entry->updatedAtMs = attemptAtMs;
+  } else if (!entry->hasValue && value != nullptr) {
+    // Preserve a typed first-read BACnet Error for status reporting without
+    // replacing a previously cached successful value on later failures.
+    entry->value = *value;
   }
 }
 
@@ -1730,7 +1857,8 @@ void BacnetDeviceSession::pollInFlightSubscription(uint32_t nowMs) {
 void BacnetDeviceSession::tryStartSubscriptionPoll(
   BacnetPropertySubscription& subscription,
   uint32_t nowMs) {
-  if (!subscription.isDue(nowMs) || inFlightObjectListScan_ != nullptr) {
+  if (!subscription.isDue(nowMs) || inFlightObjectListScan_ != nullptr ||
+      inFlightPropertyRead_ != nullptr) {
     return;
   }
 
@@ -1770,6 +1898,7 @@ void BacnetDeviceSession::tryStartSubscriptionPoll(
 bool BacnetDeviceSession::tryStartCovSubscription(
   BacnetPropertySubscription& subscription, uint32_t nowMs) {
   if (!subscription.active_ || subscription.inFlight_ ||
+      inFlightPropertyRead_ != nullptr || inFlightObjectListScan_ != nullptr ||
       !subscription.options_.preferCov || subscription.covFallback_ ||
       (subscription.covActive_ &&
        static_cast<int32_t>(nowMs - subscription.covRenewAtMs_) < 0)) {
@@ -2006,4 +2135,17 @@ void BacnetObjectListScanJob::clearInFlightState() {
   requestInFlight_ = false;
   inFlightInvokeId_ = 0;
   inFlightStartedAtMs_ = 0;
+}
+
+void BacnetPropertyReadJob::clear() {
+  session_ = nullptr;
+  status_ = BacnetPropertyReadJobStatus::Idle;
+  request_ = BacnetPropertyRequest{};
+  readStatus_ = BacnetPropertyReadStatus::Busy;
+  value_ = BacnetValue{};
+  errorClass_ = 0;
+  errorCode_ = 0;
+  timeoutMs_ = 0;
+  invokeId_ = 0;
+  startedAtMs_ = 0;
 }

@@ -25,7 +25,6 @@
 #include "core/CoreWiFiServices.h"
 #endif
 
-#include "BacnetDemoFallbackObjects.h"
 #include "BacnetDemoBinaryValueStatus.h"
 #include "BacnetDemoFormat.h"
 #include "BacnetDemoLogging.h"
@@ -147,14 +146,8 @@ static BacnetDemoLogging demoLogging(ConfigManager, bacnetClient);
 #define BACNET_STATUS_OBJECT_INSTANCE 0
 #endif
 
-#ifndef BACNET_FALLBACK_ANALOG_OBJECT_INSTANCE
-#define BACNET_FALLBACK_ANALOG_OBJECT_INSTANCE 220
-#endif
-#ifndef BACNET_FALLBACK_BINARY_OBJECT_INSTANCE
-#define BACNET_FALLBACK_BINARY_OBJECT_INSTANCE 320
-#endif
-#ifndef BACNET_FALLBACK_MULTISTATE_OBJECT_INSTANCE
-#define BACNET_FALLBACK_MULTISTATE_OBJECT_INSTANCE 2020
+#ifndef BACNET_OVERRIDE_BINARY_OBJECT_INSTANCE
+#define BACNET_OVERRIDE_BINARY_OBJECT_INSTANCE 320
 #endif
 
 #ifndef BACNET_WATCHED_ANALOG_VALUE_INSTANCE
@@ -244,17 +237,14 @@ static BacnetDemoWatchedAnalogValue polledAnalogValue(
   kWatchedAnalogValuePollMs,
   kBacnetScanReadTimeoutMs);
 static BacnetDemoBinaryValueStatus overrideBinaryValueStatus(
-  BACNET_FALLBACK_BINARY_OBJECT_INSTANCE,
+  BACNET_OVERRIDE_BINARY_OBJECT_INSTANCE,
   kWatchedAnalogValuePollMs,
   kBacnetScanReadTimeoutMs);
 static float bacnetOverrideAnalogInput = 0.0F;
 static String bacnetOverrideStatus = "No manual action yet";
 static BacnetDemoPropertyBrowser propertyBrowser;
 static String propertyBrowserStatus = "Load a scanned object on demand";
-static bool propertyBrowserLoadQueued = false;
-static BacnetObjectId propertyBrowserQueuedObject;
 static BacnetScannedObject scanBuffer[kBacnetScanResultCapacity];
-static BacnetScannedObject fallbackScanBuffer[3];
 static BacnetObjectListScanJob scanJob;
 static std::unique_ptr<BacnetDeviceSession> activeBacnetSession;
 static const BacnetObjectType kValueObjectScanFilter[] = {
@@ -361,10 +351,8 @@ static void resetBacnetPreviews() {
   watchedAnalogValue.reset("not read");
   polledAnalogValue.reset("not read");
   overrideBinaryValueStatus.reset();
-  propertyBrowser.reset();
+  propertyBrowser.reset(activeBacnetSession.get());
   propertyBrowserStatus = "Load a scanned object on demand";
-  propertyBrowserLoadQueued = false;
-  propertyBrowserQueuedObject = BacnetObjectId{};
   activeBacnetVendorId = 0;
   bacnetScanStatus = "Scan not started";
   bacnetRescanSource = "";
@@ -428,8 +416,12 @@ static bool configuredPropertyBrowserObject(BacnetObjectId& object) {
                             static_cast<uint32_t>(configuredInstance)};
   }
   if (!isDisplayedBacnetObject(object)) {
-    propertyBrowserStatus = "Object is not in the bounded scan results";
-    return false;
+    // The preview is deliberately bounded, while the on-demand browser reads
+    // exactly one explicitly configured object. Do not turn the UI/RAM limit
+    // into a false claim that a known object is unavailable.
+    demoLogging.log(BacnetDemoLogging::Level::Info,
+                    "manual property browser object %s is outside preview",
+                    bacnetObjectDisplayName(object).c_str());
   }
   return true;
 }
@@ -444,19 +436,31 @@ static void loadPropertyBrowser() {
     return;
   }
   propertyBrowser.stopSubscription();
-  propertyBrowserLoadQueued = true;
-  propertyBrowserQueuedObject = object;
+  if (!propertyBrowser.queueLoad(object, kBacnetScanReadTimeoutMs)) {
+    propertyBrowserStatus = "Property browser load already active";
+    return;
+  }
   propertyBrowserStatus = "Load queued";
 }
 
-static void finishPropertyBrowserLoad() {
-  propertyBrowser.load(
-    *activeBacnetSession, propertyBrowserQueuedObject, kBacnetScanReadTimeoutMs);
+static void updatePropertyBrowserStatus() {
   const BacnetPropertyReadAllResult& summary = propertyBrowser.result();
-  if (!propertyBrowser.loaded()) {
+  if (propertyBrowser.loading()) {
+    propertyBrowserStatus = propertyBrowser.loadStateText();
+    return;
+  }
+  if (propertyBrowser.loadState() == BacnetDemoPropertyBrowser::LoadState::Failed) {
     propertyBrowserStatus = "Property-list: ";
     propertyBrowserStatus +=
       bacnetPropertyReadStatusText(summary.propertyListStatus);
+    return;
+  }
+  if (propertyBrowser.loadState() == BacnetDemoPropertyBrowser::LoadState::Cancelled) {
+    propertyBrowserStatus = "Load cancelled";
+    return;
+  }
+  if (!propertyBrowser.loaded()) {
+    propertyBrowserStatus = "Load a scanned object on demand";
     return;
   }
   if (propertyBrowser.usingFallbackProperties()) {
@@ -1484,91 +1488,6 @@ static void copyScanResultsToPreviews(const BacnetObjectScanResult& scan,
   }
 }
 
-static bool readConfiguredFallbackObject(BacnetDeviceSession& session,
-                                         BacnetObjectId object,
-                                         BacnetScannedObject& scanned,
-                                         BacnetValueObjectPreview* destination,
-                                         size_t destinationCount) {
-  if (object.instance == 0) {
-    return false;
-  }
-
-  scanned = BacnetScannedObject{};
-  scanned.objectId = object;
-  scanned.objectNameStatus =
-    session.object(object).readProperty(BacnetPropertyId::ObjectName,
-                                        scanned.objectName,
-                                        kBacnetScanReadTimeoutMs);
-  scanned.descriptionStatus =
-    session.object(object).readProperty(BacnetPropertyId::Description,
-                                        scanned.description,
-                                        kBacnetScanReadTimeoutMs);
-  scanned.presentValueStatus =
-    session.object(object).readProperty(BacnetPropertyId::PresentValue,
-                                        scanned.presentValue,
-                                        kBacnetScanReadTimeoutMs);
-
-  demoLogging.log(BacnetDemoLogging::Level::Info,
-                  "fallback probe %s objectName=%s description=%s present-value=%s",
-                  bacnetObjectDisplayName(object).c_str(),
-                  bacnetReadStatusText(scanned.objectNameStatus),
-                  bacnetReadStatusText(scanned.descriptionStatus),
-                  bacnetReadStatusText(scanned.presentValueStatus));
-
-  if (scanned.objectNameStatus != BacnetDeviceSessionReadStatus::Ack &&
-      scanned.descriptionStatus != BacnetDeviceSessionReadStatus::Ack &&
-      scanned.presentValueStatus != BacnetDeviceSessionReadStatus::Ack) {
-    demoLogging.log(BacnetDemoLogging::Level::Warn, "fallback object %s unavailable", bacnetObjectDisplayName(object).c_str());
-    return false;
-  }
-
-  if (!copyScannedObjectToPreview(scanned, destination, destinationCount)) {
-    demoLogging.log(BacnetDemoLogging::Level::Warn, "fallback object %s not stored: display full", bacnetObjectDisplayName(object).c_str());
-    return false;
-  }
-  return true;
-}
-
-static size_t appendConfiguredFallbackObjects(BacnetDeviceSession& session,
-                                              size_t& analogStored,
-                                              size_t& binaryStored,
-                                              size_t& multiStateStored) {
-  size_t loaded = 0;
-  demoLogging.log(BacnetDemoLogging::Level::Info, "configured fallback probe started");
-
-  if (analogStored == 0 && readConfiguredFallbackObject(
-                             session,
-                             bacnetDemoFallbackAnalogObject(BACNET_FALLBACK_ANALOG_OBJECT_INSTANCE),
-                             fallbackScanBuffer[0],
-                             analogValues,
-                             kBacnetMaxFoundObjectsToDisplay)) {
-    ++analogStored;
-    ++loaded;
-  }
-  if (binaryStored == 0 && readConfiguredFallbackObject(
-                             session,
-                             bacnetDemoFallbackBinaryObject(BACNET_FALLBACK_BINARY_OBJECT_INSTANCE),
-                             fallbackScanBuffer[1],
-                             binaryValues,
-                             kBacnetMaxFoundObjectsToDisplay)) {
-    ++binaryStored;
-    ++loaded;
-  }
-  if (multiStateStored == 0 && readConfiguredFallbackObject(
-                                 session,
-                                 bacnetDemoFallbackMultiStateObject(
-                                   BACNET_FALLBACK_MULTISTATE_OBJECT_INSTANCE),
-                                 fallbackScanBuffer[2],
-                                 multiStateValues,
-                                 kBacnetMaxFoundObjectsToDisplay)) {
-    ++multiStateStored;
-    ++loaded;
-  }
-
-  demoLogging.log(BacnetDemoLogging::Level::Info, "configured fallback probe complete loaded=%u", static_cast<unsigned>(loaded));
-  return loaded;
-}
-
 static BacnetObjectScanOptions makeValueObjectScanOptions() {
   BacnetObjectScanOptions options;
   bacnetSetObjectTypeFilter(options, kValueObjectScanFilter);
@@ -1617,23 +1536,8 @@ static void finishValueObjectScan(BacnetDeviceSession& session,
   size_t multiStateStored = 0;
   copyScanResultsToPreviews(scan, analogStored, binaryStored, multiStateStored);
 
-  const bool needsConfiguredFallback =
-    scan.objectListCountStatus != BacnetDeviceSessionReadStatus::Ack ||
-    scan.stored == 0 || analogStored == 0 || binaryStored == 0 ||
-    multiStateStored == 0;
-  size_t fallbackStored = 0;
-  if (needsConfiguredFallback) {
-    fallbackStored = appendConfiguredFallbackObjects(
-      session, analogStored, binaryStored, multiStateStored);
-  }
-
   bacnetScanStoredObjects = analogStored + binaryStored + multiStateStored;
-  if (fallbackStored > 0) {
-    bacnetScanStatus = "Configured fallback objects loaded: ";
-    bacnetScanStatus += String(static_cast<unsigned>(fallbackStored));
-  } else {
-    bacnetScanStatus = bacnetScanTerminalStatus(scan);
-  }
+  bacnetScanStatus = bacnetScanTerminalStatus(scan);
 
   size_t subscriptionsCreated = 0;
   for (size_t i = 0; i < kBacnetMaxFoundObjectsToDisplay; ++i) {
@@ -1666,13 +1570,8 @@ static void finishValueObjectScan(BacnetDeviceSession& session,
                   static_cast<unsigned>(binaryStored),
                   static_cast<unsigned>(multiStateStored),
                   scan.truncated ? "yes" : "no");
-  if (fallbackStored > 0) {
-    demoLogging.log(BacnetDemoLogging::Level::Info,
-                    "using configured fallback objects loaded=%u total=%u",
-                    static_cast<unsigned>(fallbackStored),
-                    static_cast<unsigned>(bacnetScanStoredObjects));
-  } else if (scan.stored == 0 ||
-             scan.objectListCountStatus != BacnetDeviceSessionReadStatus::Ack) {
+  if (scan.stored == 0 ||
+      scan.objectListCountStatus != BacnetDeviceSessionReadStatus::Ack) {
     demoLogging.log(BacnetDemoLogging::Level::Warn, "scan result: %s", bacnetScanStatus.c_str());
   }
   demoLogging.log(BacnetDemoLogging::Level::Info, "subscriptions recreated count=%u", static_cast<unsigned>(subscriptionsCreated));
@@ -1759,7 +1658,7 @@ static void selectBacnetDevice(const BacnetIAmDevice& device) {
   Serial.print(" at ");
   Serial.print(bacnetIpAddressFromEndpoint(device.endpoint));
   Serial.print(":");
-  Serial.println(BacnetClient::kDefaultPort);
+  Serial.println(activeBacnetSession->port());
   const IPAddress address = bacnetIpAddressFromEndpoint(device.endpoint);
   demoLogging.log(BacnetDemoLogging::Level::Info, "selected device %lu at %s:%u", static_cast<unsigned long>(device.deviceInstance), address.toString().c_str(), static_cast<unsigned>(device.endpoint.port));
 
@@ -1770,6 +1669,9 @@ static void selectBacnetDevice(const BacnetIAmDevice& device) {
 static void clearBacnetRuntime() {
   if (activeBacnetSession && scanJob.isActive()) {
     activeBacnetSession->cancelObjectListScan(scanJob);
+  }
+  if (activeBacnetSession) {
+    propertyBrowser.reset(activeBacnetSession.get());
   }
   resetValueObjects(analogValues, kBacnetMaxFoundObjectsToDisplay);
   resetValueObjects(binaryValues, kBacnetMaxFoundObjectsToDisplay);
@@ -1844,15 +1746,13 @@ static void pollBacnetSubscriptions() {
     return;
   }
 
-  if (propertyBrowserLoadQueued) {
-    if (!activeBacnetSession->isBusy()) {
-      propertyBrowserLoadQueued = false;
-      finishPropertyBrowserLoad();
-    }
+  const uint32_t now = millis();
+  if (propertyBrowser.loading()) {
+    propertyBrowser.poll(*activeBacnetSession, now);
+    updatePropertyBrowserStatus();
     return;
   }
 
-  const uint32_t now = millis();
   for (size_t i = 0; i < kBacnetMaxFoundObjectsToDisplay; ++i) {
     if (analogValues[i].subscription) {
       activeBacnetSession->poll(*analogValues[i].subscription, now);
@@ -1868,6 +1768,7 @@ static void pollBacnetSubscriptions() {
   watchedAnalogValue.poll(*activeBacnetSession, now);
   polledAnalogValue.poll(*activeBacnetSession, now);
   propertyBrowser.poll(*activeBacnetSession, now);
+  updatePropertyBrowserStatus();
   overrideBinaryValueStatus.configure(
     static_cast<uint32_t>(bacnetOverrideBvInstance.get()));
   overrideBinaryValueStatus.poll(*activeBacnetSession, now);
