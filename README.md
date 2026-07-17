@@ -13,8 +13,8 @@ coverage are still evolving.
 BACnet/IP client APIs are already usable for common read-oriented use cases,
 including common process object present-value reads, cached-property access,
 read-only process-object helpers, and Analog Value metadata reads, while
-advanced discovery workflows, priority writes, hardware-write validation, and
-the server MVP remain future work.
+advanced discovery workflows and the server MVP remain future work. Write and
+priority helpers remain explicit compile-time opt-ins.
 
 ## Implementation Matrix
 
@@ -44,9 +44,11 @@ the server MVP remain future work.
 | Object discovery | BACnet `property-list` discovery / safe read-all | ✅ Implemented | Caller-buffered APIs discover advertised properties where available and safely attempt each property with per-property status results. |
 | Subscriptions | Property subscription abstraction with fallback polling | 🟢 Use-case ready | Practical for cyclic update use cases without SubscribeCOV. |
 | Subscriptions | Real SubscribeCOV | ✅ Implemented | Registration, renewal, notification routing, and polling fallback are available. |
-| Writes | WriteProperty | ⚠️ Explicit opt-in | Typed client/session API; disabled by default at compile time. |
-| Writes | PresentValue priority write helpers | ⏳ Planned | Future client capability, not currently implemented. |
-| Writes | Hardware writes | 🚫 Not implemented | Disabled by default; future explicit opt-in only. |
+| Writes | WriteProperty | ⚠️ Explicit opt-in | Typed client/session API; disabled by default with `ESP_BACNET_ENABLE_WRITE_PROPERTY=0`. |
+| Writes | Optional priority `1..16` | ⚠️ Explicit opt-in | `BacnetWritePropertyOptions` and Present Value priority helpers additionally require `ESP_BACNET_ENABLE_PRIORITY_WRITE=1`. |
+| Writes | Priority Array / Relinquish Default reads | ✅ Implemented | Typed complete and indexed Priority Array reads plus Relinquish Default reads. |
+| Writes | Single priority relinquish | ✅ Implemented | `relinquishPresentValue()` writes `Present_Value = Null` at an explicit priority. |
+| Writes | Strict and writable priority reset | ✅ Implemented | Strict reset covers `1..16`; writable reset documents and skips priority `6`. |
 | Examples / validation | `examples/client-object-list-scan-basic` | ✅ Implemented | Canonical serial-only basic client example for known-target property read, object-list scan, and fallback polling. |
 | Examples / validation | `examples/client-demo-wifi` | ✅ Implemented | Preserved WiFi client demo with discovery, scan, process-value updates, a read-only value/status browser view, and a watched Analog Value card. |
 | Examples / validation | `examples/client-demo-ETH` | ✅ Implemented | WT32-ETH01 V1.4 Ethernet variant of the full client demo with ConfigManager V4.4.0. |
@@ -54,6 +56,7 @@ the server MVP remain future work.
 | Examples / validation | HIL scenario S01 non-blocking object-list scan | 🧪 Local HIL validated | Validated on local ESP32/BACnet-IP target setup. |
 | Examples / validation | HIL scenario S02 common process present-value reads | 🧪 Local HIL validated | Validated on local ESP32/WAGO BACnet-IP target setup. |
 | Examples / validation | HIL scenario S03 common process object status reads | 🧪 Local HIL validated | Validated on local ESP32/WAGO BACnet-IP target setup. |
+| Examples / validation | Priority WriteProperty HIL | 🧪 Local HIL validated | ESP32 and internal Windows HIL paths were exercised with explicit targets; the Windows utility is not a productive user CLI. |
 | Examples / validation | Future HIL scenarios S04-S09 | ⏳ Planned | Present as scenario blocks and skipped by default unless enabled. |
 | Server / transports | BACnet/IP server role | 🧱 Placeholder | Placeholder role exists; not a completed server feature set. |
 | Server / transports | Server MVP | ⏳ Planned | Planned after client runtime completion milestones. |
@@ -282,9 +285,16 @@ The executables are in the MSVC multi-config output directory
 Winsock runtime and transport only; the transport test uses local UDP loopback
 on `127.0.0.1` and sends no broadcasts.
 
-To validate a real BACnet/IP network, supply the local interface and its
-broadcast address at runtime; do not store site-specific addresses in the
-repository:
+Small PowerShell examples for the productive native tools are in
+[`tools/native/examples`](tools/native/examples/README.md). They cover
+Who-Is/I-Am discovery, AV/BV/MSV reads, SubscribeCOV, Analog Value listing, and
+an explicitly authorized Binary Value priority-8 toggle followed by a separate
+relinquish step. Edit their documented `settings.ps1` test-environment values
+before a parameterless invocation, or use explicit script parameters for a
+one-off target.
+
+To validate a real BACnet/IP network, configure the local interface and its
+broadcast address in the examples settings or pass them at runtime:
 
 `bacnet-discover` can also be run without network arguments. It sequentially
 tries suitable active IPv4 interfaces and writes each selected bind/broadcast
@@ -338,8 +348,18 @@ Optional compile-time write feature gates:
 `BacnetClient::sendWriteProperty()`/`pollWriteProperty()` encode supported
 `BacnetValue` types through the shared portable application-value codec. The
 write feature is disabled by default; a disabled build returns an explicit
-`Disabled` status and sends no datagram. Priority, priority-array handling, and
-automatic writes are not implemented.
+`Disabled` status and sends no datagram. Priority-array reads and explicit
+command-priority relinquish helpers are supported; direct priority-array and
+automatic writes are not implemented. See
+[Command Priority Reset Semantics](docs/bacnet-command-priority.md).
+
+`BacnetWritePropertyOptions` may supply an optional priority from `1` through
+`16`; omitting it preserves a normal WriteProperty request without a priority
+field. Invalid priority values are rejected before sending. Priority requests
+also require `ESP_BACNET_ENABLE_PRIORITY_WRITE=1`; when it is disabled, the
+request returns `Disabled` before an invoke ID is reserved or a datagram is
+created. The two feature gates are independently testable; enabling the
+priority gate without WriteProperty is rejected at compile time.
 
 ## Property Subscriptions
 

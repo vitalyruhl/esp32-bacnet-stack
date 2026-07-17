@@ -226,28 +226,83 @@ void test_portable_protocol_builds_who_is_request() {
 }
 
 void test_portable_protocol_builds_subscribe_cov_request() {
+  const BacnetObjectId analogValue200{
+    static_cast<uint16_t>(BacnetObjectType::AnalogValue), 200};
+  const uint8_t unconfirmed120[] = {
+    0x81, 0x0A, 0x00, 0x15, 0x01, 0x04, 0x00, 0x05, 0x00, 0x05, 0x09, 0x07, 0x1C, 0x00, 0x80, 0x00, 0xC8, 0x29, 0x00, 0x39, 0x78};
+  const uint8_t confirmed120[] = {
+    0x81, 0x0A, 0x00, 0x15, 0x01, 0x04, 0x00, 0x05, 0x00, 0x05, 0x09, 0x07, 0x1C, 0x00, 0x80, 0x00, 0xC8, 0x29, 0x01, 0x39, 0x78};
+  const uint8_t unconfirmedLifetimeZero[] = {
+    0x81, 0x0A, 0x00, 0x15, 0x01, 0x04, 0x00, 0x05, 0x00, 0x05, 0x09, 0x07, 0x1C, 0x00, 0x80, 0x00, 0xC8, 0x29, 0x00, 0x39, 0x00};
+  const uint8_t differentProcessAndObject[] = {
+    0x81, 0x0A, 0x00, 0x16, 0x01, 0x04, 0x00, 0x05, 0x00, 0x05, 0x0A, 0x12, 0x34, 0x1C, 0x01, 0x40, 0x00, 0x2A, 0x29, 0x01, 0x39, 0x78};
   uint8_t request[BacnetProtocol::kMaxSubscribeCovRequestSize] = {};
-  const size_t length = BacnetProtocol::buildSubscribeCovRequest(
-    request, sizeof(request), 7, BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::AnalogValue), 200}, 60);
-  TEST_ASSERT_TRUE(length > 18);
-  TEST_ASSERT_EQUAL_UINT8(0x81, request[0]);
-  TEST_ASSERT_EQUAL_UINT8(0x0A, request[1]);
-  TEST_ASSERT_EQUAL_UINT8(0x05, request[9]);
-  TEST_ASSERT_EQUAL_UINT8(0x09, request[10]);
-  TEST_ASSERT_EQUAL_UINT8(7, request[11]);
-  TEST_ASSERT_EQUAL_UINT32(0, BacnetProtocol::buildSubscribeCovRequest(nullptr, 0, 7, BacnetObjectId{}, 60));
+  size_t length = BacnetProtocol::buildSubscribeCovRequest(
+    request, sizeof(request), 7, analogValue200, 120);
+  TEST_ASSERT_EQUAL_UINT32(sizeof(unconfirmed120), length);
+  TEST_ASSERT_EQUAL_UINT8_ARRAY(unconfirmed120, request, sizeof(unconfirmed120));
+  TEST_ASSERT_EQUAL_UINT8(0x29, request[17]);
+  TEST_ASSERT_EQUAL_UINT8(0x00, request[18]);
+  TEST_ASSERT_EQUAL_UINT8(0x39, request[19]);
+  TEST_ASSERT_EQUAL_UINT16(sizeof(unconfirmed120),
+                           static_cast<uint16_t>((request[2] << 8) | request[3]));
+
+  length = BacnetProtocol::buildSubscribeCovRequest(
+    request, sizeof(request), 7, analogValue200, 120, true);
+  TEST_ASSERT_EQUAL_UINT32(sizeof(confirmed120), length);
+  TEST_ASSERT_EQUAL_UINT8_ARRAY(confirmed120, request, sizeof(confirmed120));
+
+  length = BacnetProtocol::buildSubscribeCovRequest(
+    request, sizeof(request), 7, analogValue200, 0);
+  TEST_ASSERT_EQUAL_UINT32(sizeof(unconfirmedLifetimeZero), length);
+  TEST_ASSERT_EQUAL_UINT8_ARRAY(unconfirmedLifetimeZero, request, sizeof(unconfirmedLifetimeZero));
+
+  length = BacnetProtocol::buildSubscribeCovRequest(
+    request, sizeof(request), 0x1234, BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::BinaryValue), 42}, 120, true);
+  TEST_ASSERT_EQUAL_UINT32(sizeof(differentProcessAndObject), length);
+  TEST_ASSERT_EQUAL_UINT8_ARRAY(differentProcessAndObject, request, sizeof(differentProcessAndObject));
+
+  uint8_t tooSmall[sizeof(unconfirmed120) - 1] = {};
+  TEST_ASSERT_EQUAL_UINT32(0, BacnetProtocol::buildSubscribeCovRequest(tooSmall, sizeof(tooSmall), 7, analogValue200, 120));
+  TEST_ASSERT_EQUAL_UINT32(0, BacnetProtocol::buildSubscribeCovRequest(nullptr, 0, 7, analogValue200, 120));
 }
 
 void test_portable_protocol_classifies_subscribe_cov_responses() {
   const uint8_t ack[] = {0x81, 0x0A, 0x00, 0x09, 0x01, 0x00, 0x20, 0x07, 0x05};
   const uint8_t error[] = {0x81, 0x0A, 0x00, 0x09, 0x01, 0x00, 0x50, 0x07, 0x05};
-  const uint8_t reject[] = {0x81, 0x0A, 0x00, 0x08, 0x01, 0x00, 0x60, 0x07};
+  const uint8_t reject[] = {0x81, 0x0A, 0x00, 0x09, 0x01, 0x00, 0x60, 0x07, 0x04};
   const uint8_t abort[] = {0x81, 0x0A, 0x00, 0x08, 0x01, 0x00, 0x70, 0x07};
   TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetSubscribeCovResponseKind::Ack), static_cast<uint8_t>(BacnetProtocol::classifySubscribeCovResponse(ack, sizeof(ack), 7)));
   TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetSubscribeCovResponseKind::Error), static_cast<uint8_t>(BacnetProtocol::classifySubscribeCovResponse(error, sizeof(error), 7)));
-  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetSubscribeCovResponseKind::Reject), static_cast<uint8_t>(BacnetProtocol::classifySubscribeCovResponse(reject, sizeof(reject), 7)));
+  uint8_t rejectReason = 0xFF;
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetSubscribeCovResponseKind::Reject), static_cast<uint8_t>(BacnetProtocol::classifySubscribeCovResponse(reject, sizeof(reject), 7, &rejectReason)));
+  TEST_ASSERT_EQUAL_UINT8(4, rejectReason);
+  TEST_ASSERT_EQUAL_STRING("invalid-tag", BacnetProtocol::rejectReasonText(rejectReason));
   TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetSubscribeCovResponseKind::Abort), static_cast<uint8_t>(BacnetProtocol::classifySubscribeCovResponse(abort, sizeof(abort), 7)));
   TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetSubscribeCovResponseKind::None), static_cast<uint8_t>(BacnetProtocol::classifySubscribeCovResponse(ack, sizeof(ack), 8)));
+}
+
+void test_portable_protocol_parses_standard_cov_notification() {
+  const uint8_t covNotification[] = {
+    0x81, 0x0A, 0x00, 0x28, 0x01, 0x00, 0x10, 0x02, 0x09, 0x07, 0x1C, 0x02, 0x19, 0xAA, 0xB5, 0x2C, 0x00, 0x80, 0x00, 0xC8, 0x39, 0x78, 0x4E, 0x09, 0x55, 0x2E, 0x44, 0x42, 0x2A, 0x00, 0x00, 0x2F, 0x09, 0x6F, 0x2E, 0x82, 0x04, 0x00, 0x2F, 0x4F};
+  BacnetCovNotification notification;
+  TEST_ASSERT_TRUE(BacnetProtocol::parseCovNotification(
+    covNotification, sizeof(covNotification), notification));
+  TEST_ASSERT_EQUAL_UINT32(7, notification.processId);
+  TEST_ASSERT_EQUAL_UINT16(static_cast<uint16_t>(BacnetObjectType::AnalogValue),
+                           notification.object.type);
+  TEST_ASSERT_EQUAL_UINT32(200, notification.object.instance);
+  TEST_ASSERT_EQUAL_UINT32(static_cast<uint32_t>(BacnetPropertyId::PresentValue),
+                           static_cast<uint32_t>(notification.property));
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetValueType::Real),
+                          static_cast<uint8_t>(notification.value.type));
+  TEST_ASSERT_FLOAT_WITHIN(0.001F, 42.5F, notification.value.realValue);
+
+  const uint8_t covNotificationWithPriority[] = {
+    0x81, 0x0A, 0x00, 0x2A, 0x01, 0x00, 0x10, 0x02, 0x09, 0x07, 0x1C, 0x02, 0x19, 0xAA, 0xB5, 0x2C, 0x00, 0x80, 0x00, 0xC8, 0x39, 0x78, 0x4E, 0x09, 0x55, 0x2E, 0x44, 0x42, 0x2A, 0x00, 0x00, 0x2F, 0x39, 0x10, 0x09, 0x6F, 0x2E, 0x82, 0x04, 0x00, 0x2F, 0x4F};
+  TEST_ASSERT_TRUE(BacnetProtocol::parseCovNotification(
+    covNotificationWithPriority, sizeof(covNotificationWithPriority), notification));
+  TEST_ASSERT_FLOAT_WITHIN(0.001F, 42.5F, notification.value.realValue);
 }
 
 void test_portable_protocol_parses_i_am_response() {
@@ -1713,6 +1768,7 @@ void test_bacnet_subscribe_options_defaults() {
   TEST_ASSERT_TRUE(options.immediateFirstRead);
   TEST_ASSERT_TRUE(options.notifyOnStatusChange);
   TEST_ASSERT_FALSE(options.preferCov);
+  TEST_ASSERT_FALSE(options.issueConfirmedNotifications);
   TEST_ASSERT_EQUAL_UINT32(60, options.covLifetimeSeconds);
   TEST_ASSERT_EQUAL_UINT32(5, options.covRenewBeforeSeconds);
 }
@@ -1957,6 +2013,7 @@ void setup() {
   RUN_TEST(test_portable_protocol_builds_who_is_request);
   RUN_TEST(test_portable_protocol_builds_subscribe_cov_request);
   RUN_TEST(test_portable_protocol_classifies_subscribe_cov_responses);
+  RUN_TEST(test_portable_protocol_parses_standard_cov_notification);
   RUN_TEST(test_portable_protocol_parses_i_am_response);
   RUN_TEST(test_bacnet_client_rejects_non_i_am_response);
   RUN_TEST(test_portable_protocol_classifies_reject_and_abort);

@@ -2,10 +2,44 @@
 
 #include "BacnetCliSupport.h"
 #include "BacnetNativeCli.h"
+#include "portable/BacnetDisplayText.h"
 
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+
+namespace {
+
+bool testValueDisplayText() {
+  char text[BacnetValue::kMaxTextLength] = {};
+  BacnetValue value;
+  value.type = BacnetValueType::Null;
+  if (std::strcmp(bacnetValueDisplayText(value, text, sizeof(text)), "null") != 0) return false;
+  value.type = BacnetValueType::Boolean;
+  value.booleanValue = true;
+  if (std::strcmp(bacnetValueDisplayText(value, text, sizeof(text)), "true") != 0) return false;
+  value.type = BacnetValueType::Unsigned;
+  value.unsignedValue = 12;
+  if (std::strcmp(bacnetValueDisplayText(value, text, sizeof(text)), "12") != 0) return false;
+  value.type = BacnetValueType::Signed;
+  value.signedValue = -3;
+  if (std::strcmp(bacnetValueDisplayText(value, text, sizeof(text)), "-3") != 0) return false;
+  value.type = BacnetValueType::Real;
+  value.realValue = 12.5F;
+  if (std::strcmp(bacnetValueDisplayText(value, text, sizeof(text)), "12.500") != 0) return false;
+  value.type = BacnetValueType::Enumerated;
+  value.unsignedValue = 7;
+  if (std::strcmp(bacnetValueDisplayText(value, text, sizeof(text)), "7") != 0) return false;
+  value.type = BacnetValueType::CharacterString;
+  std::memcpy(value.text, "hello", 5);
+  value.textLength = 5;
+  if (std::strcmp(bacnetValueDisplayText(value, text, sizeof(text)), "hello") != 0) return false;
+  value.type = BacnetValueType::ObjectIdentifier;
+  value.objectValue = BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::AnalogValue), 42};
+  return std::strcmp(bacnetValueDisplayText(value, text, sizeof(text)), "analog-value42") == 0;
+}
+
+}  // namespace
 
 int main() {
   uint32_t value = 0;
@@ -35,7 +69,8 @@ int main() {
       bacnetNativeParseProperty("unknown-property", property) ||
       std::strcmp(bacnetCliExitCodeText(BacnetCliExitCode::InvalidArguments),
                   "invalid arguments") != 0 ||
-      std::strcmp(bacnetCliExitCodeText(BacnetCliExitCode::Timeout), "timeout") != 0) {
+      std::strcmp(bacnetCliExitCodeText(BacnetCliExitCode::Timeout), "timeout") != 0 ||
+      !testValueDisplayText()) {
     std::fputs("[E] CLI support test failed\n", stderr);
     return 1;
   }

@@ -2,6 +2,30 @@
 
 This changelog is a curated overview.
 
+## Unreleased
+
+- Added native Windows PowerShell examples for Who-Is/I-Am discovery, AV/BV/MSV
+  reads, SubscribeCOV, Analog Value listing, and one explicit Binary Value
+  priority-8 toggle/relinquish flow.
+- Added central example settings with optional local and explicit-file overrides
+  so discovery, read, list, and SubscribeCOV examples can run without a long
+  parameter list after one test-environment configuration step.
+- Extended `bacnet-client` with focused SubscribeCOV, priority-slot, and
+  explicitly authorized Binary Value priority commands. These remain bounded,
+  use the existing client/session APIs, and do not claim BACnet certification.
+
+## 0.33.0
+
+- Added optional WriteProperty priority encoding for BACnet priorities `1..16`.
+- A missing priority retains the existing WriteProperty APDU shape; invalid
+  priority values are rejected before a datagram is sent.
+- Added typed Priority Array decoding, Priority Array and Relinquish Default
+  read helpers, explicit single relinquish, and strict/writable priority reset
+  helpers; writable reset documents its priority-6 compatibility skip.
+- Added local ESP32 and Windows HIL evidence for priority writes. Failed HIL
+  relinquish operations retain the primary status and make one bounded cleanup
+  attempt without claiming BACnet certification.
+
 ## 0.32.0
 
 - Added an explicit typed WriteProperty client/session API backed by one shared

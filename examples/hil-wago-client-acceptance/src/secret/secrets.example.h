@@ -76,3 +76,10 @@
 // Keep disabled unless an explicit local write validation is intended.
 #define HIL_ENABLE_WRITE_TESTS false
 #define HIL_ENABLE_PRIORITY_WRITE_TESTS false
+
+// Explicit Priority Write HIL targets. Keep the scenario disabled by default.
+// The local WAGO test application owns its own values at priority 16; this
+// scenario writes only temporary values at priority 8 and relinquishes them.
+#define HIL_PRIORITY_WRITE_AV_INSTANCE 200
+#define HIL_PRIORITY_WRITE_BV_INSTANCE 320
+#define HIL_PRIORITY_WRITE_MSV_INSTANCE 2020

@@ -31,6 +31,19 @@ Current public responsibilities:
 - create a session from discovered I-Am metadata through `fromIAm()`
 - read one property through `readProperty()`
 - explicitly write one typed property through `writeProperty()` when enabled
+  and optionally provide `BacnetWritePropertyOptions` for an array index and a
+  BACnet priority from `1` through `16`; priority requests additionally require
+  `ESP_BACNET_ENABLE_PRIORITY_WRITE=1`
+- read complete `priority-array` values through the typed
+  `BacnetPriorityArray` helper, or read one priority slot through the scalar
+  indexed helper; read `relinquish-default` through the detailed
+  `BacnetPropertyReadStatus` convenience helper; write or relinquish
+  `present-value` explicitly through `writePresentValue()` and
+  `relinquishPresentValue()`; run a strict command-priority reset through
+  `relinquishAllPriorities()` or explicitly skip Minimum On/Off priority 6
+  with `BacnetPriorityResetOptions` when both write feature gates are enabled;
+  inspect its
+  `BacnetPriorityRelinquishResult`
 - read compact object health through `readObjectStatus()`
 - collect a property's advertised property list through `readPropertyList()`
 - safely attempt all collected properties through `readAllProperties()`
@@ -65,7 +78,14 @@ Current public responsibilities:
 
 ## Common Result Types
 
-- `BacnetValue`: typed value holder used by ReadProperty and scan helpers
+- `BacnetValue`: typed value holder used by scalar ReadProperty and scan helpers
+- `BacnetPriorityArray`: complete 16-slot typed `priority-array` result;
+  `slots[0]` through `slots[15]` correspond to BACnet priorities `1` through
+  `16`
+- `BacnetPriorityResetOptions` and `BacnetPriorityRelinquishResult`: explicit
+  strict or writable command-priority reset behavior and per-reset completed,
+  skipped, and failed priority reporting; see
+  [Command priority reset semantics](../bacnet-command-priority.md)
 - `BacnetDeviceSessionWriteStatus` and `BacnetWritePropertyPollStatus`: typed
   WriteProperty result states
 - `BacnetDeviceSessionReadStatus`: session-level read result status
@@ -81,6 +101,5 @@ Current public responsibilities:
 
 The following are planned or intentionally absent from the current public client runtime:
 
-- priority write helpers
 - automatic background polling tasks
 - global discovery cache or mandatory object browser state

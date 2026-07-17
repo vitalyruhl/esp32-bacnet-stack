@@ -14,6 +14,8 @@ enum class BacnetCliExitCode : int {
   Reject = 4,
   Abort = 5,
   DecodeError = 6,
+  FeatureDisabled = 7,
+  WriteNotAuthorized = 8,
 };
 
 bool bacnetCliParseUnsigned(const char* text, uint32_t& value);

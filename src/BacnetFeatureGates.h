@@ -13,3 +13,15 @@
 #if ESP_BACNET_ENABLE_PRIORITY_WRITE && !ESP_BACNET_ENABLE_WRITE_PROPERTY
 #error "ESP_BACNET_ENABLE_PRIORITY_WRITE requires ESP_BACNET_ENABLE_WRITE_PROPERTY"
 #endif
+
+inline constexpr bool bacnetWritePropertyEnabled(bool hasPriority = false) {
+#if !ESP_BACNET_ENABLE_WRITE_PROPERTY
+  (void)hasPriority;
+  return false;
+#elif !ESP_BACNET_ENABLE_PRIORITY_WRITE
+  return !hasPriority;
+#else
+  (void)hasPriority;
+  return true;
+#endif
+}

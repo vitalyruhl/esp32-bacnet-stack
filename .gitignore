@@ -27,3 +27,4 @@ Thumbs.db
 .Temp/
 **/.Temp/
 build/
+tools/native/examples/settings.local.ps1

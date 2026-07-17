@@ -3,6 +3,7 @@
 #include "BacnetDeviceSession.h"
 
 #include "BacnetDisplayText.h"
+#include "BacnetFeatureGates.h"
 #include "BacnetRemoteObject.h"
 
 #include <cstring>
@@ -331,6 +332,14 @@ BacnetPropertySubscription::lastNotificationReason() const {
   return lastNotificationReason_;
 }
 
+BacnetCovSubscriptionStatus BacnetPropertySubscription::covStatus() const {
+  return covStatus_;
+}
+
+uint8_t BacnetPropertySubscription::covRejectReason() const {
+  return covRejectReason_;
+}
+
 void BacnetPropertySubscription::stop() {
   if (!active_) {
     return;
@@ -415,6 +424,8 @@ void BacnetPropertySubscription::moveFrom(BacnetPropertySubscription& other) {
   inFlightOperation_ = other.inFlightOperation_;
   covActive_ = other.covActive_;
   covFallback_ = other.covFallback_;
+  covStatus_ = other.covStatus_;
+  covRejectReason_ = other.covRejectReason_;
   covRenewAtMs_ = other.covRenewAtMs_;
 
   if (session_ != nullptr && session_->inFlightSubscription_ == &other) {
@@ -434,6 +445,8 @@ void BacnetPropertySubscription::moveFrom(BacnetPropertySubscription& other) {
   other.lastNotificationReason_ = BacnetSubscriptionNotificationReason::None;
   other.covActive_ = false;
   other.covFallback_ = false;
+  other.covStatus_ = BacnetCovSubscriptionStatus::Pending;
+  other.covRejectReason_ = 0xFF;
   other.covRenewAtMs_ = 0;
   other.callback_ = nullptr;
   other.userData_ = nullptr;
@@ -542,6 +555,61 @@ BacnetDeviceSessionReadStatus BacnetDeviceSession::readProperty(
   return deviceReadStatusFromPropertyStatus(status);
 }
 
+BacnetPropertyReadStatus BacnetDeviceSession::readPropertyStatus(
+  BacnetObjectId objectId, BacnetPropertyId property, BacnetValue& value, uint32_t timeoutMs, uint32_t arrayIndex) {
+  uint32_t errorClass = 0;
+  uint32_t errorCode = 0;
+  return readPropertyDetailed(BacnetPropertyRequest{objectId, property, arrayIndex},
+                              value,
+                              timeoutMs,
+                              errorClass,
+                              errorCode);
+}
+
+BacnetPropertyReadStatus BacnetDeviceSession::readPriorityArray(
+  BacnetObjectId objectId,
+  BacnetPriorityArray& value,
+  uint32_t timeoutMs) {
+  value = BacnetPriorityArray{};
+  const BacnetPropertyRequest request{
+    objectId, BacnetPropertyId::PriorityArray, kBacnetNoArrayIndex};
+  if (inFlightSubscription_ != nullptr || inFlightObjectListScan_ != nullptr) {
+    client_.logger().warn(
+      "BACnet/ReadProperty",
+      "ReadProperty %s,%lu priorityArray skipped: session busy",
+      bacnetObjectTypeText(request.object.type),
+      static_cast<unsigned long>(request.object.instance));
+    return BacnetPropertyReadStatus::Busy;
+  }
+
+  const uint8_t invokeId = allocateInvokeId();
+  if (!client_.sendReadProperty(endpoint_, request, invokeId)) {
+    return BacnetPropertyReadStatus::SendFailed;
+  }
+
+  uint32_t errorClass = 0;
+  uint32_t errorCode = 0;
+  const uint32_t startedAt = client_.nowMs();
+  while (true) {
+    const BacnetReadPropertyPollStatus pollStatus =
+      client_.pollReadPriorityArrayStatus(
+        value, invokeId, request, &errorClass, &errorCode);
+    if (pollStatus == BacnetReadPropertyPollStatus::Ack) {
+      return BacnetPropertyReadStatus::Ack;
+    }
+    if (pollStatus != BacnetReadPropertyPollStatus::None) {
+      const BacnetValue ignoredValue;
+      return classifyDetailedReadStatus(
+        pollStatus, ignoredValue, errorClass, errorCode, kBacnetNoArrayIndex);
+    }
+    if (client_.nowMs() - startedAt >= timeoutMs) {
+      client_.logReadPropertyTimeout(invokeId, request);
+      return BacnetPropertyReadStatus::Timeout;
+    }
+    client_.idle();
+  }
+}
+
 BacnetDeviceSessionReadStatus BacnetDeviceSession::readProperty(
   BacnetObjectType objectType, uint32_t objectInstance, BacnetPropertyId property, BacnetValue& value, uint32_t timeoutMs, uint32_t arrayIndex) {
   return readProperty(
@@ -557,6 +625,9 @@ BacnetDeviceSessionWriteStatus BacnetDeviceSession::writeProperty(
   if (inFlightSubscription_ != nullptr || inFlightObjectListScan_ != nullptr) {
     return BacnetDeviceSessionWriteStatus::Busy;
   }
+#if !ESP_BACNET_ENABLE_WRITE_PROPERTY
+  return BacnetDeviceSessionWriteStatus::Disabled;
+#endif
   const BacnetPropertyRequest request{objectId, property, arrayIndex};
   const uint8_t invokeId = allocateInvokeId();
   const BacnetWritePropertyPollStatus sendStatus = client_.sendWriteProperty(
@@ -582,6 +653,8 @@ BacnetDeviceSessionWriteStatus BacnetDeviceSession::writeProperty(
         return BacnetDeviceSessionWriteStatus::Ack;
       case BacnetWritePropertyPollStatus::Error:
         return BacnetDeviceSessionWriteStatus::Error;
+      case BacnetWritePropertyPollStatus::NotCommandable:
+        return BacnetDeviceSessionWriteStatus::NotCommandable;
       case BacnetWritePropertyPollStatus::Reject:
         return BacnetDeviceSessionWriteStatus::Reject;
       case BacnetWritePropertyPollStatus::Abort:
@@ -610,6 +683,48 @@ BacnetDeviceSessionWriteStatus BacnetDeviceSession::writeProperty(
                        value,
                        timeoutMs,
                        arrayIndex);
+}
+
+BacnetDeviceSessionWriteStatus BacnetDeviceSession::writeProperty(
+  BacnetObjectType objectType, uint32_t objectInstance, BacnetPropertyId property, const BacnetValue& value, const BacnetWritePropertyOptions& options, uint32_t timeoutMs) {
+  if (inFlightSubscription_ != nullptr || inFlightObjectListScan_ != nullptr) {
+    return BacnetDeviceSessionWriteStatus::Busy;
+  }
+#if !ESP_BACNET_ENABLE_WRITE_PROPERTY
+  return BacnetDeviceSessionWriteStatus::Disabled;
+#else
+  if (!bacnetWritePropertyEnabled(options.hasPriority)) {
+    return BacnetDeviceSessionWriteStatus::Disabled;
+  }
+#endif
+  const uint8_t invokeId = allocateInvokeId();
+  const BacnetWritePropertyPollStatus sendStatus = client_.sendWriteProperty(
+    endpoint_, BacnetObjectId{static_cast<uint16_t>(objectType), objectInstance}, property, value, options, invokeId);
+  if (sendStatus == BacnetWritePropertyPollStatus::Disabled)
+    return BacnetDeviceSessionWriteStatus::Disabled;
+  if (sendStatus == BacnetWritePropertyPollStatus::InvalidArgument)
+    return BacnetDeviceSessionWriteStatus::InvalidArgument;
+  if (sendStatus == BacnetWritePropertyPollStatus::UnsupportedValue)
+    return BacnetDeviceSessionWriteStatus::UnsupportedValue;
+  if (sendStatus != BacnetWritePropertyPollStatus::None)
+    return BacnetDeviceSessionWriteStatus::SendFailed;
+  const uint32_t startedAt = client_.nowMs();
+  while (true) {
+    const BacnetWritePropertyPollStatus status = client_.pollWriteProperty(invokeId);
+    if (status == BacnetWritePropertyPollStatus::Ack)
+      return BacnetDeviceSessionWriteStatus::Ack;
+    if (status == BacnetWritePropertyPollStatus::Error)
+      return BacnetDeviceSessionWriteStatus::Error;
+    if (status == BacnetWritePropertyPollStatus::NotCommandable)
+      return BacnetDeviceSessionWriteStatus::NotCommandable;
+    if (status == BacnetWritePropertyPollStatus::Reject)
+      return BacnetDeviceSessionWriteStatus::Reject;
+    if (status == BacnetWritePropertyPollStatus::Abort)
+      return BacnetDeviceSessionWriteStatus::Abort;
+    if (client_.nowMs() - startedAt >= timeoutMs)
+      return BacnetDeviceSessionWriteStatus::Timeout;
+    client_.idle();
+  }
 }
 
 BacnetObjectHealthState BacnetDeviceSession::readObjectStatus(
@@ -1530,13 +1645,15 @@ void BacnetDeviceSession::pollInFlightSubscription(uint32_t nowMs) {
 
   if (subscription.inFlightOperation_ ==
       BacnetPropertySubscription::Operation::SubscribeCov) {
-    const BacnetSubscribeCovResponseKind covStatus =
-      client_.pollSubscribeCov(subscription.inFlightInvokeId_);
+    uint8_t rejectReason = 0xFF;
+    const BacnetSubscribeCovResponseKind covStatus = client_.pollSubscribeCov(
+      subscription.inFlightInvokeId_, &rejectReason);
     if (covStatus == BacnetSubscribeCovResponseKind::Ack) {
       const uint32_t renewBefore = subscription.options_.covRenewBeforeSeconds;
       const uint32_t lifetime = subscription.options_.covLifetimeSeconds;
       subscription.covActive_ = true;
       subscription.covFallback_ = false;
+      subscription.covStatus_ = BacnetCovSubscriptionStatus::Active;
       subscription.covRenewAtMs_ = nowMs +
                                    (lifetime > renewBefore ? lifetime - renewBefore : lifetime) * 1000UL;
       subscription.clearInFlightState();
@@ -1548,6 +1665,21 @@ void BacnetDeviceSession::pollInFlightSubscription(uint32_t nowMs) {
         nowMs - subscription.inFlightStartedAt_ >= subscription.options_.timeoutMs) {
       subscription.covActive_ = false;
       subscription.covFallback_ = true;
+      switch (covStatus) {
+        case BacnetSubscribeCovResponseKind::Error:
+          subscription.covStatus_ = BacnetCovSubscriptionStatus::Error;
+          break;
+        case BacnetSubscribeCovResponseKind::Reject:
+          subscription.covStatus_ = BacnetCovSubscriptionStatus::Reject;
+          subscription.covRejectReason_ = rejectReason;
+          break;
+        case BacnetSubscribeCovResponseKind::Abort:
+          subscription.covStatus_ = BacnetCovSubscriptionStatus::Abort;
+          break;
+        default:
+          subscription.covStatus_ = BacnetCovSubscriptionStatus::Timeout;
+          break;
+      }
       subscription.initialReadPending_ = true;
       subscription.clearInFlightState();
       inFlightSubscription_ = nullptr;
@@ -1640,8 +1772,10 @@ bool BacnetDeviceSession::tryStartCovSubscription(
     return false;
   }
   const uint8_t invokeId = allocateInvokeId();
-  if (!client_.sendSubscribeCov(endpoint_, invokeId, subscription.objectId_, subscription.options_.covLifetimeSeconds, invokeId)) {
+  subscription.covRejectReason_ = 0xFF;
+  if (!client_.sendSubscribeCov(endpoint_, invokeId, subscription.objectId_, subscription.options_.covLifetimeSeconds, invokeId, subscription.options_.issueConfirmedNotifications)) {
     subscription.covFallback_ = true;
+    subscription.covStatus_ = BacnetCovSubscriptionStatus::SendFailed;
     client_.logger().warn("BACnet/COV", "SubscribeCOV send failed; polling fallback");
     return false;
   }

@@ -46,8 +46,10 @@ public:
                         uint32_t processId,
                         BacnetObjectId object,
                         uint32_t lifetimeSeconds,
-                        uint8_t invokeId = 1);
-  BacnetSubscribeCovResponseKind pollSubscribeCov(uint8_t expectedInvokeId);
+                        uint8_t invokeId = 1,
+                        bool issueConfirmedNotifications = false);
+  BacnetSubscribeCovResponseKind pollSubscribeCov(uint8_t expectedInvokeId,
+                                                  uint8_t* rejectReason = nullptr);
   bool pollCovNotification(BacnetCovNotification& notification);
   bool pollIAm(BacnetIAmDevice& device);
   bool sendReadProperty(const BacnetIpEndpoint& destination,
@@ -63,6 +65,8 @@ public:
     const BacnetPropertyRequest& request,
     const BacnetValue& value,
     uint8_t invokeId = 1);
+  BacnetWritePropertyPollStatus sendWriteProperty(
+    const BacnetIpEndpoint& destination, BacnetObjectId object, BacnetPropertyId property, const BacnetValue& value, const BacnetWritePropertyOptions& options, uint8_t invokeId = 1);
   BacnetWritePropertyPollStatus pollWriteProperty(uint8_t expectedInvokeId);
   bool pollReadProperty(BacnetValue& value, uint8_t expectedInvokeId, const BacnetPropertyRequest& expectedRequest);
   bool pollReadProperty(BacnetValue& value, uint8_t expectedInvokeId, BacnetPropertyId expectedProperty);
@@ -76,11 +80,18 @@ public:
     BacnetValue& value, uint8_t expectedInvokeId, BacnetPropertyId expectedProperty);
   BacnetReadPropertyPollStatus pollReadPropertyStatus(
     BacnetValue& value, uint8_t expectedInvokeId, BacnetPropertyId expectedProperty, uint32_t* errorClass, uint32_t* errorCode);
+  BacnetReadPropertyPollStatus pollReadPriorityArrayStatus(
+    BacnetPriorityArray& value,
+    uint8_t expectedInvokeId,
+    const BacnetPropertyRequest& expectedRequest,
+    uint32_t* errorClass = nullptr,
+    uint32_t* errorCode = nullptr);
 
   static size_t buildWhoIsRequest(uint8_t* buffer, size_t bufferSize);
   static bool parseIAmResponse(const uint8_t* buffer, size_t length, BacnetIAmDevice& device);
   static size_t buildReadPropertyRequest(uint8_t* buffer, size_t bufferSize, const BacnetPropertyRequest& request, uint8_t invokeId = 1);
   static size_t buildWritePropertyRequest(uint8_t* buffer, size_t bufferSize, const BacnetPropertyRequest& request, const BacnetValue& value, uint8_t invokeId = 1);
+  static size_t buildWritePropertyRequest(uint8_t* buffer, size_t bufferSize, BacnetObjectId object, BacnetPropertyId property, const BacnetValue& value, const BacnetWritePropertyOptions& options, uint8_t invokeId = 1);
   static size_t buildReadPropertyRequest(uint8_t* buffer, size_t bufferSize, BacnetObjectId object, BacnetPropertyId property, uint8_t invokeId = 1, uint32_t arrayIndex = kNoArrayIndex);
   static bool parseReadPropertyAck(const uint8_t* buffer, size_t length, uint8_t expectedInvokeId, const BacnetPropertyRequest& expectedRequest, BacnetValue& value);
   static bool parseReadPropertyAck(const uint8_t* buffer, size_t length, uint8_t expectedInvokeId, BacnetPropertyId expectedProperty, BacnetValue& value);

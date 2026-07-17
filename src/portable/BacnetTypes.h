@@ -90,6 +90,12 @@ struct BacnetPropertyRequest {
   uint32_t arrayIndex = kBacnetNoArrayIndex;
 };
 
+struct BacnetWritePropertyOptions {
+  uint32_t arrayIndex = kBacnetNoArrayIndex;
+  bool hasPriority = false;
+  uint8_t priority = 0;
+};
+
 enum class BacnetValueType : uint8_t {
   Empty,
   Null,
@@ -103,6 +109,7 @@ enum class BacnetValueType : uint8_t {
   ObjectIdentifier,
   ObjectIdentifierList,
   Error,
+  NotCommandable,
   Unsupported,
 };
 
@@ -121,6 +128,13 @@ struct BacnetValue {
   const char* displayText() const {
     return text;
   }
+};
+
+struct BacnetPriorityArray {
+  static constexpr size_t kSlotCount = 16;
+
+  BacnetValue slots[kSlotCount];
+  bool present[kSlotCount] = {};
 };
 
 enum class BacnetReadPropertyPollStatus { None,
@@ -142,6 +156,7 @@ enum class BacnetWritePropertyPollStatus : uint8_t {
   None,
   Ack,
   Error,
+  NotCommandable,
   Reject,
   Abort,
   DecodeError,

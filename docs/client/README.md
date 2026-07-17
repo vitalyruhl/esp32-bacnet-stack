@@ -22,8 +22,11 @@ adapters and native Windows applications:
 - property subscription abstraction with fallback polling
 - SubscribeCOV registration, renewal, notification routing, and polling fallback
 - explicit compile-time opt-in WriteProperty for supported `BacnetValue` types
+  and command-priority helpers
 
 The portable protocol and client code are shared across platforms. Only
 transport, clock, logging, and application integration belong to the Arduino
 or Windows adapters. The client documentation describes implemented behavior
-only; priority writes and hardware write validation remain planned.
+only; hardware write validation remains local and explicit. See
+[Command priority reset semantics](../bacnet-command-priority.md) for priority
+write and reset behavior.

@@ -91,6 +91,7 @@ enum class BacnetDeviceSessionReadStatus : uint8_t {
 enum class BacnetDeviceSessionWriteStatus : uint8_t {
   Ack,
   Error,
+  NotCommandable,
   Reject,
   Abort,
   Timeout,
@@ -237,8 +238,19 @@ struct BacnetSubscribeOptions {
   uint32_t covLifetimeSeconds = 60;
   uint32_t covRenewBeforeSeconds = 5;
   bool preferCov = false;
+  bool issueConfirmedNotifications = false;
   bool immediateFirstRead = true;
   bool notifyOnStatusChange = true;
+};
+
+enum class BacnetCovSubscriptionStatus : uint8_t {
+  Pending,
+  Active,
+  Error,
+  Reject,
+  Abort,
+  Timeout,
+  SendFailed,
 };
 
 enum class BacnetSubscriptionNotificationReason : uint8_t {
@@ -351,6 +363,8 @@ public:
   BacnetDeviceSessionReadStatus lastStatus() const;
   uint32_t lastUpdateMs() const;
   BacnetSubscriptionNotificationReason lastNotificationReason() const;
+  BacnetCovSubscriptionStatus covStatus() const;
+  uint8_t covRejectReason() const;
 
   void stop();
   void requestRefresh();
@@ -402,6 +416,8 @@ private:
   Operation inFlightOperation_ = Operation::None;
   bool covActive_ = false;
   bool covFallback_ = false;
+  BacnetCovSubscriptionStatus covStatus_ = BacnetCovSubscriptionStatus::Pending;
+  uint8_t covRejectReason_ = 0xFF;
   uint32_t covRenewAtMs_ = 0;
 };
 
@@ -445,10 +461,18 @@ public:
     BacnetObjectId object, BacnetPropertyId property, BacnetValue& value, uint32_t timeoutMs = kDefaultReadTimeoutMs, uint32_t arrayIndex = kBacnetNoArrayIndex);
   BacnetDeviceSessionReadStatus readProperty(
     BacnetObjectType objectType, uint32_t objectInstance, BacnetPropertyId property, BacnetValue& value, uint32_t timeoutMs = kDefaultReadTimeoutMs, uint32_t arrayIndex = kBacnetNoArrayIndex);
+  BacnetPropertyReadStatus readPropertyStatus(
+    BacnetObjectId object, BacnetPropertyId property, BacnetValue& value, uint32_t timeoutMs = kDefaultReadTimeoutMs, uint32_t arrayIndex = kBacnetNoArrayIndex);
+  BacnetPropertyReadStatus readPriorityArray(
+    BacnetObjectId object,
+    BacnetPriorityArray& value,
+    uint32_t timeoutMs = kDefaultReadTimeoutMs);
   BacnetDeviceSessionWriteStatus writeProperty(
     BacnetObjectId object, BacnetPropertyId property, const BacnetValue& value, uint32_t timeoutMs = kDefaultReadTimeoutMs, uint32_t arrayIndex = kBacnetNoArrayIndex);
   BacnetDeviceSessionWriteStatus writeProperty(
     BacnetObjectType objectType, uint32_t objectInstance, BacnetPropertyId property, const BacnetValue& value, uint32_t timeoutMs = kDefaultReadTimeoutMs, uint32_t arrayIndex = kBacnetNoArrayIndex);
+  BacnetDeviceSessionWriteStatus writeProperty(
+    BacnetObjectType objectType, uint32_t objectInstance, BacnetPropertyId property, const BacnetValue& value, const BacnetWritePropertyOptions& options, uint32_t timeoutMs = kDefaultReadTimeoutMs);
   BacnetObjectHealthState readObjectStatus(
     BacnetObjectId object,
     BacnetObjectStatus& status,

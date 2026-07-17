@@ -92,10 +92,11 @@ bool BacnetClient::sendSubscribeCov(const BacnetIpEndpoint& destination,
                                     uint32_t processId,
                                     BacnetObjectId object,
                                     uint32_t lifetimeSeconds,
-                                    uint8_t invokeId) {
+                                    uint8_t invokeId,
+                                    bool issueConfirmedNotifications) {
   uint8_t request[kMaxSubscribeCovRequestSize] = {};
   const size_t requestSize = BacnetProtocol::buildSubscribeCovRequest(
-    request, sizeof(request), processId, object, lifetimeSeconds);
+    request, sizeof(request), processId, object, lifetimeSeconds, issueConfirmedNotifications);
   if (!running_ || requestSize == 0)
     return false;
   request[8] = invokeId;
@@ -103,7 +104,7 @@ bool BacnetClient::sendSubscribeCov(const BacnetIpEndpoint& destination,
 }
 
 BacnetSubscribeCovResponseKind BacnetClient::pollSubscribeCov(
-  uint8_t expectedInvokeId) {
+  uint8_t expectedInvokeId, uint8_t* rejectReason) {
   if (!running_)
     return BacnetSubscribeCovResponseKind::None;
   uint8_t packet[kMaxDiscoveryPacketSize] = {};
@@ -112,7 +113,7 @@ BacnetSubscribeCovResponseKind BacnetClient::pollSubscribeCov(
   if (bytesRead == 0)
     return BacnetSubscribeCovResponseKind::None;
   return BacnetProtocol::classifySubscribeCovResponse(
-    packet, bytesRead, expectedInvokeId);
+    packet, bytesRead, expectedInvokeId, rejectReason);
 }
 
 bool BacnetClient::pollCovNotification(BacnetCovNotification& notification) {
@@ -205,6 +206,39 @@ BacnetWritePropertyPollStatus BacnetClient::sendWriteProperty(
 #endif
 }
 
+BacnetWritePropertyPollStatus BacnetClient::sendWriteProperty(
+  const BacnetIpEndpoint& destination, BacnetObjectId object, BacnetPropertyId property, const BacnetValue& value, const BacnetWritePropertyOptions& options, uint8_t invokeId) {
+#if !ESP_BACNET_ENABLE_WRITE_PROPERTY
+  (void)destination;
+  (void)object;
+  (void)property;
+  (void)value;
+  (void)options;
+  (void)invokeId;
+  return BacnetWritePropertyPollStatus::Disabled;
+#else
+  if (!bacnetWritePropertyEnabled(options.hasPriority)) {
+    return BacnetWritePropertyPollStatus::Disabled;
+  }
+  if (!running_ || destination.isZero()) {
+    return BacnetWritePropertyPollStatus::SendFailed;
+  }
+  if (object.type > 1023 || object.instance > 0x003FFFFFUL ||
+      (options.hasPriority && (options.priority == 0 || options.priority > 16))) {
+    return BacnetWritePropertyPollStatus::InvalidArgument;
+  }
+  uint8_t packet[BacnetProtocol::kMaxWritePropertyRequestSize] = {};
+  const size_t packetSize = BacnetProtocol::buildWritePropertyRequest(
+    packet, sizeof(packet), object, property, value, options, invokeId);
+  if (packetSize == 0) {
+    return BacnetWritePropertyPollStatus::UnsupportedValue;
+  }
+  return transport_->send(destination, packet, packetSize)
+           ? BacnetWritePropertyPollStatus::None
+           : BacnetWritePropertyPollStatus::SendFailed;
+#endif
+}
+
 BacnetWritePropertyPollStatus BacnetClient::pollWriteProperty(
   uint8_t expectedInvokeId) {
 #if !ESP_BACNET_ENABLE_WRITE_PROPERTY
@@ -225,6 +259,10 @@ BacnetWritePropertyPollStatus BacnetClient::pollWriteProperty(
     case BacnetWritePropertyResponseKind::Ack:
       return BacnetWritePropertyPollStatus::Ack;
     case BacnetWritePropertyResponseKind::Error:
+      if (bytesRead >= 13 && packet[9] == 0x91 && packet[10] == 0x02 &&
+          packet[11] == 0x91 && packet[12] == 40) {
+        return BacnetWritePropertyPollStatus::NotCommandable;
+      }
       return BacnetWritePropertyPollStatus::Error;
     case BacnetWritePropertyResponseKind::Reject:
       return BacnetWritePropertyPollStatus::Reject;
@@ -349,6 +387,66 @@ BacnetReadPropertyPollStatus BacnetClient::pollReadPropertyStatus(BacnetValue& v
   return BacnetReadPropertyPollStatus::None;
 }
 
+BacnetReadPropertyPollStatus BacnetClient::pollReadPriorityArrayStatus(
+  BacnetPriorityArray& value,
+  uint8_t expectedInvokeId,
+  const BacnetPropertyRequest& expectedRequest,
+  uint32_t* errorClass,
+  uint32_t* errorCode) {
+  value = BacnetPriorityArray{};
+  if (!running_) {
+    return BacnetReadPropertyPollStatus::None;
+  }
+  uint8_t packet[kMaxDiscoveryPacketSize] = {};
+  BacnetIpEndpoint source;
+  const size_t bytesRead = transport_->receive(packet, sizeof(packet), source);
+  if (bytesRead == 0) {
+    return BacnetReadPropertyPollStatus::None;
+  }
+
+  switch (BacnetProtocol::classifyReadPropertyResponse(packet, bytesRead, expectedInvokeId)) {
+    case BacnetReadPropertyResponseKind::Ack:
+      if (BacnetProtocol::parseReadPriorityArrayAck(
+            packet, bytesRead, expectedInvokeId, expectedRequest, value)) {
+        logger_.info("BACnet/ReadProperty",
+                     "ReadProperty %s,%lu %s = 16 slots invoke %u",
+                     bacnetObjectTypeText(expectedRequest.object.type),
+                     static_cast<unsigned long>(expectedRequest.object.instance),
+                     bacnetPropertyName(expectedRequest.property),
+                     static_cast<unsigned>(expectedInvokeId));
+        return BacnetReadPropertyPollStatus::Ack;
+      }
+      logger_.warn("BACnet/ReadProperty",
+                   "ReadProperty %s,%lu %s decode error invoke %u",
+                   bacnetObjectTypeText(expectedRequest.object.type),
+                   static_cast<unsigned long>(expectedRequest.object.instance),
+                   bacnetPropertyName(expectedRequest.property),
+                   static_cast<unsigned>(expectedInvokeId));
+      return BacnetReadPropertyPollStatus::DecodeError;
+    case BacnetReadPropertyResponseKind::Error: {
+      BacnetValue error;
+      if (parseReadPropertyError(packet, bytesRead, expectedInvokeId, error, errorClass, errorCode)) {
+        logger_.warn("BACnet/ReadProperty",
+                     "ReadProperty %s,%lu %s error %s invoke %u",
+                     bacnetObjectTypeText(expectedRequest.object.type),
+                     static_cast<unsigned long>(expectedRequest.object.instance),
+                     bacnetPropertyName(expectedRequest.property),
+                     error.displayText(),
+                     static_cast<unsigned>(expectedInvokeId));
+        return BacnetReadPropertyPollStatus::Error;
+      }
+      return BacnetReadPropertyPollStatus::DecodeError;
+    }
+    case BacnetReadPropertyResponseKind::Reject:
+      return BacnetReadPropertyPollStatus::Reject;
+    case BacnetReadPropertyResponseKind::Abort:
+      return BacnetReadPropertyPollStatus::Abort;
+    case BacnetReadPropertyResponseKind::Unrelated:
+      return BacnetReadPropertyPollStatus::None;
+  }
+  return BacnetReadPropertyPollStatus::None;
+}
+
 size_t BacnetClient::buildWhoIsRequest(uint8_t* buffer, size_t bufferSize) {
   return BacnetProtocol::buildWhoIsRequest(buffer, bufferSize);
 }
@@ -368,6 +466,10 @@ size_t BacnetClient::buildReadPropertyRequest(uint8_t* buffer, size_t bufferSize
 size_t BacnetClient::buildWritePropertyRequest(
   uint8_t* buffer, size_t bufferSize, const BacnetPropertyRequest& request, const BacnetValue& value, uint8_t invokeId) {
   return BacnetProtocol::buildWritePropertyRequest(buffer, bufferSize, request, value, invokeId);
+}
+size_t BacnetClient::buildWritePropertyRequest(
+  uint8_t* buffer, size_t bufferSize, BacnetObjectId object, BacnetPropertyId property, const BacnetValue& value, const BacnetWritePropertyOptions& options, uint8_t invokeId) {
+  return BacnetProtocol::buildWritePropertyRequest(buffer, bufferSize, object, property, value, options, invokeId);
 }
 size_t BacnetClient::buildReadPropertyRequest(uint8_t* buffer, size_t bufferSize, BacnetObjectId object, BacnetPropertyId property, uint8_t invokeId, uint32_t arrayIndex) {
   return BacnetProtocol::buildReadPropertyRequest(buffer, bufferSize, object, property, invokeId, arrayIndex);
