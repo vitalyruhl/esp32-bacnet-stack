@@ -1,8 +1,8 @@
 {
   "name": "ESP32 BACnet Stack",
   "version": "0.33.0",
-  "keywords": "esp32, bacnet, bacnet-ip, bacnet-stack, bacnet-client, bacnet-server, building-automation, bms, automation, hvac, scada, arduino, platformio",
-  "description": "ESP32 BACnet/IP stack library with client and server support for Arduino and PlatformIO projects.",
+  "keywords": "bacnet, bacnet-ip, bacnet-client, bacnet-stack, building-automation, bms, automation, hvac, scada, esp32, arduino, platformio, ethernet, wifi, cpp, portable, windows, winsock, cmake",
+  "description": "Portable BACnet/IP client core for ESP32 Arduino and native Windows applications.",
   "license": "GPL-2.0-or-later",
   "repository": {
     "type": "git",
@@ -39,6 +39,7 @@
       "tools/**",
       "README.md",
       "LICENSE",
+      "THIRD_PARTY_NOTICES.md",
       "library.json"
     ],
     "exclude": [
