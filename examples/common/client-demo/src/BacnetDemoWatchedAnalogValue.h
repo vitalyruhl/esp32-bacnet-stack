@@ -20,8 +20,13 @@ class BacnetDemoWatchedAnalogValue {
 public:
   BacnetDemoWatchedAnalogValue(uint32_t objectInstance,
                                uint32_t pollMs,
-                               uint32_t timeoutMs);
+                               uint32_t timeoutMs,
+                               bool preferCov = false,
+                               uint32_t covLifetimeSeconds = 120);
 
+  void configure(uint32_t objectInstance,
+                 bool preferCov,
+                 uint32_t covLifetimeSeconds);
   void setLogger(BacnetDemoLogCallback logger);
   void reset(const char* status = "not read");
   bool setup(BacnetDeviceSession& session);
@@ -40,6 +45,7 @@ public:
   String alarmStateSummary() const;
   String statusSummary() const;
   String refreshSummary() const;
+  String updateModeSummary() const;
   String lastAttemptAgeSummary() const;
   String lastSuccessAgeSummary() const;
 
@@ -131,6 +137,8 @@ private:
   uint32_t objectInstance_;
   uint32_t pollMs_;
   uint32_t timeoutMs_;
+  bool preferCov_ = false;
+  uint32_t covLifetimeSeconds_ = 120;
   BacnetDeviceSession* session_ = nullptr;
   BacnetDemoLogCallback logger_ = nullptr;
   Preview preview_;

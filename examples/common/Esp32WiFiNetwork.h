@@ -90,4 +90,4 @@ private:
   }
 };
 
-}  // namespace bacnet_example
+} // namespace bacnet_example

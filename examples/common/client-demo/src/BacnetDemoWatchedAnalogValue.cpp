@@ -18,9 +18,24 @@ static const BacnetPropertyId kWatchedAnalogStatusProperties[] = {
 BacnetDemoWatchedAnalogValue::BacnetDemoWatchedAnalogValue(
   uint32_t objectInstance,
   uint32_t pollMs,
-  uint32_t timeoutMs)
-    : objectInstance_(objectInstance), pollMs_(pollMs), timeoutMs_(timeoutMs) {
+  uint32_t timeoutMs,
+  bool preferCov,
+  uint32_t covLifetimeSeconds)
+    : objectInstance_(objectInstance), pollMs_(pollMs), timeoutMs_(timeoutMs),
+      preferCov_(preferCov), covLifetimeSeconds_(covLifetimeSeconds) {
   resetPreview("not read");
+}
+
+void BacnetDemoWatchedAnalogValue::configure(uint32_t objectInstance,
+                                             bool preferCov,
+                                             uint32_t covLifetimeSeconds) {
+  if (objectInstance_ == objectInstance && preferCov_ == preferCov &&
+      covLifetimeSeconds_ == covLifetimeSeconds)
+    return;
+  reset("configuration changed");
+  objectInstance_ = objectInstance;
+  preferCov_ = preferCov;
+  covLifetimeSeconds_ = covLifetimeSeconds;
 }
 
 void BacnetDemoWatchedAnalogValue::setLogger(BacnetDemoLogCallback logger) {
@@ -257,6 +272,40 @@ String BacnetDemoWatchedAnalogValue::refreshSummary() const {
                                    : "no cached value";
   text += "; attempt=";
   text += ageSummary(preview_.lastAttemptMs);
+  return text;
+}
+
+String BacnetDemoWatchedAnalogValue::updateModeSummary() const {
+  if (!preferCov_)
+    return "Polling";
+  if (!preview_.presentValueSubscription)
+    return "SubscribeCOV pending";
+  const BacnetCovSubscriptionStatus status =
+    preview_.presentValueSubscription->covStatus();
+  String text = "SubscribeCOV ";
+  switch (status) {
+    case BacnetCovSubscriptionStatus::Pending:
+      text += "pending";
+      break;
+    case BacnetCovSubscriptionStatus::Active:
+      text += "active";
+      break;
+    case BacnetCovSubscriptionStatus::Error:
+      text += "error";
+      break;
+    case BacnetCovSubscriptionStatus::Reject:
+      text += "reject";
+      break;
+    case BacnetCovSubscriptionStatus::Abort:
+      text += "abort";
+      break;
+    case BacnetCovSubscriptionStatus::Timeout:
+      text += "timeout";
+      break;
+    case BacnetCovSubscriptionStatus::SendFailed:
+      text += "send-failed";
+      break;
+  }
   return text;
 }
 
@@ -599,9 +648,14 @@ BacnetDemoWatchedAnalogValue::subscribeProperty(BacnetProcessObject watched,
                                                 BacnetPropertyId propertyId,
                                                 bool repeating) {
   BacnetSubscribeOptions options;
-  options.fallbackPollMs = repeating ? pollMs_ : 0;
+  const bool covPresentValue = preferCov_ && repeating &&
+                               propertyId == BacnetPropertyId::PresentValue;
+  options.preferCov = covPresentValue;
+  options.fallbackPollMs = covPresentValue ? 0 : (repeating ? pollMs_ : 0);
   options.timeoutMs = timeoutMs_;
-  options.immediateFirstRead = true;
+  options.immediateFirstRead = !covPresentValue;
+  options.covLifetimeSeconds = covLifetimeSeconds_;
+  options.covRenewBeforeSeconds = covLifetimeSeconds_ > 5 ? 5 : 1;
   options.notifyOnStatusChange = true;
 
   return std::unique_ptr<BacnetPropertySubscription>(

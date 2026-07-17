@@ -47,4 +47,4 @@ void printFinalSummary(const ScenarioSummary& summary,
   printResult(scenarioOutcomeText(finalOutcome), "client acceptance complete");
 }
 
-}  // namespace bacnet_hil
+} // namespace bacnet_hil
