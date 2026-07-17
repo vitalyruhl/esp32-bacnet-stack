@@ -27,8 +27,8 @@ is a practical reset of externally writable slots, not a claim that all sixteen
 slots were written.
 
 Both modes use the existing Present Value WriteProperty encoder and dispatch.
-They send no datagrams when the WriteProperty feature gate is disabled. Neither
-mode runs automatically or cyclically.
+They send no datagrams unless both WriteProperty and priority writes are enabled
+at compile time. Neither mode runs automatically or cyclically.
 
 ## Native Windows HIL
 
@@ -39,7 +39,10 @@ helpers against explicit command-line targets. It does not store local network
 addresses or test-object instances in repository configuration. The utility
 uses priority 8 for its temporary command, relinquishes an active temporary
 priority after a failed readback, and performs the writable reset only for its
-requested Analog Value target.
+requested Analog Value target. After a successful temporary priority write, a
+failed primary relinquish triggers exactly one cleanup relinquish. The primary
+and cleanup statuses are reported separately; a failed cleanup reports that an
+override may remain active and stops the run before another target is written.
 
 ## Device compatibility note
 

@@ -3,6 +3,7 @@
 #include "BacnetDeviceSession.h"
 
 #include "BacnetDisplayText.h"
+#include "BacnetFeatureGates.h"
 #include "BacnetRemoteObject.h"
 
 #include <cstring>
@@ -612,6 +613,9 @@ BacnetDeviceSessionWriteStatus BacnetDeviceSession::writeProperty(
   if (inFlightSubscription_ != nullptr || inFlightObjectListScan_ != nullptr) {
     return BacnetDeviceSessionWriteStatus::Busy;
   }
+#if !ESP_BACNET_ENABLE_WRITE_PROPERTY
+  return BacnetDeviceSessionWriteStatus::Disabled;
+#endif
   const BacnetPropertyRequest request{objectId, property, arrayIndex};
   const uint8_t invokeId = allocateInvokeId();
   const BacnetWritePropertyPollStatus sendStatus = client_.sendWriteProperty(
@@ -674,6 +678,13 @@ BacnetDeviceSessionWriteStatus BacnetDeviceSession::writeProperty(
   if (inFlightSubscription_ != nullptr || inFlightObjectListScan_ != nullptr) {
     return BacnetDeviceSessionWriteStatus::Busy;
   }
+#if !ESP_BACNET_ENABLE_WRITE_PROPERTY
+  return BacnetDeviceSessionWriteStatus::Disabled;
+#else
+  if (!bacnetWritePropertyEnabled(options.hasPriority)) {
+    return BacnetDeviceSessionWriteStatus::Disabled;
+  }
+#endif
   const uint8_t invokeId = allocateInvokeId();
   const BacnetWritePropertyPollStatus sendStatus = client_.sendWriteProperty(
     endpoint_, BacnetObjectId{static_cast<uint16_t>(objectType), objectInstance}, property, value, options, invokeId);

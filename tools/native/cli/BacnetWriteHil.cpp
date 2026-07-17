@@ -56,7 +56,9 @@ bool observePrioritySixteen(BacnetRemoteObject& object, uint32_t timeoutMs,
 void relinquishAfterFailure(BacnetRemoteObject& object, uint8_t priority,
                             uint32_t timeoutMs, BacnetWriteHilResult& result) {
   result.cleanupAttempted = true;
-  result.relinquishStatus = object.relinquishPresentValue(priority, timeoutMs);
+  result.cleanupStatus = object.relinquishPresentValue(priority, timeoutMs);
+  result.priorityMayBeActive =
+    result.cleanupStatus != BacnetDeviceSessionWriteStatus::Ack;
 }
 
 BacnetWriteHilResult fail(BacnetWriteHilResult result,
@@ -171,11 +173,11 @@ BacnetWriteHilResult bacnetWriteHilRunTarget(
 
   result.relinquishStatus = object.relinquishPresentValue(
     options.priority, options.timeoutMs);
-  priorityActive = false;
   if (result.relinquishStatus != BacnetDeviceSessionWriteStatus::Ack) {
     return fail(result, BacnetWriteHilStage::Relinquish, object, options,
                 priorityActive);
   }
+  priorityActive = false;
   if (!readSlot(object, options.priority, options.timeoutMs, result.slotEight) ||
       result.slotEight.type != BacnetValueType::Null ||
       !readSlot(object, 16, options.timeoutMs, result.slotSixteen) ||

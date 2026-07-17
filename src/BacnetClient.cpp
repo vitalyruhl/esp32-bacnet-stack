@@ -216,6 +216,9 @@ BacnetWritePropertyPollStatus BacnetClient::sendWriteProperty(
   (void)invokeId;
   return BacnetWritePropertyPollStatus::Disabled;
 #else
+  if (!bacnetWritePropertyEnabled(options.hasPriority)) {
+    return BacnetWritePropertyPollStatus::Disabled;
+  }
   if (!running_ || destination.isZero()) {
     return BacnetWritePropertyPollStatus::SendFailed;
   }

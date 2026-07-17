@@ -40,9 +40,9 @@
 
 ## Safety And Boundaries
 
-- WriteProperty, including priority writes, is an explicit compile-time opt-in
-  client API and is disabled by default. Hardware write validation remains a
-  local, explicit HIL action.
+- WriteProperty is an explicit compile-time opt-in client API and is disabled
+  by default. Priority writes require the separate priority-write opt-in.
+  Hardware write validation remains a local, explicit HIL action.
 - Command priority reset helpers do not run automatically; applications invoke
   them explicitly. See [Command priority reset semantics](../bacnet-command-priority.md).
 - The library must remain vendor-neutral and must not hardcode WAGO-specific assumptions in reusable APIs.

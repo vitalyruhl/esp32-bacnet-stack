@@ -4,6 +4,7 @@
 #include "BacnetNativeCli.h"
 #include "BacnetWriteHil.h"
 #include "WindowsInterfaceSelection.h"
+#include "portable/BacnetDisplayText.h"
 #include "platform/windows/WindowsBacnetDatagramTransport.h"
 #include "platform/windows/WindowsMonotonicClock.h"
 #include "platform/windows/WindowsSocketRuntime.h"
@@ -96,18 +97,26 @@ bool parseArguments(int argc, char* argv[], Options& options) {
 
 void printResult(const char* label, const BacnetWriteHilResult& result) {
   std::printf("[HIL] %s stage=%s write=%u relinquish=%u reset-completed=%u "
-              "reset-skipped=%u reset-failed=%u cleanup=%s\n",
+              "reset-skipped=%u reset-failed=%u cleanup=%s cleanup-status=%u "
+              "priority-may-be-active=%s\n",
               label, bacnetWriteHilStageText(result.stage),
               static_cast<unsigned>(result.writeStatus),
               static_cast<unsigned>(result.relinquishStatus),
               static_cast<unsigned>(result.reset.completedPriorities),
               static_cast<unsigned>(result.reset.skippedPriority),
               static_cast<unsigned>(result.reset.failedPriority),
-              result.cleanupAttempted ? "attempted" : "not-needed");
+              result.cleanupAttempted ? "attempted" : "not-needed",
+              static_cast<unsigned>(result.cleanupStatus),
+              result.priorityMayBeActive ? "yes" : "no");
+  char original[BacnetValue::kMaxTextLength] = {};
+  char temporary[BacnetValue::kMaxTextLength] = {};
+  char slotEight[BacnetValue::kMaxTextLength] = {};
+  char slotSixteen[BacnetValue::kMaxTextLength] = {};
   std::printf("[HIL] %s original=%s temporary=%s slot8=%s slot16=%s\n", label,
-              result.originalPresentValue.displayText(),
-              result.temporaryValue.displayText(), result.slotEight.displayText(),
-              result.slotSixteen.displayText());
+              bacnetValueDisplayText(result.originalPresentValue, original, sizeof(original)),
+              bacnetValueDisplayText(result.temporaryValue, temporary, sizeof(temporary)),
+              bacnetValueDisplayText(result.slotEight, slotEight, sizeof(slotEight)),
+              bacnetValueDisplayText(result.slotSixteen, slotSixteen, sizeof(slotSixteen)));
 }
 
 }  // namespace

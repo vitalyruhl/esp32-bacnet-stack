@@ -7,6 +7,12 @@ This changelog is a curated overview.
 - Added optional WriteProperty priority encoding for BACnet priorities `1..16`.
 - A missing priority retains the existing WriteProperty APDU shape; invalid
   priority values are rejected before a datagram is sent.
+- Added typed Priority Array decoding, Priority Array and Relinquish Default
+  read helpers, explicit single relinquish, and strict/writable priority reset
+  helpers; writable reset documents its priority-6 compatibility skip.
+- Added local ESP32 and Windows HIL evidence for priority writes. Failed HIL
+  relinquish operations retain the primary status and make one bounded cleanup
+  attempt without claiming BACnet certification.
 
 ## 0.32.0
 

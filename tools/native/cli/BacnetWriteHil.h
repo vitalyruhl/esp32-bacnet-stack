@@ -32,12 +32,14 @@ struct BacnetWriteHilResult {
   BacnetWriteHilStage stage = BacnetWriteHilStage::InvalidConfiguration;
   BacnetDeviceSessionWriteStatus writeStatus = BacnetDeviceSessionWriteStatus::Ack;
   BacnetDeviceSessionWriteStatus relinquishStatus = BacnetDeviceSessionWriteStatus::Ack;
+  BacnetDeviceSessionWriteStatus cleanupStatus = BacnetDeviceSessionWriteStatus::Ack;
   BacnetPriorityRelinquishResult reset;
   BacnetValue originalPresentValue;
   BacnetValue temporaryValue;
   BacnetValue slotEight;
   BacnetValue slotSixteen;
   bool cleanupAttempted = false;
+  bool priorityMayBeActive = false;
 
   bool succeeded() const { return stage == BacnetWriteHilStage::Complete; }
 };

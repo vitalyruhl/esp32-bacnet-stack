@@ -4,6 +4,51 @@
 
 #include "BacnetTypes.h"
 
+#include <cstdio>
+#include <cstring>
+
+inline const char* bacnetValueDisplayText(const BacnetValue& value,
+                                          char* output,
+                                          size_t outputCapacity) {
+  if (output == nullptr || outputCapacity == 0) {
+    return "";
+  }
+
+  switch (value.type) {
+    case BacnetValueType::Null:
+      std::snprintf(output, outputCapacity, "null");
+      break;
+    case BacnetValueType::Boolean:
+      std::snprintf(output, outputCapacity, "%s", value.booleanValue ? "true" : "false");
+      break;
+    case BacnetValueType::Unsigned:
+    case BacnetValueType::Enumerated:
+      std::snprintf(output, outputCapacity, "%lu", static_cast<unsigned long>(value.unsignedValue));
+      break;
+    case BacnetValueType::Signed:
+      std::snprintf(output, outputCapacity, "%ld", static_cast<long>(value.signedValue));
+      break;
+    case BacnetValueType::Real:
+      std::snprintf(output, outputCapacity, "%.3f", static_cast<double>(value.realValue));
+      break;
+    case BacnetValueType::CharacterString: {
+      const size_t count = value.textLength < outputCapacity - 1
+                             ? value.textLength
+                             : outputCapacity - 1;
+      std::memcpy(output, value.text, count);
+      output[count] = '\0';
+      break;
+    }
+    case BacnetValueType::ObjectIdentifier:
+      std::snprintf(output, outputCapacity, "%s%lu", bacnetObjectTypeText(value.objectValue.type), static_cast<unsigned long>(value.objectValue.instance));
+      break;
+    default:
+      std::snprintf(output, outputCapacity, "%s", value.textLength > 0 ? value.displayText() : "empty");
+      break;
+  }
+  return output;
+}
+
 inline const char* bacnetObjectTypePrefix(uint16_t objectType) {
   switch (static_cast<BacnetObjectType>(objectType)) {
     case BacnetObjectType::AnalogInput:

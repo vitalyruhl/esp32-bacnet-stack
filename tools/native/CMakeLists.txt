@@ -76,6 +76,16 @@ add_executable(bacnet_write_property_disabled_tests
 target_compile_features(bacnet_write_property_disabled_tests PRIVATE cxx_std_17)
 target_link_libraries(bacnet_write_property_disabled_tests PRIVATE bacnet_client)
 
+add_executable(bacnet_priority_write_disabled_tests
+  test/priority_write_disabled_tests.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/../../src/BacnetDeviceSession.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/../../src/BacnetRemoteObject.cpp)
+target_compile_features(bacnet_priority_write_disabled_tests PRIVATE cxx_std_17)
+target_compile_definitions(bacnet_priority_write_disabled_tests PRIVATE
+  ESP_BACNET_ENABLE_WRITE_PROPERTY=1
+  ESP_BACNET_ENABLE_PRIORITY_WRITE=0)
+target_link_libraries(bacnet_priority_write_disabled_tests PRIVATE bacnet_client_write_enabled)
+
 add_executable(bacnet_priority_helpers_tests
   test/priority_helpers_tests.cpp
   ${CMAKE_CURRENT_LIST_DIR}/../../src/BacnetClient.cpp
@@ -111,6 +121,7 @@ if(BUILD_TESTING)
   add_test(NAME bacnet_cli_support_tests COMMAND bacnet_cli_support_tests)
   add_test(NAME bacnet_write_property_tests COMMAND bacnet_write_property_tests)
   add_test(NAME bacnet_write_property_disabled_tests COMMAND bacnet_write_property_disabled_tests)
+  add_test(NAME bacnet_priority_write_disabled_tests COMMAND bacnet_priority_write_disabled_tests)
   add_test(NAME bacnet_priority_helpers_tests COMMAND bacnet_priority_helpers_tests)
   add_test(NAME bacnet_write_hil_tests COMMAND bacnet_write_hil_tests)
   add_test(NAME bacnet_cli_help COMMAND bacnet_cli_smoke --help)

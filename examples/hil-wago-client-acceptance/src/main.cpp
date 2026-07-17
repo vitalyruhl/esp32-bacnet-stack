@@ -1114,6 +1114,24 @@ void printPriorityWriteStatus(const PriorityWriteTarget& target,
   Serial.println(priorityWriteStatusText(status));
 }
 
+bool cleanupPriorityWrite(BacnetRemoteObject& object,
+                          const PriorityWriteTarget& target,
+                          bool& priorityActive) {
+  if (!priorityActive) {
+    return true;
+  }
+  const BacnetDeviceSessionWriteStatus cleanupStatus =
+    object.relinquishPresentValue(kPriorityWritePriority, kScanReadTimeoutMs);
+  printPriorityWriteStatus(target, "relinquish-priority-8-cleanup", cleanupStatus);
+  if (cleanupStatus == BacnetDeviceSessionWriteStatus::Ack) {
+    priorityActive = false;
+    printResult("I", "priority cleanup acknowledged after failed scenario step");
+    return true;
+  }
+  printResult("FAIL", "priority cleanup failed; priority override may remain active");
+  return false;
+}
+
 void printPriorityWriteReset(const PriorityWriteTarget& target,
                              const char* mode,
                              const BacnetPriorityRelinquishResult& result) {
@@ -1413,8 +1431,10 @@ ScenarioOutcome runPresentValuePriorityWriteScenario() {
     if (writeStatus != BacnetDeviceSessionWriteStatus::Ack) {
       return ScenarioOutcome::Fail;
     }
+    bool priorityActive = true;
 
     if (!observePriorityWriteValue(object, target, temporary, "priority-8-active", true)) {
+      cleanupPriorityWrite(object, target, priorityActive);
       return ScenarioOutcome::Fail;
     }
     const BacnetPropertyReadStatus activePriorityArrayStatus =
@@ -1423,6 +1443,7 @@ ScenarioOutcome runPresentValuePriorityWriteScenario() {
       target, "priority-array-priority-8-active", activePriorityArrayStatus, priorityArray);
     if (activePriorityArrayStatus != BacnetPropertyReadStatus::Ack ||
         !priorityWriteValueEquals(priorityArray.slots[kPriorityWritePriority - 1], temporary)) {
+      cleanupPriorityWrite(object, target, priorityActive);
       return ScenarioOutcome::Fail;
     }
     BacnetValue slot8Active;
@@ -1431,6 +1452,7 @@ ScenarioOutcome runPresentValuePriorityWriteScenario() {
         !readPriorityWriteSlot(object, target, 16, "priority-array[16]-active", slot16Active) ||
         !priorityWriteValueEquals(slot8Active, temporary)) {
       printResult("FAIL", "priority 8 did not contain the temporary value");
+      cleanupPriorityWrite(object, target, priorityActive);
       return ScenarioOutcome::Fail;
     }
 
@@ -1438,8 +1460,10 @@ ScenarioOutcome runPresentValuePriorityWriteScenario() {
       object.relinquishPresentValue(kPriorityWritePriority, kScanReadTimeoutMs);
     printPriorityWriteStatus(target, "relinquish-priority-8", relinquishStatus);
     if (relinquishStatus != BacnetDeviceSessionWriteStatus::Ack) {
+      cleanupPriorityWrite(object, target, priorityActive);
       return ScenarioOutcome::Fail;
     }
+    priorityActive = false;
     BacnetValue slot8Relinquished;
     if (!readPriorityWriteSlot(object, target, kPriorityWritePriority, "priority-array[8]-relinquished", slot8Relinquished) ||
         slot8Relinquished.type != BacnetValueType::Null) {

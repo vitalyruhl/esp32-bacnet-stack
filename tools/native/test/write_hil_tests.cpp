@@ -35,11 +35,21 @@ public:
     return true;
   }
   size_t receive(uint8_t* data, size_t capacity, BacnetIpEndpoint&) override {
-    if (next == count || capacity < responseSize[next]) {
+    if (next < count) {
+      if (capacity < responseSize[next]) {
+        return 0;
+      }
+      const size_t size = responseSize[next];
+      std::memcpy(data, response[next++], size);
+      return size;
+    }
+    if (delayedResponseSize == 0 || sendCount < delayedResponseSendCount ||
+        capacity < delayedResponseSize) {
       return 0;
     }
-    const size_t size = responseSize[next];
-    std::memcpy(data, response[next++], size);
+    const size_t size = delayedResponseSize;
+    std::memcpy(data, delayedResponse, size);
+    delayedResponseSize = 0;
     return size;
   }
   void idle() override { ++clock->now; }
@@ -51,6 +61,15 @@ public:
     responseSize[count++] = size;
     return true;
   }
+  bool queueAfterSend(const uint8_t* data, size_t size, unsigned minimumSendCount) {
+    if (size > sizeof(delayedResponse)) {
+      return false;
+    }
+    std::memcpy(delayedResponse, data, size);
+    delayedResponseSize = size;
+    delayedResponseSendCount = minimumSendCount;
+    return true;
+  }
 
   FakeClock* clock = nullptr;
   unsigned sendCount = 0;
@@ -60,6 +79,9 @@ public:
   size_t responseSize[32] = {};
   size_t count = 0;
   size_t next = 0;
+  uint8_t delayedResponse[128] = {};
+  size_t delayedResponseSize = 0;
+  unsigned delayedResponseSendCount = 0;
 };
 
 size_t buildReadAck(uint8_t* buffer, uint8_t invokeId, BacnetObjectId object,
@@ -113,6 +135,22 @@ size_t buildReadError(uint8_t* buffer, uint8_t invokeId) {
 size_t buildWriteAck(uint8_t* buffer, uint8_t invokeId) {
   const uint8_t bytes[] = {
     0x81, 0x0A, 0x00, 0x0A, 0x01, 0x00, 0x20, invokeId, 0x0F, 0x0F,
+  };
+  std::memcpy(buffer, bytes, sizeof(bytes));
+  return sizeof(bytes);
+}
+
+size_t buildWriteError(uint8_t* buffer, uint8_t invokeId) {
+  const uint8_t bytes[] = {
+    0x81, 0x0A, 0x00, 0x0A, 0x01, 0x00, 0x50, invokeId, 0x0F, 0x0F,
+  };
+  std::memcpy(buffer, bytes, sizeof(bytes));
+  return sizeof(bytes);
+}
+
+size_t buildWriteTerminal(uint8_t* buffer, uint8_t apduType, uint8_t invokeId) {
+  const uint8_t bytes[] = {
+    0x81, 0x0A, 0x00, 0x08, 0x01, 0x00, apduType, invokeId,
   };
   std::memcpy(buffer, bytes, sizeof(bytes));
   return sizeof(bytes);
@@ -303,9 +341,109 @@ bool testReadbackFailureRelinquishes() {
   const BacnetWriteHilResult result = bacnetWriteHilRunTarget(session, target, {8, 3});
   return expect(result.stage == BacnetWriteHilStage::Readback &&
                   result.cleanupAttempted &&
-                  result.relinquishStatus == BacnetDeviceSessionWriteStatus::Ack &&
+                  result.cleanupStatus == BacnetDeviceSessionWriteStatus::Ack &&
+                  !result.priorityMayBeActive &&
                   transport.sendCount == 7 && transport.sent[6][18] == 0x00,
                 "readback failure relinquishes active priority");
+}
+
+bool queueRunUntilRelinquish(FakeTransport& transport, uint8_t* response,
+                             const BacnetObjectId& object) {
+  BacnetValue off;
+  off.type = BacnetValueType::Enumerated;
+  off.unsignedValue = 0;
+  BacnetValue on = off;
+  on.unsignedValue = 1;
+  BacnetValue nullValue;
+  nullValue.type = BacnetValueType::Null;
+  const struct Read {
+    BacnetPropertyId property;
+    uint32_t index;
+    BacnetValue value;
+  } reads[] = {
+    {BacnetPropertyId::PresentValue, kBacnetNoArrayIndex, off},
+    {BacnetPropertyId::PriorityArray, 8, nullValue},
+    {BacnetPropertyId::PriorityArray, 16, off},
+    {BacnetPropertyId::PresentValue, kBacnetNoArrayIndex, on},
+    {BacnetPropertyId::PriorityArray, 8, on},
+    {BacnetPropertyId::PriorityArray, 16, off},
+  };
+  for (uint8_t invokeId = 1; invokeId <= 3; ++invokeId) {
+    if (!transport.queue(response, buildReadAck(
+          response, invokeId, object, reads[invokeId - 1].property,
+          reads[invokeId - 1].index, reads[invokeId - 1].value))) {
+      return false;
+    }
+  }
+  if (!transport.queue(response, buildWriteAck(response, 4))) {
+    return false;
+  }
+  for (uint8_t invokeId = 5; invokeId <= 7; ++invokeId) {
+    if (!transport.queue(response, buildReadAck(
+          response, invokeId, object, reads[invokeId - 2].property,
+          reads[invokeId - 2].index, reads[invokeId - 2].value))) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool testRelinquishFailureCleanup(BacnetDeviceSessionWriteStatus primaryStatus,
+                                  uint8_t primaryResponse,
+                                  BacnetDeviceSessionWriteStatus cleanupStatus,
+                                  uint8_t cleanupResponse,
+                                  bool priorityMayBeActive) {
+  FakeTransport transport;
+  FakeClock clock;
+  transport.clock = &clock;
+  BacnetClient client(transport, &clock);
+  client.begin();
+  BacnetDeviceSession session(
+    client, 1234, BacnetIpEndpoint(192, 0, 2, 1, BacnetClient::kDefaultPort));
+  const BacnetObjectId object{static_cast<uint16_t>(BacnetObjectType::BinaryValue), 7};
+  uint8_t response[128] = {};
+  if (!expect(queueRunUntilRelinquish(transport, response, object),
+              "queue run until relinquish")) {
+    return false;
+  }
+  if (primaryResponse == 0x50) {
+    transport.queue(response, buildWriteError(response, 8));
+  } else if (primaryResponse != 0) {
+    transport.queue(response, buildWriteTerminal(response, primaryResponse, 8));
+  }
+  if (cleanupResponse == 0x20) {
+    const size_t cleanupSize = buildWriteAck(response, 9);
+    if (primaryResponse == 0) {
+      transport.queueAfterSend(response, cleanupSize, 9);
+    } else {
+      transport.queue(response, cleanupSize);
+    }
+  } else if (cleanupResponse == 0x50) {
+    transport.queue(response, buildWriteError(response, 9));
+  }
+  const BacnetWriteHilTarget target{BacnetObjectType::BinaryValue, 7, false};
+  const BacnetWriteHilResult result = bacnetWriteHilRunTarget(session, target, {8, 3});
+  return expect(result.stage == BacnetWriteHilStage::Relinquish &&
+                  result.relinquishStatus == primaryStatus &&
+                  result.cleanupAttempted && result.cleanupStatus == cleanupStatus &&
+                  result.priorityMayBeActive == priorityMayBeActive &&
+                  transport.sendCount == 9 && transport.sent[8][18] == 0x00,
+                "failed relinquish preserves status and makes one cleanup attempt");
+}
+
+bool testRelinquishFailureCleanupStatuses() {
+  return testRelinquishFailureCleanup(BacnetDeviceSessionWriteStatus::Timeout, 0,
+                                      BacnetDeviceSessionWriteStatus::Ack, 0x20, false) &&
+         testRelinquishFailureCleanup(BacnetDeviceSessionWriteStatus::Error, 0x50,
+                                      BacnetDeviceSessionWriteStatus::Ack, 0x20, false) &&
+         testRelinquishFailureCleanup(BacnetDeviceSessionWriteStatus::Reject, 0x60,
+                                      BacnetDeviceSessionWriteStatus::Ack, 0x20, false) &&
+         testRelinquishFailureCleanup(BacnetDeviceSessionWriteStatus::Abort, 0x70,
+                                      BacnetDeviceSessionWriteStatus::Ack, 0x20, false) &&
+         testRelinquishFailureCleanup(BacnetDeviceSessionWriteStatus::Timeout, 0,
+                                      BacnetDeviceSessionWriteStatus::Timeout, 0, true) &&
+         testRelinquishFailureCleanup(BacnetDeviceSessionWriteStatus::Error, 0x50,
+                                      BacnetDeviceSessionWriteStatus::Error, 0x50, true);
 }
 
 bool testInvalidConfigurationSendsNothing() {
@@ -327,7 +465,8 @@ bool testInvalidConfigurationSendsNothing() {
 
 int main() {
   return testValueSelection() && testSuccessfulBinaryRun() &&
-         testReadbackFailureRelinquishes() && testInvalidConfigurationSendsNothing()
+         testReadbackFailureRelinquishes() && testRelinquishFailureCleanupStatuses() &&
+         testInvalidConfigurationSendsNothing()
            ? 0
            : 1;
 }

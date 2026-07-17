@@ -111,7 +111,7 @@ bool testRequestAndResponses() {
   priorityOptions.priority = 0;
   if (!expect(BacnetProtocol::buildWritePropertyRequest(priorityPacket, sizeof(priorityPacket), request.object, request.property, value, priorityOptions, 9) == 0, "priority zero rejected")) return false;
   priorityOptions.priority = 17;
-  if (!expect(client.sendWriteProperty(BacnetIpEndpoint(192, 0, 2, 1, 47808), request.object, request.property, value, priorityOptions, 9) == BacnetWritePropertyPollStatus::InvalidArgument && transport.sendCount == 1, "priority 17 rejected without send")) return false;
+  if (!expect(client.sendWriteProperty(BacnetIpEndpoint(192, 0, 2, 1, 47808), request.object, request.property, value, priorityOptions, 9) == BacnetWritePropertyPollStatus::Disabled && transport.sendCount == 1, "disabled priority gate rejects without send")) return false;
   const uint8_t ack[] = {0x81,0x0A,0x00,0x0A,0x01,0x00,0x20,0x09,0x0F,0x0F};
   std::memcpy(transport.response, ack, sizeof(ack)); transport.responseSize = sizeof(ack);
   if (!expect(client.pollWriteProperty(9) == BacnetWritePropertyPollStatus::Ack, "write ack")) return false;

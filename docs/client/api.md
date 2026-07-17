@@ -32,7 +32,8 @@ Current public responsibilities:
 - read one property through `readProperty()`
 - explicitly write one typed property through `writeProperty()` when enabled
   and optionally provide `BacnetWritePropertyOptions` for an array index and a
-  BACnet priority from `1` through `16`
+  BACnet priority from `1` through `16`; priority requests additionally require
+  `ESP_BACNET_ENABLE_PRIORITY_WRITE=1`
 - read complete `priority-array` values through the typed
   `BacnetPriorityArray` helper, or read one priority slot through the scalar
   indexed helper; read `relinquish-default` through the detailed
@@ -40,7 +41,8 @@ Current public responsibilities:
   `present-value` explicitly through `writePresentValue()` and
   `relinquishPresentValue()`; run a strict command-priority reset through
   `relinquishAllPriorities()` or explicitly skip Minimum On/Off priority 6
-  with `BacnetPriorityResetOptions`; inspect its
+  with `BacnetPriorityResetOptions` when both write feature gates are enabled;
+  inspect its
   `BacnetPriorityRelinquishResult`
 - read compact object health through `readObjectStatus()`
 - collect a property's advertised property list through `readPropertyList()`
