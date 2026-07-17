@@ -21,10 +21,14 @@ SubscribeCOV has no polling fallback; a subscription error remains visible while
 AV201 polling continues. The settings page provides the object instances, COV
 lifetime, and Write Priority (`1..16`).
 
-The separate **Manual Priority Overrides** card contains a numeric AV input,
-AV write/relinquish actions, and BV Set 0, Set 1, and relinquish actions. Each
-button sends at most one request and only after an explicit user click. The
-Ethernet build enables `ESP_BACNET_ENABLE_WRITE_PROPERTY` and
+The shared **Manual Priority Overrides** card contains a numeric AV input,
+AV write/relinquish actions, and BV Set 0, Set 1, and relinquish actions. It
+also shows the configured `BV<instance>` as a read-only Boolean indicator plus
+an explicit `active`, `inactive`, or `unknown` Present Value status. The status
+uses the normal controlled polling interval and performs one actual
+`Present_Value` readback after an acknowledged BV action; it never assumes the
+requested write became the current value. Each button sends at most one request
+and only after an explicit user click. The Ethernet build enables `ESP_BACNET_ENABLE_WRITE_PROPERTY` and
 `ESP_BACNET_ENABLE_PRIORITY_WRITE`; other demo environments retain disabled
 write features. A successful override remains active until relinquished.
 

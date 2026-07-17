@@ -4,6 +4,11 @@ This changelog is a curated overview.
 
 ## Unreleased
 
+- Added a read-only current Binary Value status indicator to the shared client
+  demo priority-override card. It uses the existing controlled polling path and
+  confirmed Present Value readbacks after an acknowledged BV action; it does
+  not send automatic writes or infer the displayed state from a requested write.
+
 - Added native Windows PowerShell examples for Who-Is/I-Am discovery, AV/BV/MSV
   reads, SubscribeCOV, Analog Value listing, and one explicit Binary Value
   priority-8 toggle/relinquish flow.
