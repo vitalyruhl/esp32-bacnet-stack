@@ -2,11 +2,6 @@
 
 #include "BacnetServer.h"
 
-namespace {
-constexpr uint8_t kApduConfirmedRequest = 0x00;
-constexpr uint8_t kApduUnconfirmedRequest = 0x10;
-} // namespace
-
 BacnetServer::BacnetServer(BacnetDatagramTransport& transport)
     : transport_(&transport) {}
 
@@ -85,33 +80,19 @@ BacnetServerPollResult BacnetServer::poll() {
                            : BacnetServerPollResult::SendFailed;
   }
 
-  if (bytesRead < 8 || packet[0] != 0x81 ||
-      (packet[1] != 0x0A && packet[1] != 0x0B) ||
-      (static_cast<size_t>((static_cast<uint16_t>(packet[2]) << 8) |
-                           packet[3]) != bytesRead)) {
+  BacnetConfirmedRequestHeader confirmedRequest;
+  const auto confirmedStatus = BacnetProtocol::parseConfirmedRequestHeader(
+    packet, bytesRead, confirmedRequest);
+  if (confirmedStatus == BacnetConfirmedRequestParseStatus::Malformed) {
     return BacnetServerPollResult::Malformed;
   }
-
-  size_t offset = 4;
-  if (packet[offset++] != 0x01) {
-    return BacnetServerPollResult::Malformed;
-  }
-  const uint8_t npduControl = packet[offset++];
-  if ((npduControl & static_cast<uint8_t>(~0x04U)) != 0) {
+  if (confirmedStatus != BacnetConfirmedRequestParseStatus::Confirmed) {
     return BacnetServerPollResult::Ignored;
   }
 
-  const uint8_t apduType = packet[offset] & 0xF0;
-  if (apduType == kApduUnconfirmedRequest) {
-    return BacnetServerPollResult::Ignored;
-  }
-  if (apduType != kApduConfirmedRequest || offset + 2 >= bytesRead) {
-    return BacnetServerPollResult::Ignored;
-  }
-
-  const uint8_t invokeId = packet[offset + 1];
-  return sendReject(source, invokeId) ? BacnetServerPollResult::RejectSent
-                                      : BacnetServerPollResult::SendFailed;
+  return sendReject(source, confirmedRequest.invokeId)
+           ? BacnetServerPollResult::RejectSent
+           : BacnetServerPollResult::SendFailed;
 }
 
 bool BacnetServer::sendIAm(const BacnetIpEndpoint& destination) {

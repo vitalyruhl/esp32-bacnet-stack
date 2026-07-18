@@ -60,6 +60,28 @@ Package metadata and the
 currently available installation version are listed in the
 [PlatformIO Registry](https://registry.platformio.org/libraries/vitaly.ruhl/ESP32%20BACnet%20Stack).
 
+## BACnet Vendor Identifier
+
+BACnet has no private or generally free Vendor ID range. ASHRAE assigns Vendor
+IDs uniquely, and the final provider of a BACnet device or software product is
+responsible for configuring the appropriate value. The library does not assign
+a production Vendor ID. Configure `vendorIdentifier` (currently
+`BacnetServerDevice::vendorId`) and, when supported, `vendorName` for the
+final product. When integrating this library into an existing product, use the
+Vendor ID of that responsible product provider.
+
+BACnet software and open-source implementors may request their own Vendor ID;
+own hardware is not a prerequisite and the assignment is free. Use the
+[BACnet Vendor IDs overview and assigned-ID list](https://bacnet.org/vendor-ids/)
+as the primary reference and the
+[ASHRAE Vendor ID assignment procedure](https://www.ashrae.org/file%20library/technical%20resources/standards%20and%20guidelines/procedures-vendor-id-rev7-5-2023.pdf)
+for the official request process.
+
+This project uses Vendor ID `555` only in clearly labelled local tests and
+examples. It is ASHRAE-reserved for test/example use, is not a BACnet analogue
+of a private IP range, and must not be copied into shipped or production
+devices.
+
 ## Goals
 
 - Provide one portable public `BacnetClient` role for BACnet/IP client workflows.

@@ -16,6 +16,9 @@
 
 using IPAddress = BacnetIpEndpoint;
 
+// ASHRAE-reserved vendor ID for tests and examples only; never a product ID.
+constexpr uint16_t kTestVendorId = 555;
+
 struct SubscriptionCallbackCapture {
   size_t calls = 0;
   BacnetObjectId objectId;
@@ -391,8 +394,9 @@ void test_portable_protocol_parses_i_am_response() {
     0xC4,
     0x91,
     0x00,
-    0x21,
-    0xDE,
+    0x22,
+    0x02,
+    0x2B,
   };
   BacnetIAmDeviceInfo device;
 
@@ -400,7 +404,7 @@ void test_portable_protocol_parses_i_am_response() {
   TEST_ASSERT_EQUAL_UINT32(1234, device.deviceInstance);
   TEST_ASSERT_EQUAL_UINT32(1476, device.maxApduLengthAccepted);
   TEST_ASSERT_EQUAL_UINT8(0, device.segmentationSupported);
-  TEST_ASSERT_EQUAL_UINT16(222, device.vendorId);
+  TEST_ASSERT_EQUAL_UINT16(kTestVendorId, device.vendorId);
 }
 
 void test_bacnet_client_rejects_non_i_am_response() {
@@ -1354,7 +1358,7 @@ void test_bacnet_device_session_from_i_am_preserves_source_port() {
   BacnetIAmDevice device;
   device.endpoint = BacnetIpEndpoint(192, 168, 1, 52, 47809);
   device.deviceInstance = 9012;
-  device.vendorId = 222;
+  device.vendorId = kTestVendorId;
 
   BacnetDeviceSession session = BacnetDeviceSession::fromIAm(client, device);
 
@@ -1957,11 +1961,18 @@ void test_bacnet_object_list_scan_job_busy_protects_blocking_read() {
 }
 
 void test_bacnet_server_lifecycle() {
+  static_assert(!std::is_copy_constructible<BacnetServer>::value,
+                "BacnetServer must not be copyable");
+  static_assert(!std::is_copy_assignable<BacnetServer>::value,
+                "BacnetServer must not be copy-assignable");
+  static_assert(!std::is_move_constructible<BacnetServer>::value,
+                "BacnetServer must not be movable");
+
   MemoryBacnetDatagramTransport transport;
   BacnetServer server(transport);
   BacnetServerDevice device;
   device.deviceInstance = 1234;
-  device.vendorId = 42;
+  device.vendorId = kTestVendorId;
   device.maxApduLengthAccepted = 1024;
   device.segmentationSupported = 3;
 
@@ -1971,11 +1982,15 @@ void test_bacnet_server_lifecycle() {
   TEST_ASSERT_EQUAL_UINT32(1234, server.deviceInstance());
   TEST_ASSERT_EQUAL_UINT16(BacnetServer::kDefaultPort, server.port());
   TEST_ASSERT_EQUAL_UINT16(BacnetServer::kDefaultPort, transport.lastBeginPort);
-  TEST_ASSERT_EQUAL_UINT16(42, server.device().vendorId);
+  TEST_ASSERT_EQUAL_UINT16(kTestVendorId, server.device().vendorId);
 
   server.end();
   TEST_ASSERT_FALSE(server.isRunning());
   TEST_ASSERT_EQUAL_UINT32(1, transport.endCalls);
+
+  BacnetServer invalidServer(transport);
+  TEST_ASSERT_FALSE(invalidServer.begin(0x400000));
+  TEST_ASSERT_EQUAL_UINT32(1, transport.beginCalls);
 }
 
 void test_bacnet_server_poll_answers_who_is_at_source_endpoint() {
@@ -1983,7 +1998,7 @@ void test_bacnet_server_poll_answers_who_is_at_source_endpoint() {
   BacnetServer server(transport);
   BacnetServerDevice device;
   device.deviceInstance = 1234;
-  device.vendorId = 55;
+  device.vendorId = kTestVendorId;
   device.maxApduLengthAccepted = 1024;
   device.segmentationSupported = 3;
   TEST_ASSERT_TRUE(server.begin(device));
@@ -2009,7 +2024,7 @@ void test_bacnet_server_poll_answers_who_is_at_source_endpoint() {
   TEST_ASSERT_EQUAL_UINT32(1234, parsed.deviceInstance);
   TEST_ASSERT_EQUAL_UINT32(1024, parsed.maxApduLengthAccepted);
   TEST_ASSERT_EQUAL_UINT8(3, parsed.segmentationSupported);
-  TEST_ASSERT_EQUAL_UINT16(55, parsed.vendorId);
+  TEST_ASSERT_EQUAL_UINT16(kTestVendorId, parsed.vendorId);
 }
 
 void test_bacnet_server_poll_honors_who_is_range() {
@@ -2055,6 +2070,46 @@ void test_bacnet_server_poll_honors_who_is_range() {
   TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetServerPollResult::Ignored),
                           static_cast<uint8_t>(server.poll()));
   TEST_ASSERT_EQUAL_UINT32(1, transport.sendCalls);
+
+  const uint8_t incompleteRange[] = {
+    0x81,
+    0x0B,
+    0x00,
+    0x0A,
+    0x01,
+    0x00,
+    0x10,
+    0x08,
+    0x09,
+    0x2A,
+  };
+  transport.queue(incompleteRange, sizeof(incompleteRange), BacnetIpEndpoint(192, 0, 2, 47, 47812));
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetServerPollResult::Malformed),
+                          static_cast<uint8_t>(server.poll()));
+  TEST_ASSERT_EQUAL_UINT32(1, transport.sendCalls);
+
+  const uint8_t invalidRange[] = {
+    0x81,
+    0x0B,
+    0x00,
+    0x10,
+    0x01,
+    0x00,
+    0x10,
+    0x08,
+    0x0B,
+    0x40,
+    0x00,
+    0x00,
+    0x1B,
+    0x40,
+    0x00,
+    0x01,
+  };
+  transport.queue(invalidRange, sizeof(invalidRange), BacnetIpEndpoint(192, 0, 2, 48, 47813));
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetServerPollResult::Malformed),
+                          static_cast<uint8_t>(server.poll()));
+  TEST_ASSERT_EQUAL_UINT32(1, transport.sendCalls);
 }
 
 void test_bacnet_server_poll_rejects_confirmed_service_and_ignores_malformed() {
@@ -2093,6 +2148,28 @@ void test_bacnet_server_poll_rejects_confirmed_service_and_ignores_malformed() {
   TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetServerPollResult::NoDatagram),
                           static_cast<uint8_t>(server.poll()));
   TEST_ASSERT_EQUAL_UINT32(3, transport.receiveCalls);
+}
+
+void test_bacnet_server_poll_discards_truncated_confirmed_request() {
+  MemoryBacnetDatagramTransport transport;
+  BacnetServer server(transport);
+  TEST_ASSERT_TRUE(server.begin(1234));
+
+  const uint8_t truncatedConfirmed[] = {
+    0x81,
+    0x0A,
+    0x00,
+    0x09,
+    0x01,
+    0x04,
+    0x00,
+    0x05,
+    0x42,
+  };
+  transport.queue(truncatedConfirmed, sizeof(truncatedConfirmed), BacnetIpEndpoint(192, 0, 2, 48, 47813));
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetServerPollResult::Malformed),
+                          static_cast<uint8_t>(server.poll()));
+  TEST_ASSERT_EQUAL_UINT32(0, transport.sendCalls);
 }
 
 void test_bacnet_subscribe_options_defaults() {
@@ -2410,6 +2487,7 @@ void setup() {
   RUN_TEST(test_bacnet_server_poll_answers_who_is_at_source_endpoint);
   RUN_TEST(test_bacnet_server_poll_honors_who_is_range);
   RUN_TEST(test_bacnet_server_poll_rejects_confirmed_service_and_ignores_malformed);
+  RUN_TEST(test_bacnet_server_poll_discards_truncated_confirmed_request);
   RUN_TEST(test_bacnet_subscribe_options_defaults);
   RUN_TEST(test_bacnet_property_subscription_is_move_only);
   RUN_TEST(test_bacnet_property_subscribe_exposes_identity_and_defaults);

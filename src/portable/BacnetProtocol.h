@@ -17,6 +17,10 @@ public:
   static bool parseWhoIsRequest(const uint8_t* buffer,
                                 size_t length,
                                 BacnetWhoIsRequest& request);
+  static BacnetConfirmedRequestParseStatus parseConfirmedRequestHeader(
+    const uint8_t* buffer,
+    size_t length,
+    BacnetConfirmedRequestHeader& header);
   static size_t buildIAmResponse(uint8_t* buffer,
                                  size_t bufferSize,
                                  const BacnetIAmDeviceInfo& device);

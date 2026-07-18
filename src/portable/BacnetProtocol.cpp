@@ -884,6 +884,36 @@ bool BacnetProtocol::parseWhoIsRequest(const uint8_t* buffer,
   return true;
 }
 
+BacnetConfirmedRequestParseStatus
+BacnetProtocol::parseConfirmedRequestHeader(
+  const uint8_t* buffer,
+  size_t length,
+  BacnetConfirmedRequestHeader& header) {
+  header = BacnetConfirmedRequestHeader{};
+  if (buffer == nullptr || length < 4 || buffer[0] != kBvlcTypeBacnetIp ||
+      buffer[1] != kBvlcOriginalUnicastNpdu ||
+      readUint16(&buffer[2]) != length) {
+    return BacnetConfirmedRequestParseStatus::Malformed;
+  }
+
+  size_t offset = 4;
+  if (!readNpduHeader(buffer, length, offset) || offset >= length) {
+    return BacnetConfirmedRequestParseStatus::Malformed;
+  }
+
+  if ((buffer[offset] & 0xF0) != kApduConfirmedRequest) {
+    return BacnetConfirmedRequestParseStatus::Unrelated;
+  }
+
+  if (offset + 4 > length) {
+    return BacnetConfirmedRequestParseStatus::Malformed;
+  }
+
+  header.invokeId = buffer[offset + 2];
+  header.serviceChoice = buffer[offset + 3];
+  return BacnetConfirmedRequestParseStatus::Confirmed;
+}
+
 size_t BacnetProtocol::buildIAmResponse(uint8_t* buffer,
                                         size_t bufferSize,
                                         const BacnetIAmDeviceInfo& device) {

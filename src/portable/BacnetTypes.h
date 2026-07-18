@@ -336,6 +336,17 @@ struct BacnetWhoIsRequest {
   }
 };
 
+struct BacnetConfirmedRequestHeader {
+  uint8_t invokeId = 0;
+  uint8_t serviceChoice = 0;
+};
+
+enum class BacnetConfirmedRequestParseStatus : uint8_t {
+  Unrelated,
+  Malformed,
+  Confirmed,
+};
+
 struct BacnetIpEndpoint {
   uint8_t address[4] = {};
   uint16_t port = 47808;

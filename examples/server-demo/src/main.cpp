@@ -102,7 +102,10 @@ void setup() {
     return;
   }
 #endif
-  bacnetServer.begin(1234);
+  if (!bacnetServer.begin(1234)) {
+    Serial.println("[W] BACnet server runtime requires a platform transport");
+    return;
+  }
 #if 0
   setupBme280ForBacnet();
 #endif
