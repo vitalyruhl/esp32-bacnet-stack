@@ -617,7 +617,7 @@ bool testIndividuallyRegisteredOptionalProperties() {
   const float maximum = 50.0F;
   const float resolution = 0.1F;
   const uint32_t reliability = 2;
-  BacnetServerPropertyRegistration registrations[10] = {};
+  BacnetServerPropertyRegistration registrations[11] = {};
   size_t registrationCount = 0;
   const auto object = [&values](size_t index) {
     return BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::AnalogValue),

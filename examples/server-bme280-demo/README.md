@@ -1,7 +1,7 @@
 # BACnet BME280 Server Demo
 
 This ESP32 WiFi example exposes a BME280 through the portable read-only BACnet
-server and persists setup through ConfigManager 4.4.0. It requires no BME280
+server and persists setup through ConfigManager 4.4.1. It requires no BME280
 for compilation.
 
 ## Hardware interoperability validation
