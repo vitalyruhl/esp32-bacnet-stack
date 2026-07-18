@@ -3,6 +3,11 @@
 The release backcheck verifies that the PlatformIO package can be installed and
 built from a fresh consumer project, without reusing local repository sources.
 
+The release CI also packs the clean checkout and validates the archive content.
+It requires package metadata, public sources, documentation, and both server
+demos, while rejecting native test consumers, local secrets, IDE files, Git,
+PlatformIO, temporary, and compiled-build content.
+
 By default the check uses `examples/hil-wago-client-acceptance` as the source
 template because it is the realistic WAGO BACnet/IP client acceptance example.
 The script copies the selected example into `.Temp/release-backcheck/` and
