@@ -414,13 +414,22 @@ bool testRegisteredAnalogValues() {
       value.bitStringValue != ((1UL << 8U) | (1UL << 2U))) {
     return false;
   }
+  if (!readProperty(transport,
+                    server,
+                    source,
+                    BacnetPropertyRequest{deviceObject, BacnetPropertyId::PropertyList, 0},
+                    34,
+                    value) ||
+      value.type != BacnetValueType::Unsigned || value.unsignedValue != 21) {
+    return false;
+  }
 
   uint8_t malformed[BacnetProtocol::kMaxReadPropertyRequestSize] = {};
   const size_t malformedSize = BacnetProtocol::buildReadPropertyRequest(
     malformed,
     sizeof(malformed),
     BacnetPropertyRequest{storedObject, BacnetPropertyId::ObjectName, kBacnetNoArrayIndex},
-    34);
+    35);
   const uint32_t sendsBeforeMalformed = transport.sendCalls;
   transport.queue(malformed, malformedSize - 1U, source);
   return malformedSize != 0 && server.poll() == BacnetServerPollResult::Malformed &&

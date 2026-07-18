@@ -167,6 +167,7 @@ BacnetServerPollResult BacnetServer::handleReadProperty(
     BacnetPropertyId::NumberOfApduRetries,
     BacnetPropertyId::DeviceAddressBinding,
     BacnetPropertyId::DatabaseRevision,
+    BacnetPropertyId::PropertyList,
   };
   static constexpr BacnetPropertyId kAnalogValueProperties[] = {
     BacnetPropertyId::ObjectIdentifier,

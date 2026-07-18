@@ -121,6 +121,7 @@ enum class BacnetValueType : uint8_t {
   Error,
   NotCommandable,
   Unsupported,
+  PropertyIdentifierList,
 };
 
 // Stable BACnet error names used by protocol decoders and presentation layers.
@@ -184,6 +185,8 @@ inline const char* bacnetValueTypeName(BacnetValueType type) {
       return "not-commandable";
     case BacnetValueType::Unsupported:
       return "unsupported";
+    case BacnetValueType::PropertyIdentifierList:
+      return "property-id-list";
   }
   return "unknown";
 }

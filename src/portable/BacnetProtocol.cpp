@@ -461,6 +461,36 @@ bool parseApplicationObjectIdentifierList(const uint8_t* buffer, size_t length, 
   return used > 0;
 }
 
+bool parseApplicationPropertyIdentifierList(const uint8_t* buffer,
+                                            size_t length,
+                                            size_t& offset,
+                                            BacnetValue& value) {
+  char* text = value.text;
+  text[0] = '\0';
+  size_t used = 0;
+
+  while (offset < length && buffer[offset] != 0x3F) {
+    uint32_t propertyIdentifier = 0;
+    if (!readApplicationValue(buffer,
+                              length,
+                              offset,
+                              kApplicationTagEnumerated,
+                              propertyIdentifier)) {
+      return false;
+    }
+    if (used > 0 && !appendText(text, BacnetValue::kMaxTextLength, used, ";")) {
+      return false;
+    }
+    if (!appendUnsignedDecimal(text, BacnetValue::kMaxTextLength, used, propertyIdentifier)) {
+      return false;
+    }
+  }
+
+  value.type = BacnetValueType::PropertyIdentifierList;
+  value.textLength = used;
+  return used > 0;
+}
+
 bool parseApplicationCharacterString(const uint8_t* buffer, size_t length, size_t& offset, BacnetValue& value) {
   size_t stringLength = 0;
   if (!readApplicationTagHeader(buffer, length, offset, kApplicationTagCharacterString, stringLength) ||
@@ -536,6 +566,17 @@ bool parseReadPropertyApplicationValue(const uint8_t* buffer, size_t length, siz
       }
       return parseApplicationObjectIdentifierList(buffer, length, offset, value);
     }
+  }
+
+  if (expectedProperty == BacnetPropertyId::PropertyList &&
+      arrayIndex == kBacnetNoArrayIndex) {
+    return parseApplicationPropertyIdentifierList(buffer, length, offset, value);
+  }
+  if (expectedProperty == BacnetPropertyId::DeviceAddressBinding &&
+      buffer[offset] == 0x3F) {
+    value = BacnetValue{};
+    value.type = BacnetValueType::Empty;
+    return true;
   }
 
   const uint8_t tagNumber = buffer[offset] >> 4;
