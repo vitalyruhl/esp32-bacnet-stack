@@ -280,11 +280,20 @@ int main() {
     expectError(BacnetPropertyRequest{deviceObject, BacnetPropertyId::ObjectName, 0}, 44, 42) &&
     expectError(BacnetPropertyRequest{BacnetObjectId{8, 7}, BacnetPropertyId::ObjectName, kBacnetNoArrayIndex}, 45, 31) &&
     expectError(BacnetPropertyRequest{deviceObject, static_cast<BacnetPropertyId>(999), kBacnetNoArrayIndex}, 46, 32);
+  BacnetValue propertyListCount;
   const bool propertyList =
     readProperty(deviceObject, BacnetPropertyId::PropertyList, 0, 47) &&
+    BacnetProtocol::parseReadPropertyAck(
+      transport.lastSent,
+      transport.lastSentLength,
+      47,
+      BacnetPropertyRequest{deviceObject, BacnetPropertyId::PropertyList, 0},
+      propertyListCount) &&
+    propertyListCount.type == BacnetValueType::Unsigned &&
+    propertyListCount.unsignedValue == 21 &&
     transport.lastSentLength > 16 && transport.lastSent[transport.lastSentLength - 1] == 0x3F &&
     readProperty(deviceObject, BacnetPropertyId::PropertyList, 1, 48) &&
-    expectError(BacnetPropertyRequest{deviceObject, BacnetPropertyId::PropertyList, 21}, 49, 42);
+    expectError(BacnetPropertyRequest{deviceObject, BacnetPropertyId::PropertyList, 22}, 49, 42);
   const bool addressBinding =
     readProperty(deviceObject, BacnetPropertyId::DeviceAddressBinding, kBacnetNoArrayIndex, 50) &&
     transport.lastSent[transport.lastSentLength - 2] == 0x3E &&

@@ -86,6 +86,8 @@ int main() {
       property != BacnetPropertyId::PropertyList ||
       !bacnetNativeParseProperty("statusFlags", property) ||
       property != BacnetPropertyId::StatusFlags ||
+      !bacnetNativeParseProperty("units", property) ||
+      property != BacnetPropertyId::Units ||
       bacnetNativeParseProperty("unknown-property", property) ||
       std::strcmp(bacnetCliExitCodeText(BacnetCliExitCode::InvalidArguments),
                   "invalid arguments") != 0 ||

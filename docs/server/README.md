@@ -30,8 +30,13 @@ does not allocate from the heap in its normal request path and intentionally
 does not store a clock or logger. Later features that need either must use the
 existing portable clock and logging abstractions.
 
+The ESP32 server demo uses the existing Arduino UDP adapter with separate WiFi
+and Ethernet network setup, then injects it into this portable runtime. Its
+shared profile is Device `1682127` plus AV200 (stored sine) and AV201
+(polling/callback uptime). The demo-specific networking, identity, and value
+binding remain outside the portable core.
+
 This is not a complete BACnet/IP server feature: there is no COV, alarm,
-priority, WriteProperty, real I/O, ESP32 network adapter, or server demo
-transport binding.
+priority, WriteProperty, or real I/O.
 
 See [Planned Server Work](planned.md) for the current scope boundary.

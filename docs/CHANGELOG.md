@@ -14,11 +14,13 @@ This changelog is a curated overview. The canonical library version is in
 - Added portable protocol helpers and focused fake-transport coverage for
   Who-Is/I-Am dispatch, source-port preservation, rejected confirmed services,
   malformed datagrams, and server-only native compilation.
+- Added the read-only ESP32 WiFi/Ethernet server demo with Device `1682127`,
+  stored AV200 sine data, and callback-backed AV201 uptime data.
 
 ### Notes
 
-- This release does not add an ESP32 server adapter, object/property model,
-  ReadProperty, COV, WriteProperty, or real I/O binding.
+- This release adds no COV, WriteProperty, alarm, priority, or real I/O
+  binding to the read-only server profile.
 
 ## 0.34.0 - 2026-07-17
 

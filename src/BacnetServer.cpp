@@ -16,23 +16,23 @@ bool BacnetServer::setTransport(BacnetDatagramTransport& transport) {
 }
 
 bool BacnetServer::begin(const BacnetServerDevice& configuredDevice,
-                         uint16_t portValue) {
+                         uint16_t localPort) {
   if (transport_ == nullptr ||
       configuredDevice.deviceInstance > 0x003FFFFFUL ||
-      !transport_->begin(portValue)) {
+      !transport_->begin(localPort)) {
     return false;
   }
 
   device_ = configuredDevice;
-  port_ = portValue;
+  port_ = localPort;
   running_ = true;
   return true;
 }
 
-bool BacnetServer::begin(uint32_t deviceInstanceValue, uint16_t portValue) {
+bool BacnetServer::begin(uint32_t deviceInstanceValue, uint16_t localPort) {
   BacnetServerDevice configuredDevice;
   configuredDevice.deviceInstance = deviceInstanceValue;
-  return begin(configuredDevice, portValue);
+  return begin(configuredDevice, localPort);
 }
 
 void BacnetServer::end() {
@@ -167,6 +167,7 @@ BacnetServerPollResult BacnetServer::handleReadProperty(
     BacnetPropertyId::NumberOfApduRetries,
     BacnetPropertyId::DeviceAddressBinding,
     BacnetPropertyId::DatabaseRevision,
+    BacnetPropertyId::PropertyList,
   };
   static constexpr BacnetPropertyId kAnalogValueProperties[] = {
     BacnetPropertyId::ObjectIdentifier,
@@ -302,7 +303,10 @@ bool BacnetServer::readDeviceProperty(BacnetPropertyId property,
     case BacnetPropertyId::FirmwareRevision:
       return setText(device_.firmwareRevision);
     case BacnetPropertyId::ApplicationSoftwareVersion:
-      return setText(device_.applicationSoftwareVersion);
+      return setText(device_.applicationSoftwareVersion != nullptr &&
+                         device_.applicationSoftwareVersion[0] != '\0'
+                       ? device_.applicationSoftwareVersion
+                       : device_.firmwareRevision);
     case BacnetPropertyId::ObjectType:
       value.type = BacnetValueType::Enumerated;
       value.unsignedValue = static_cast<uint16_t>(BacnetObjectType::Device);

@@ -10,13 +10,15 @@ as a completed server feature set.
   ReadProperty responses, and Reject responses for unsupported confirmed
   services.
 - The portable object model exposes the Device Object and caller-owned,
-  read-only Analog Value objects. It has no platform adapter or ESP32 server
-  demo transport binding.
+  read-only Analog Value objects. `examples/server-demo` injects the existing
+  Arduino UDP adapter and keeps WiFi/Ethernet setup and demo binding outside
+  those portable modules.
 - Analog Values support stored Present Values or a lightweight function-pointer
   provider with caller context. No globally allocated Analog Value capacity is
   reserved when no values are registered.
 - The current project focus remains the BACnet/IP client roadmap and validation.
-- This page must not be read as evidence of usable ESP32 server behavior.
+- The demo is intentionally read-only and does not claim COV, alarm, priority,
+  WriteProperty, real I/O, or production-server coverage.
 
 ## Planning Notes
 
