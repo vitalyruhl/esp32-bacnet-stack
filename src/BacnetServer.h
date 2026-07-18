@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 #include "portable/BacnetProtocol.h"
@@ -28,18 +29,17 @@ struct BacnetServerDevice {
 };
 
 using BacnetServerAnalogValueProvider = float (*)(void* context);
+using BacnetServerPropertyProvider = bool (*)(const void* context, BacnetValue& value);
 
-// Optional caller-owned engineering and state metadata. A null pointer
-// preserves the minimal AV profile and does not advertise these properties.
-struct BacnetServerAnalogValueMetadata {
-  const char* description = nullptr;
-  float minPresentValue = 0.0F;
-  float maxPresentValue = 0.0F;
-  float resolution = 0.0F;
-  uint8_t eventState = 0;  // BACnet EVENT_STATE_NORMAL.
-  uint8_t reliability = 0; // BACnet RELIABILITY_NO_FAULT_DETECTED.
-  bool inAlarm = false;
-  bool fault = false;
+// Caller-owned optional property descriptor. Register only properties that an
+// object actually supports; the server neither owns nor allocates descriptors
+// or their contexts. An empty string is a valid Description value, while a
+// null description context must simply not be registered.
+struct BacnetServerPropertyRegistration {
+  BacnetObjectId object;
+  BacnetPropertyId property = BacnetPropertyId::ObjectName;
+  BacnetServerPropertyProvider provider = nullptr;
+  const void* context = nullptr;
 };
 
 // Caller-owned Analog Value configuration. The server borrows this array and
@@ -53,7 +53,6 @@ struct BacnetServerAnalogValue {
   bool outOfService = false;
   BacnetServerAnalogValueProvider presentValueProvider = nullptr;
   void* presentValueContext = nullptr;
-  const BacnetServerAnalogValueMetadata* metadata = nullptr;
 };
 
 enum class BacnetServerPollResult : uint8_t {
@@ -97,6 +96,13 @@ public:
   bool setAnalogValues(BacnetServerAnalogValue* analogValues,
                        size_t count);
   size_t analogValueCount() const;
+  // Optional caller-owned ReadProperty descriptors. Registrations extend an
+  // object's Property_List only when present and must remain valid while the
+  // server is running. Passing nullptr with zero entries unregisters all.
+  bool setPropertyRegistrations(
+    const BacnetServerPropertyRegistration* registrations,
+    size_t count);
+  size_t propertyRegistrationCount() const;
 
   bool isRunning() const;
   const BacnetServerDevice& device() const;
@@ -111,13 +117,23 @@ private:
     const BacnetIpEndpoint& source,
     const BacnetReadPropertyRequestHeader& request);
   bool readDeviceProperty(BacnetPropertyId property, BacnetValue& value) const;
-  static bool readAnalogValueProperty(const BacnetServerAnalogValue& analogValue,
-                                      BacnetPropertyId property,
-                                      BacnetValue& value);
+  bool readAnalogValueProperty(const BacnetServerAnalogValue& analogValue,
+                               BacnetPropertyId property,
+                               BacnetValue& value) const;
   const BacnetServerAnalogValue* findAnalogValue(uint32_t instance) const;
+  const BacnetServerPropertyRegistration* findPropertyRegistration(
+    BacnetObjectId object,
+    BacnetPropertyId property) const;
+  size_t analogValuePropertyCount(const BacnetServerAnalogValue& analogValue) const;
+  bool analogValuePropertyAt(const BacnetServerAnalogValue& analogValue,
+                             size_t index,
+                             BacnetPropertyId& property) const;
   static bool objectListEntry(const void* context,
                               size_t index,
                               BacnetObjectId& object);
+  static bool analogValuePropertyEntry(const void* context,
+                                       size_t index,
+                                       BacnetPropertyId& property);
 
   BacnetDatagramTransport* transport_ = nullptr; // Non-owning.
   bool running_ = false;
@@ -125,4 +141,6 @@ private:
   uint16_t port_ = kDefaultPort;
   BacnetServerAnalogValue* analogValues_ = nullptr; // Caller-owned.
   size_t analogValueCount_ = 0;
+  const BacnetServerPropertyRegistration* propertyRegistrations_ = nullptr;
+  size_t propertyRegistrationCount_ = 0;
 };

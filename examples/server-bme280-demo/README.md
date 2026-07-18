@@ -2,7 +2,16 @@
 
 This ESP32 WiFi example exposes a BME280 through the portable read-only BACnet
 server and persists setup through ConfigManager 4.4.0. It requires no BME280
-for compilation; real sensor HIL remains required before merging.
+for compilation.
+
+## Hardware interoperability validation
+
+Real ESP32 WiFi HIL passed on 2026-07-18: the BME280 produced real values, all
+four AV300–AV303 objects were read over BACnet, and the ConfigManager Live View
+matched BACnet Present_Value exactly. Home Assistant recognized the Device and
+all four sensors. Pressure is published in Pascals, including the BME280 hPa to
+Pa conversion. Sensor-fault/recovery manipulation, full Intrinsic Reporting,
+COV, and WriteProperty/Priority Array remain outside this demo.
 
 ## Wiring and sensor
 

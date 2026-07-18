@@ -4,6 +4,7 @@
 #include "portable/BacnetAnalogValueLimits.h"
 
 #include <cstring>
+#include <type_traits>
 
 namespace {
 
@@ -79,9 +80,55 @@ float readProviderValue(void* context) {
   return state->value;
 }
 
+bool readTextProperty(const void* context, BacnetValue& value) {
+  const char* text = static_cast<const char*>(context);
+  if (text == nullptr || std::strlen(text) >= sizeof(value.text))
+    return false;
+  value = BacnetValue{};
+  value.type = BacnetValueType::CharacterString;
+  value.textLength = std::strlen(text);
+  std::memcpy(value.text, text, value.textLength + 1U);
+  return true;
+}
+
+bool readRealProperty(const void* context, BacnetValue& value) {
+  const auto* real = static_cast<const float*>(context);
+  if (real == nullptr)
+    return false;
+  value = BacnetValue{};
+  value.type = BacnetValueType::Real;
+  value.realValue = *real;
+  return true;
+}
+
+bool readEnumeratedProperty(const void* context, BacnetValue& value) {
+  const auto* enumerated = static_cast<const uint32_t*>(context);
+  if (enumerated == nullptr)
+    return false;
+  value = BacnetValue{};
+  value.type = BacnetValueType::Enumerated;
+  value.unsignedValue = *enumerated;
+  return true;
+}
+
 bool equals(float actual, float expected) {
   return actual == expected;
 }
+
+struct LegacyAnalogValueLayout {
+  uint32_t instance;
+  const char* objectName;
+  float presentValue;
+  uint32_t units;
+  bool outOfService;
+  BacnetServerAnalogValueProvider presentValueProvider;
+  void* presentValueContext;
+};
+
+static_assert(std::is_aggregate<BacnetServerAnalogValue>::value,
+              "Analog Value must remain aggregate-initializable");
+static_assert(sizeof(BacnetServerAnalogValue) == sizeof(LegacyAnalogValueLayout),
+              "Baseline Analog Value must not reserve optional-property storage");
 
 bool readProperty(TestTransport& transport,
                   BacnetServer& server,
@@ -142,6 +189,37 @@ bool readError(TestTransport& transport,
          errorClass == (expectedCode == 31 ? 1U : 2U) && errorCode == expectedCode;
 }
 
+bool propertyListMatches(TestTransport& transport,
+                         BacnetServer& server,
+                         const BacnetIpEndpoint& source,
+                         BacnetObjectId object,
+                         const BacnetPropertyId* expected,
+                         size_t expectedCount,
+                         uint8_t invokeId) {
+  BacnetValue value;
+  if (!readProperty(transport, server, source,
+                    BacnetPropertyRequest{object, BacnetPropertyId::PropertyList, 0},
+                    invokeId++, value) ||
+      value.type != BacnetValueType::Unsigned ||
+      value.unsignedValue != expectedCount) {
+    return false;
+  }
+  for (size_t index = 0; index < expectedCount; ++index) {
+    if (!readProperty(transport, server, source,
+                      BacnetPropertyRequest{object, BacnetPropertyId::PropertyList,
+                                            static_cast<uint32_t>(index + 1U)},
+                      invokeId++, value) ||
+        value.type != BacnetValueType::Enumerated ||
+        value.unsignedValue != static_cast<uint32_t>(expected[index]) ||
+        !readProperty(transport, server, source,
+                      BacnetPropertyRequest{object, expected[index], kBacnetNoArrayIndex},
+                      invokeId++, value)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 bool testRegisteredAnalogValues() {
   TestTransport transport;
   BacnetServer server(transport);
@@ -149,13 +227,27 @@ bool testRegisteredAnalogValues() {
   device.deviceInstance = 1234;
   device.objectName = "AV Test Device";
   ProviderState provider{7.25F, 0};
-  BacnetServerAnalogValueMetadata providerMetadata{
-    "Provider metadata", -10.0F, 50.0F, 0.1F, 3, 2, true, true};
+  static constexpr char kProviderDescription[] = "Provider metadata";
+  const float providerMinimum = -10.0F;
+  const float providerMaximum = 50.0F;
+  const float providerResolution = 0.1F;
+  const uint32_t providerReliability = 2;
   BacnetServerAnalogValue values[] = {
     {100, "Stored AV", 1.25F, 62, true, nullptr, nullptr},
-    {101, "Provider AV", 0.0F, 95, false, readProviderValue, &provider, &providerMetadata},
+    {101, "Provider AV", 0.0F, 95, false, readProviderValue, &provider},
   };
-  if (!server.setAnalogValues(values, 2) || server.analogValueCount() != 2 ||
+  const BacnetObjectId providerObject{
+    static_cast<uint16_t>(BacnetObjectType::AnalogValue), values[1].instance};
+  const BacnetServerPropertyRegistration properties[] = {
+    {providerObject, BacnetPropertyId::Description, readTextProperty, kProviderDescription},
+    {providerObject, BacnetPropertyId::MinPresentValue, readRealProperty, &providerMinimum},
+    {providerObject, BacnetPropertyId::MaxPresentValue, readRealProperty, &providerMaximum},
+    {providerObject, BacnetPropertyId::Resolution, readRealProperty, &providerResolution},
+    {providerObject, BacnetPropertyId::Reliability, readEnumeratedProperty, &providerReliability},
+  };
+  if (!server.setAnalogValues(values, 2) ||
+      !server.setPropertyRegistrations(properties, sizeof(properties) / sizeof(properties[0])) ||
+      server.analogValueCount() != 2 ||
       !server.begin(device)) {
     return false;
   }
@@ -165,8 +257,6 @@ bool testRegisteredAnalogValues() {
     static_cast<uint16_t>(BacnetObjectType::Device), device.deviceInstance};
   const BacnetObjectId storedObject{
     static_cast<uint16_t>(BacnetObjectType::AnalogValue), values[0].instance};
-  const BacnetObjectId providerObject{
-    static_cast<uint16_t>(BacnetObjectType::AnalogValue), values[1].instance};
   BacnetValue value;
 
   if (!readProperty(transport,
@@ -499,6 +589,242 @@ bool testDisabledAnalogValues() {
                    31);
 }
 
+bool testIndividuallyRegisteredOptionalProperties() {
+  TestTransport transport;
+  BacnetServer server(transport);
+  BacnetServerDevice device;
+  device.deviceInstance = 3456;
+  device.objectName = "Optional Property Test Device";
+  BacnetServerAnalogValue values[] = {
+    {200, "Baseline", 0.0F, 62},
+    {201, "Description", 0.0F, 62},
+    {202, "Null Description", 0.0F, 62},
+    {203, "Empty Description", 0.0F, 62},
+    {204, "Minimum", 0.0F, 62},
+    {205, "Maximum", 0.0F, 62},
+    {206, "Resolution", 0.0F, 62},
+    {207, "Reliability", 0.0F, 62},
+    {208, "Min Max", 0.0F, 62},
+    {209, "Description Resolution", 0.0F, 62},
+    {210, "BME Profile", 0.0F, 62},
+  };
+  const char* nullDescription = nullptr;
+  static constexpr char kDescription[] = "Description only";
+  static constexpr char kEmptyDescription[] = "";
+  static constexpr char kDescriptionResolutionText[] = "Description and resolution";
+  static constexpr char kBmeDescription[] = "BME280 temperature";
+  const float minimum = -10.0F;
+  const float maximum = 50.0F;
+  const float resolution = 0.1F;
+  const uint32_t reliability = 2;
+  BacnetServerPropertyRegistration registrations[10] = {};
+  size_t registrationCount = 0;
+  const auto object = [&values](size_t index) {
+    return BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::AnalogValue),
+                          values[index].instance};
+  };
+  registrations[registrationCount++] = {object(1), BacnetPropertyId::Description,
+                                        readTextProperty, kDescription};
+  if (nullDescription != nullptr) {
+    registrations[registrationCount++] = {object(2), BacnetPropertyId::Description,
+                                          readTextProperty, nullDescription};
+  }
+  registrations[registrationCount++] = {object(3), BacnetPropertyId::Description,
+                                        readTextProperty, kEmptyDescription};
+  registrations[registrationCount++] = {object(4), BacnetPropertyId::MinPresentValue,
+                                        readRealProperty, &minimum};
+  registrations[registrationCount++] = {object(5), BacnetPropertyId::MaxPresentValue,
+                                        readRealProperty, &maximum};
+  registrations[registrationCount++] = {object(6), BacnetPropertyId::Resolution,
+                                        readRealProperty, &resolution};
+  registrations[registrationCount++] = {object(7), BacnetPropertyId::Reliability,
+                                        readEnumeratedProperty, &reliability};
+  registrations[registrationCount++] = {object(8), BacnetPropertyId::MinPresentValue,
+                                        readRealProperty, &minimum};
+  registrations[registrationCount++] = {object(8), BacnetPropertyId::MaxPresentValue,
+                                        readRealProperty, &maximum};
+  registrations[registrationCount++] = {object(9), BacnetPropertyId::Description,
+                                        readTextProperty, kDescriptionResolutionText};
+  registrations[registrationCount++] = {object(9), BacnetPropertyId::Resolution,
+                                        readRealProperty, &resolution};
+  // The complete BME280 profile is registered after the compact combinations.
+  BacnetServerPropertyRegistration bmeRegistrations[] = {
+    {object(10), BacnetPropertyId::Description, readTextProperty, kBmeDescription},
+    {object(10), BacnetPropertyId::MinPresentValue, readRealProperty, &minimum},
+    {object(10), BacnetPropertyId::MaxPresentValue, readRealProperty, &maximum},
+    {object(10), BacnetPropertyId::Resolution, readRealProperty, &resolution},
+    {object(10), BacnetPropertyId::Reliability, readEnumeratedProperty, &reliability},
+  };
+  // The fixed array above intentionally contains only the compact cases.
+  if (!server.setAnalogValues(values, sizeof(values) / sizeof(values[0])) ||
+      !server.setPropertyRegistrations(registrations, registrationCount) ||
+      !server.begin(device)) {
+    return false;
+  }
+  const BacnetServerPropertyRegistration duplicateRegistrations[] = {
+    {object(1), BacnetPropertyId::Description, readTextProperty, kDescription},
+    {object(1), BacnetPropertyId::Description, readTextProperty, kDescription},
+  };
+  if (server.setPropertyRegistrations(duplicateRegistrations,
+                                      sizeof(duplicateRegistrations) /
+                                        sizeof(duplicateRegistrations[0]))) {
+    return false;
+  }
+
+  const BacnetIpEndpoint source(192, 0, 2, 44, 47809);
+  static constexpr BacnetPropertyId kBase[] = {
+    BacnetPropertyId::ObjectIdentifier, BacnetPropertyId::ObjectName,
+    BacnetPropertyId::ObjectType, BacnetPropertyId::PresentValue,
+    BacnetPropertyId::StatusFlags, BacnetPropertyId::EventState,
+    BacnetPropertyId::OutOfService, BacnetPropertyId::Units,
+    BacnetPropertyId::PropertyList,
+  };
+  static constexpr BacnetPropertyId kDescriptionOnly[] = {
+    BacnetPropertyId::ObjectIdentifier, BacnetPropertyId::ObjectName,
+    BacnetPropertyId::ObjectType, BacnetPropertyId::PresentValue,
+    BacnetPropertyId::StatusFlags, BacnetPropertyId::EventState,
+    BacnetPropertyId::OutOfService, BacnetPropertyId::Units,
+    BacnetPropertyId::PropertyList, BacnetPropertyId::Description,
+  };
+  static constexpr BacnetPropertyId kMinimumOnly[] = {
+    BacnetPropertyId::ObjectIdentifier, BacnetPropertyId::ObjectName,
+    BacnetPropertyId::ObjectType, BacnetPropertyId::PresentValue,
+    BacnetPropertyId::StatusFlags, BacnetPropertyId::EventState,
+    BacnetPropertyId::OutOfService, BacnetPropertyId::Units,
+    BacnetPropertyId::PropertyList, BacnetPropertyId::MinPresentValue,
+  };
+  static constexpr BacnetPropertyId kMaximumOnly[] = {
+    BacnetPropertyId::ObjectIdentifier, BacnetPropertyId::ObjectName,
+    BacnetPropertyId::ObjectType, BacnetPropertyId::PresentValue,
+    BacnetPropertyId::StatusFlags, BacnetPropertyId::EventState,
+    BacnetPropertyId::OutOfService, BacnetPropertyId::Units,
+    BacnetPropertyId::PropertyList, BacnetPropertyId::MaxPresentValue,
+  };
+  static constexpr BacnetPropertyId kResolutionOnly[] = {
+    BacnetPropertyId::ObjectIdentifier, BacnetPropertyId::ObjectName,
+    BacnetPropertyId::ObjectType, BacnetPropertyId::PresentValue,
+    BacnetPropertyId::StatusFlags, BacnetPropertyId::EventState,
+    BacnetPropertyId::OutOfService, BacnetPropertyId::Units,
+    BacnetPropertyId::PropertyList, BacnetPropertyId::Resolution,
+  };
+  static constexpr BacnetPropertyId kReliabilityOnly[] = {
+    BacnetPropertyId::ObjectIdentifier, BacnetPropertyId::ObjectName,
+    BacnetPropertyId::ObjectType, BacnetPropertyId::PresentValue,
+    BacnetPropertyId::StatusFlags, BacnetPropertyId::EventState,
+    BacnetPropertyId::OutOfService, BacnetPropertyId::Units,
+    BacnetPropertyId::PropertyList, BacnetPropertyId::Reliability,
+  };
+  static constexpr BacnetPropertyId kMinMax[] = {
+    BacnetPropertyId::ObjectIdentifier, BacnetPropertyId::ObjectName,
+    BacnetPropertyId::ObjectType, BacnetPropertyId::PresentValue,
+    BacnetPropertyId::StatusFlags, BacnetPropertyId::EventState,
+    BacnetPropertyId::OutOfService, BacnetPropertyId::Units,
+    BacnetPropertyId::PropertyList, BacnetPropertyId::MinPresentValue,
+    BacnetPropertyId::MaxPresentValue,
+  };
+  static constexpr BacnetPropertyId kDescriptionResolution[] = {
+    BacnetPropertyId::ObjectIdentifier, BacnetPropertyId::ObjectName,
+    BacnetPropertyId::ObjectType, BacnetPropertyId::PresentValue,
+    BacnetPropertyId::StatusFlags, BacnetPropertyId::EventState,
+    BacnetPropertyId::OutOfService, BacnetPropertyId::Units,
+    BacnetPropertyId::PropertyList, BacnetPropertyId::Description,
+    BacnetPropertyId::Resolution,
+  };
+  const auto check = [&](size_t index, const BacnetPropertyId* expected, size_t count,
+                         uint8_t invokeId) {
+    return propertyListMatches(transport, server, source, object(index), expected, count,
+                               invokeId);
+  };
+  if (!check(0, kBase, sizeof(kBase) / sizeof(kBase[0]), 1) ||
+      !check(1, kDescriptionOnly, sizeof(kDescriptionOnly) / sizeof(kDescriptionOnly[0]), 40) ||
+      !check(2, kBase, sizeof(kBase) / sizeof(kBase[0]), 80) ||
+      !check(3, kDescriptionOnly, sizeof(kDescriptionOnly) / sizeof(kDescriptionOnly[0]), 120) ||
+      !check(4, kMinimumOnly, sizeof(kMinimumOnly) / sizeof(kMinimumOnly[0]), 160) ||
+      !check(5, kMaximumOnly, sizeof(kMaximumOnly) / sizeof(kMaximumOnly[0]), 200) ||
+      !check(6, kResolutionOnly, sizeof(kResolutionOnly) / sizeof(kResolutionOnly[0]), 20) ||
+      !check(7, kReliabilityOnly, sizeof(kReliabilityOnly) / sizeof(kReliabilityOnly[0]), 60) ||
+      !check(8, kMinMax, sizeof(kMinMax) / sizeof(kMinMax[0]), 100) ||
+      !check(9, kDescriptionResolution,
+             sizeof(kDescriptionResolution) / sizeof(kDescriptionResolution[0]), 150) ||
+      !readError(transport, server, source,
+                 BacnetPropertyRequest{object(2), BacnetPropertyId::Description,
+                                       kBacnetNoArrayIndex}, 210, 32)) {
+    return false;
+  }
+  const BacnetPropertyId optionalProperties[] = {
+    BacnetPropertyId::Description,
+    BacnetPropertyId::MinPresentValue,
+    BacnetPropertyId::MaxPresentValue,
+    BacnetPropertyId::Resolution,
+    BacnetPropertyId::Reliability,
+  };
+  const auto contains = [](const BacnetPropertyId* list, size_t count,
+                           BacnetPropertyId property) {
+    for (size_t index = 0; index < count; ++index) {
+      if (list[index] == property)
+        return true;
+    }
+    return false;
+  };
+  struct OptionalCase {
+    size_t objectIndex;
+    const BacnetPropertyId* properties;
+    size_t propertyCount;
+  };
+  const OptionalCase cases[] = {
+    {0, kBase, sizeof(kBase) / sizeof(kBase[0])},
+    {1, kDescriptionOnly, sizeof(kDescriptionOnly) / sizeof(kDescriptionOnly[0])},
+    {2, kBase, sizeof(kBase) / sizeof(kBase[0])},
+    {3, kDescriptionOnly, sizeof(kDescriptionOnly) / sizeof(kDescriptionOnly[0])},
+    {4, kMinimumOnly, sizeof(kMinimumOnly) / sizeof(kMinimumOnly[0])},
+    {5, kMaximumOnly, sizeof(kMaximumOnly) / sizeof(kMaximumOnly[0])},
+    {6, kResolutionOnly, sizeof(kResolutionOnly) / sizeof(kResolutionOnly[0])},
+    {7, kReliabilityOnly, sizeof(kReliabilityOnly) / sizeof(kReliabilityOnly[0])},
+    {8, kMinMax, sizeof(kMinMax) / sizeof(kMinMax[0])},
+    {9, kDescriptionResolution,
+     sizeof(kDescriptionResolution) / sizeof(kDescriptionResolution[0])},
+  };
+  uint8_t errorInvokeId = 212;
+  for (const OptionalCase& optionalCase : cases) {
+    for (BacnetPropertyId property : optionalProperties) {
+      if (!contains(optionalCase.properties, optionalCase.propertyCount, property) &&
+          !readError(transport, server, source,
+                     BacnetPropertyRequest{object(optionalCase.objectIndex), property,
+                                           kBacnetNoArrayIndex}, errorInvokeId++, 32)) {
+        return false;
+      }
+    }
+  }
+  BacnetValue emptyDescription;
+  if (!readProperty(transport, server, source,
+                    BacnetPropertyRequest{object(3), BacnetPropertyId::Description,
+                                          kBacnetNoArrayIndex}, 211, emptyDescription) ||
+      emptyDescription.type != BacnetValueType::CharacterString ||
+      emptyDescription.textLength != 0) {
+    return false;
+  }
+
+  // A separate complete BME profile validates all five individually registered
+  // optional properties without adding storage to baseline AV entries.
+  if (!server.setPropertyRegistrations(bmeRegistrations,
+                                       sizeof(bmeRegistrations) / sizeof(bmeRegistrations[0]))) {
+    return false;
+  }
+  static constexpr BacnetPropertyId kBmeProfile[] = {
+    BacnetPropertyId::ObjectIdentifier, BacnetPropertyId::ObjectName,
+    BacnetPropertyId::ObjectType, BacnetPropertyId::PresentValue,
+    BacnetPropertyId::StatusFlags, BacnetPropertyId::EventState,
+    BacnetPropertyId::OutOfService, BacnetPropertyId::Units,
+    BacnetPropertyId::PropertyList, BacnetPropertyId::Description,
+    BacnetPropertyId::MinPresentValue, BacnetPropertyId::MaxPresentValue,
+    BacnetPropertyId::Resolution, BacnetPropertyId::Reliability,
+  };
+  return check(10, kBmeProfile, sizeof(kBmeProfile) / sizeof(kBmeProfile[0]), 1) &&
+         readError(transport, server, source,
+                   BacnetPropertyRequest{object(10), static_cast<BacnetPropertyId>(999),
+                                         kBacnetNoArrayIndex}, 100, 32);
+}
+
 bool testStartConfigurationAndVersionFallback() {
   BacnetServerDevice device;
   device.deviceInstance = 1234;
@@ -576,6 +902,7 @@ bool testLimitStates() {
 
 int main() {
   return testRegisteredAnalogValues() && testDisabledAnalogValues() &&
+           testIndividuallyRegisteredOptionalProperties() &&
            testStartConfigurationAndVersionFallback() && testLimitStates()
            ? 0
            : 1;

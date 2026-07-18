@@ -7,6 +7,9 @@
 using BacnetObjectListEntryProvider = bool (*)(const void* context,
                                                size_t index,
                                                BacnetObjectId& object);
+using BacnetPropertyListEntryProvider = bool (*)(const void* context,
+                                                 size_t index,
+                                                 BacnetPropertyId& property);
 
 class BacnetProtocol {
 public:
@@ -57,6 +60,13 @@ public:
     const BacnetReadPropertyRequestHeader& request,
     const BacnetPropertyId* properties,
     size_t propertyCount);
+  static size_t buildReadPropertyPropertyListAck(
+    uint8_t* buffer,
+    size_t bufferSize,
+    const BacnetReadPropertyRequestHeader& request,
+    size_t propertyCount,
+    BacnetPropertyListEntryProvider propertyAt,
+    const void* context);
   static size_t buildReadPropertyEmptyListAck(
     uint8_t* buffer,
     size_t bufferSize,

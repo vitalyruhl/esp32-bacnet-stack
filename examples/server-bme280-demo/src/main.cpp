@@ -8,6 +8,7 @@
 #include <WiFiUdp.h>
 
 #include <cstdio>
+#include <cstring>
 
 #include "core/CoreSettings.h"
 #include "core/CoreWiFiServices.h"
@@ -84,13 +85,29 @@ ArduinoUdpDatagramTransport transport(udp);
 BacnetServer bacnetServer(transport);
 BME280_I2C bme;
 
-BacnetServerAnalogValueMetadata metadata[] = {
-  {"BME280 temperature", -40.0F, 85.0F, 0.1F},
-  {"BME280 relative humidity", 0.0F, 100.0F, 0.1F},
-  {"BME280 pressure", 30000.0F, 110000.0F, 1.0F},
-  {"Calculated Magnus dew point", -60.0F, 60.0F, 0.1F},
+struct EngineeringValue {
+  float value = 0.0F;
 };
+
+struct RuntimeState {
+  uint8_t eventState = 0;
+  uint8_t reliability = 0;
+  bool inAlarm = false;
+  bool fault = false;
+};
+
+const char* descriptions[] = {
+  "BME280 temperature",
+  "BME280 relative humidity",
+  "BME280 pressure",
+  "Calculated Magnus dew point",
+};
+EngineeringValue minimumValues[] = {{-40.0F}, {0.0F}, {30000.0F}, {-60.0F}};
+EngineeringValue maximumValues[] = {{85.0F}, {100.0F}, {110000.0F}, {60.0F}};
+EngineeringValue resolutions[] = {{0.1F}, {0.1F}, {1.0F}, {0.1F}};
+RuntimeState runtimeStates[4];
 BacnetServerAnalogValue values[4];
+BacnetServerPropertyRegistration optionalProperties[28];
 BacnetAnalogValueLimitState dewState = BacnetAnalogValueLimitState::Normal;
 uint32_t lastReadMs = 0;
 bool bacnetConfigured = false;
@@ -107,6 +124,62 @@ void onWiFiAPMode();
 static void setupNetworkDefaults();
 static void setupRuntimeUI();
 
+bool readDescription(const void* context, BacnetValue& value) {
+  const char* text = static_cast<const char*>(context);
+  if (text == nullptr)
+    return false;
+  const size_t length = std::strlen(text);
+  if (length >= sizeof(value.text))
+    return false;
+  value = BacnetValue{};
+  std::memcpy(value.text, text, length + 1U);
+  value.textLength = length;
+  value.type = BacnetValueType::CharacterString;
+  return true;
+}
+
+bool readEngineeringValue(const void* context, BacnetValue& value) {
+  const auto* engineeringValue = static_cast<const EngineeringValue*>(context);
+  if (engineeringValue == nullptr)
+    return false;
+  value = BacnetValue{};
+  value.type = BacnetValueType::Real;
+  value.realValue = engineeringValue->value;
+  return true;
+}
+
+bool readReliability(const void* context, BacnetValue& value) {
+  const auto* state = static_cast<const RuntimeState*>(context);
+  if (state == nullptr)
+    return false;
+  value = BacnetValue{};
+  value.type = BacnetValueType::Enumerated;
+  value.unsignedValue = state->reliability;
+  return true;
+}
+
+bool readEventState(const void* context, BacnetValue& value) {
+  const auto* state = static_cast<const RuntimeState*>(context);
+  if (state == nullptr)
+    return false;
+  value = BacnetValue{};
+  value.type = BacnetValueType::Enumerated;
+  value.unsignedValue = state->eventState;
+  return true;
+}
+
+bool readStatusFlags(const void* context, BacnetValue& value) {
+  const auto* state = static_cast<const RuntimeState*>(context);
+  if (state == nullptr)
+    return false;
+  value = BacnetValue{};
+  value.type = BacnetValueType::BitString;
+  value.bitStringValue = (state->inAlarm ? 1UL : 0UL) |
+                         (state->fault ? 1UL << 1U : 0UL);
+  value.bitStringBitCount = 4;
+  return true;
+}
+
 float dewPointCelsius(float temperature, float humidity) {
   if (!isfinite(temperature) || !isfinite(humidity) || humidity <= 0.0F || humidity > 100.0F)
     return NAN;
@@ -122,10 +195,10 @@ void applyDewPointState(float dewPoint, bool valid) {
     limits = kDewPointDefaults;
   const BacnetAnalogValueLimitResult result = bacnetAnalogValueLimitEvaluate(dewPoint, valid, limits, dewState);
   dewState = result.state;
-  metadata[3].eventState = result.eventState;
-  metadata[3].reliability = result.reliability;
-  metadata[3].inAlarm = result.inAlarm;
-  metadata[3].fault = result.fault;
+  runtimeStates[3].eventState = result.eventState;
+  runtimeStates[3].reliability = result.reliability;
+  runtimeStates[3].inAlarm = result.inAlarm;
+  runtimeStates[3].fault = result.fault;
 }
 
 void readSensor() {
@@ -137,7 +210,7 @@ void readSensor() {
   const float dewPoint = dewPointCelsius(temperature, humidity);
   const bool valid = isfinite(temperature) && isfinite(humidity) && isfinite(pressure) && isfinite(dewPoint);
   if (!valid) {
-    for (BacnetServerAnalogValueMetadata& item : metadata) {
+    for (RuntimeState& item : runtimeStates) {
       item.eventState = 1;
       item.reliability = 1;
       item.inAlarm = false;
@@ -150,10 +223,10 @@ void readSensor() {
   values[2].presentValue = pressure;
   values[3].presentValue = dewPoint;
   for (size_t index = 0; index < 3; ++index) {
-    metadata[index].eventState = 0;
-    metadata[index].reliability = 0;
-    metadata[index].inAlarm = false;
-    metadata[index].fault = false;
+    runtimeStates[index].eventState = 0;
+    runtimeStates[index].reliability = 0;
+    runtimeStates[index].inAlarm = false;
+    runtimeStates[index].fault = false;
   }
   applyDewPointState(dewPoint, true);
 }
@@ -176,15 +249,29 @@ bool validStartupSettings(uint32_t& deviceInstance, uint16_t& port, uint32_t& av
 
 void configureBacnetAndSensor() {
   validStartupSettings(configuredDeviceInstance, configuredPort, configuredAvBase, configuredBmeAddress);
-  values[0] = {configuredAvBase, "AV Temperature", 0.0F, BacnetEngineeringUnits::DegreesCelsius, false, nullptr, nullptr, &metadata[0]};
-  values[1] = {configuredAvBase + 1U, "AV Relative Humidity", 0.0F, BacnetEngineeringUnits::PercentRelativeHumidity, false, nullptr, nullptr, &metadata[1]};
-  values[2] = {configuredAvBase + 2U, "AV Pressure", 0.0F, BacnetEngineeringUnits::Pascals, false, nullptr, nullptr, &metadata[2]};
-  values[3] = {configuredAvBase + 3U, "AV Dew Point", 0.0F, BacnetEngineeringUnits::DegreesCelsius, false, nullptr, nullptr, &metadata[3]};
+  values[0] = {configuredAvBase, "AV Temperature", 0.0F, BacnetEngineeringUnits::DegreesCelsius};
+  values[1] = {configuredAvBase + 1U, "AV Relative Humidity", 0.0F, BacnetEngineeringUnits::PercentRelativeHumidity};
+  values[2] = {configuredAvBase + 2U, "AV Pressure", 0.0F, BacnetEngineeringUnits::Pascals};
+  values[3] = {configuredAvBase + 3U, "AV Dew Point", 0.0F, BacnetEngineeringUnits::DegreesCelsius};
+  size_t registrationIndex = 0;
+  for (size_t index = 0; index < 4; ++index) {
+    const BacnetObjectId object{static_cast<uint16_t>(BacnetObjectType::AnalogValue),
+                                values[index].instance};
+    optionalProperties[registrationIndex++] = {object, BacnetPropertyId::Description, readDescription, descriptions[index]};
+    optionalProperties[registrationIndex++] = {object, BacnetPropertyId::MinPresentValue, readEngineeringValue, &minimumValues[index]};
+    optionalProperties[registrationIndex++] = {object, BacnetPropertyId::MaxPresentValue, readEngineeringValue, &maximumValues[index]};
+    optionalProperties[registrationIndex++] = {object, BacnetPropertyId::Resolution, readEngineeringValue, &resolutions[index]};
+    optionalProperties[registrationIndex++] = {object, BacnetPropertyId::StatusFlags, readStatusFlags, &runtimeStates[index]};
+    optionalProperties[registrationIndex++] = {object, BacnetPropertyId::EventState, readEventState, &runtimeStates[index]};
+    optionalProperties[registrationIndex++] = {object, BacnetPropertyId::Reliability, readReliability, &runtimeStates[index]};
+  }
   bme.setAddress(configuredBmeAddress, 21, 22);
   if (!bme.begin(bme.BME280_STANDBY_0_5, bme.BME280_FILTER_OFF, bme.BME280_SPI3_DISABLE, bme.BME280_OVERSAMPLING_1, bme.BME280_OVERSAMPLING_1, bme.BME280_OVERSAMPLING_1, bme.BME280_MODE_NORMAL)) {
     Serial.println("[E] BME280 initialization failed; AVs report sensor fault");
   }
-  bacnetConfigured = bacnetServer.setAnalogValues(values, 4);
+  bacnetConfigured = bacnetServer.setAnalogValues(values, 4) &&
+                     bacnetServer.setPropertyRegistrations(optionalProperties,
+                                                           registrationIndex);
   Serial.print("[I] BME280 address 0x");
   Serial.println(configuredBmeAddress, HEX);
   Serial.print("[I] BACnet Device Instance ");
