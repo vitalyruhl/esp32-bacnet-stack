@@ -4,9 +4,14 @@ BACnet/IP server support is planned but not yet delivered as a completed server 
 
 ## Current Boundary
 
-- The repository already includes a `BacnetServer` role and placeholder structure.
+- The repository includes a portable `BacnetServer` runtime with configurable
+  Device identity, non-blocking `poll()`, Who-Is decoding, I-Am responses, and
+  Reject responses for unsupported confirmed services.
+- The runtime has no object/property model, ReadProperty support, platform
+  adapter, or ESP32 server demo transport binding.
 - The current project focus remains the BACnet/IP client roadmap and validation.
-- This page must not be read as evidence of implemented server MVP behavior.
+- This page must not be read as evidence of a completed server MVP or usable
+  ESP32 server behavior.
 
 ## Planning Notes
 

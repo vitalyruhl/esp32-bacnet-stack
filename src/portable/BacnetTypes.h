@@ -324,6 +324,29 @@ struct BacnetIAmDeviceInfo {
   uint16_t vendorId = 0;
 };
 
+struct BacnetWhoIsRequest {
+  bool hasDeviceInstanceRange = false;
+  uint32_t lowDeviceInstance = 0;
+  uint32_t highDeviceInstance = 0;
+
+  bool includes(uint32_t deviceInstance) const {
+    return !hasDeviceInstanceRange ||
+           (deviceInstance >= lowDeviceInstance &&
+            deviceInstance <= highDeviceInstance);
+  }
+};
+
+struct BacnetConfirmedRequestHeader {
+  uint8_t invokeId = 0;
+  uint8_t serviceChoice = 0;
+};
+
+enum class BacnetConfirmedRequestParseStatus : uint8_t {
+  Unrelated,
+  Malformed,
+  Confirmed,
+};
+
 struct BacnetIpEndpoint {
   uint8_t address[4] = {};
   uint16_t port = 47808;

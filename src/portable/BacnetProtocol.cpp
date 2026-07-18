@@ -846,6 +846,155 @@ size_t BacnetProtocol::buildWhoIsRequest(uint8_t* buffer, size_t bufferSize) {
   return kWhoIsRequestSize;
 }
 
+bool BacnetProtocol::parseWhoIsRequest(const uint8_t* buffer,
+                                       size_t length,
+                                       BacnetWhoIsRequest& request) {
+  request = BacnetWhoIsRequest{};
+  if (buffer == nullptr || length < kWhoIsRequestSize ||
+      buffer[0] != kBvlcTypeBacnetIp ||
+      (buffer[1] != kBvlcOriginalUnicastNpdu &&
+       buffer[1] != kBvlcOriginalBroadcastNpdu) ||
+      readUint16(&buffer[2]) != length) {
+    return false;
+  }
+
+  size_t offset = 4;
+  if (!readNpduHeader(buffer, length, offset) || offset + 2 > length ||
+      buffer[offset++] != kApduUnconfirmedRequest ||
+      buffer[offset++] != kServiceWhoIs) {
+    return false;
+  }
+
+  if (offset == length) {
+    return true;
+  }
+
+  uint32_t lowDeviceInstance = 0;
+  uint32_t highDeviceInstance = 0;
+  if (!readContextValue(buffer, length, offset, 0, lowDeviceInstance) ||
+      !readContextValue(buffer, length, offset, 1, highDeviceInstance) ||
+      offset != length || lowDeviceInstance > highDeviceInstance ||
+      highDeviceInstance > kObjectInstanceMask) {
+    return false;
+  }
+
+  request.hasDeviceInstanceRange = true;
+  request.lowDeviceInstance = lowDeviceInstance;
+  request.highDeviceInstance = highDeviceInstance;
+  return true;
+}
+
+BacnetConfirmedRequestParseStatus
+BacnetProtocol::parseConfirmedRequestHeader(
+  const uint8_t* buffer,
+  size_t length,
+  BacnetConfirmedRequestHeader& header) {
+  header = BacnetConfirmedRequestHeader{};
+  if (buffer == nullptr || length < 4 || buffer[0] != kBvlcTypeBacnetIp ||
+      buffer[1] != kBvlcOriginalUnicastNpdu ||
+      readUint16(&buffer[2]) != length) {
+    return BacnetConfirmedRequestParseStatus::Malformed;
+  }
+
+  size_t offset = 4;
+  if (!readNpduHeader(buffer, length, offset) || offset >= length) {
+    return BacnetConfirmedRequestParseStatus::Malformed;
+  }
+
+  if ((buffer[offset] & 0xF0) != kApduConfirmedRequest) {
+    return BacnetConfirmedRequestParseStatus::Unrelated;
+  }
+
+  if (offset + 4 > length) {
+    return BacnetConfirmedRequestParseStatus::Malformed;
+  }
+
+  header.invokeId = buffer[offset + 2];
+  header.serviceChoice = buffer[offset + 3];
+  return BacnetConfirmedRequestParseStatus::Confirmed;
+}
+
+size_t BacnetProtocol::buildIAmResponse(uint8_t* buffer,
+                                        size_t bufferSize,
+                                        const BacnetIAmDeviceInfo& device) {
+  const auto applicationUnsignedSize = [](uint32_t value) -> size_t {
+    return value <= UINT8_MAX    ? 2
+           : value <= UINT16_MAX ? 3
+           : value <= 0xFFFFFFU  ? 4
+                                 : 5;
+  };
+  const size_t required = 13 +
+                          applicationUnsignedSize(device.maxApduLengthAccepted) +
+                          applicationUnsignedSize(device.segmentationSupported) +
+                          applicationUnsignedSize(device.vendorId);
+  if (buffer == nullptr || bufferSize < required ||
+      device.deviceInstance > kObjectInstanceMask) {
+    return 0;
+  }
+
+  const auto writeApplicationUnsigned = [&](uint8_t tag,
+                                            uint32_t value,
+                                            size_t& offset) {
+    const uint8_t valueLength = value <= UINT8_MAX    ? 1
+                                : value <= UINT16_MAX ? 2
+                                : value <= 0xFFFFFFU  ? 3
+                                                      : 4;
+    buffer[offset++] = static_cast<uint8_t>((tag << 4) | valueLength);
+    for (uint8_t index = 0; index < valueLength; ++index) {
+      buffer[offset++] = static_cast<uint8_t>(
+        value >> ((valueLength - index - 1U) * 8U));
+    }
+  };
+
+  size_t offset = 0;
+  buffer[offset++] = kBvlcTypeBacnetIp;
+  buffer[offset++] = kBvlcOriginalUnicastNpdu;
+  buffer[offset++] = 0;
+  buffer[offset++] = 0;
+  buffer[offset++] = kNpduVersion;
+  buffer[offset++] = 0;
+  buffer[offset++] = kApduUnconfirmedRequest;
+  buffer[offset++] = kServiceIAm;
+  buffer[offset++] = 0xC4;
+  const uint32_t objectIdentifier =
+    (static_cast<uint32_t>(kDeviceObjectType) << 22) |
+    device.deviceInstance;
+  buffer[offset++] = static_cast<uint8_t>(objectIdentifier >> 24);
+  buffer[offset++] = static_cast<uint8_t>(objectIdentifier >> 16);
+  buffer[offset++] = static_cast<uint8_t>(objectIdentifier >> 8);
+  buffer[offset++] = static_cast<uint8_t>(objectIdentifier);
+  writeApplicationUnsigned(kApplicationTagUnsigned,
+                           device.maxApduLengthAccepted,
+                           offset);
+  writeApplicationUnsigned(kApplicationTagEnumerated,
+                           device.segmentationSupported,
+                           offset);
+  writeApplicationUnsigned(kApplicationTagUnsigned, device.vendorId, offset);
+  buffer[2] = static_cast<uint8_t>(offset >> 8);
+  buffer[3] = static_cast<uint8_t>(offset);
+  return offset;
+}
+
+size_t BacnetProtocol::buildRejectResponse(uint8_t* buffer,
+                                           size_t bufferSize,
+                                           uint8_t invokeId,
+                                           uint8_t reason) {
+  if (buffer == nullptr || bufferSize < kRejectResponseSize) {
+    return 0;
+  }
+
+  buffer[0] = kBvlcTypeBacnetIp;
+  buffer[1] = kBvlcOriginalUnicastNpdu;
+  buffer[2] = 0;
+  buffer[3] = static_cast<uint8_t>(kRejectResponseSize);
+  buffer[4] = kNpduVersion;
+  buffer[5] = 0;
+  buffer[6] = kApduReject;
+  buffer[7] = invokeId;
+  buffer[8] = reason;
+  return kRejectResponseSize;
+}
+
 size_t BacnetProtocol::encodeApplicationValue(uint8_t* buffer, size_t bufferSize, const BacnetValue& value) {
   if (buffer == nullptr || bufferSize == 0) {
     return 0;

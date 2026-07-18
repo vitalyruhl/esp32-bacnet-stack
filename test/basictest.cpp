@@ -16,6 +16,9 @@
 
 using IPAddress = BacnetIpEndpoint;
 
+// ASHRAE-reserved vendor ID for tests and examples only; never a product ID.
+constexpr uint16_t kTestVendorId = 555;
+
 struct SubscriptionCallbackCapture {
   size_t calls = 0;
   BacnetObjectId objectId;
@@ -73,6 +76,72 @@ static bool acceptMatchingTag(const BacnetLogRecord& record,
   return expected != nullptr && record.tag != nullptr &&
          strcmp(record.tag, expected) == 0;
 }
+
+class MemoryBacnetDatagramTransport final : public BacnetDatagramTransport {
+public:
+  bool begin(uint16_t localPort) override {
+    ++beginCalls;
+    lastBeginPort = localPort;
+    return beginResult;
+  }
+
+  void end() override {
+    ++endCalls;
+  }
+
+  bool send(const BacnetIpEndpoint& destination,
+            const uint8_t* data,
+            size_t length) override {
+    ++sendCalls;
+    lastDestination = destination;
+    if (!sendResult || data == nullptr || length > sizeof(lastSent)) {
+      return false;
+    }
+    memcpy(lastSent, data, length);
+    lastSentLength = length;
+    return true;
+  }
+
+  size_t receive(uint8_t* data,
+                 size_t capacity,
+                 BacnetIpEndpoint& source) override {
+    ++receiveCalls;
+    if (receivedLength == 0 || data == nullptr || receivedLength > capacity) {
+      return 0;
+    }
+    memcpy(data, received, receivedLength);
+    source = receivedSource;
+    const size_t length = receivedLength;
+    receivedLength = 0;
+    return length;
+  }
+
+  void idle() override {}
+
+  void queue(const uint8_t* data, size_t length, BacnetIpEndpoint source) {
+    TEST_ASSERT_NOT_NULL(data);
+    TEST_ASSERT_TRUE(length <= sizeof(received));
+    memcpy(received, data, length);
+    receivedLength = length;
+    receivedSource = source;
+  }
+
+  bool beginResult = true;
+  bool sendResult = true;
+  size_t beginCalls = 0;
+  size_t endCalls = 0;
+  size_t receiveCalls = 0;
+  size_t sendCalls = 0;
+  uint16_t lastBeginPort = 0;
+  BacnetIpEndpoint lastDestination;
+  uint8_t lastSent[64] = {};
+  size_t lastSentLength = 0;
+
+private:
+  uint8_t received[64] = {};
+  size_t receivedLength = 0;
+  BacnetIpEndpoint receivedSource;
+};
 
 void test_bacnet_client_lifecycle() {
   BacnetClient client;
@@ -325,8 +394,9 @@ void test_portable_protocol_parses_i_am_response() {
     0xC4,
     0x91,
     0x00,
-    0x21,
-    0xDE,
+    0x22,
+    0x02,
+    0x2B,
   };
   BacnetIAmDeviceInfo device;
 
@@ -334,7 +404,7 @@ void test_portable_protocol_parses_i_am_response() {
   TEST_ASSERT_EQUAL_UINT32(1234, device.deviceInstance);
   TEST_ASSERT_EQUAL_UINT32(1476, device.maxApduLengthAccepted);
   TEST_ASSERT_EQUAL_UINT8(0, device.segmentationSupported);
-  TEST_ASSERT_EQUAL_UINT16(222, device.vendorId);
+  TEST_ASSERT_EQUAL_UINT16(kTestVendorId, device.vendorId);
 }
 
 void test_bacnet_client_rejects_non_i_am_response() {
@@ -1288,7 +1358,7 @@ void test_bacnet_device_session_from_i_am_preserves_source_port() {
   BacnetIAmDevice device;
   device.endpoint = BacnetIpEndpoint(192, 168, 1, 52, 47809);
   device.deviceInstance = 9012;
-  device.vendorId = 222;
+  device.vendorId = kTestVendorId;
 
   BacnetDeviceSession session = BacnetDeviceSession::fromIAm(client, device);
 
@@ -1891,16 +1961,215 @@ void test_bacnet_object_list_scan_job_busy_protects_blocking_read() {
 }
 
 void test_bacnet_server_lifecycle() {
-  BacnetServer server;
+  static_assert(!std::is_copy_constructible<BacnetServer>::value,
+                "BacnetServer must not be copyable");
+  static_assert(!std::is_copy_assignable<BacnetServer>::value,
+                "BacnetServer must not be copy-assignable");
+  static_assert(!std::is_move_constructible<BacnetServer>::value,
+                "BacnetServer must not be movable");
+
+  MemoryBacnetDatagramTransport transport;
+  BacnetServer server(transport);
+  BacnetServerDevice device;
+  device.deviceInstance = 1234;
+  device.vendorId = kTestVendorId;
+  device.maxApduLengthAccepted = 1024;
+  device.segmentationSupported = 3;
 
   TEST_ASSERT_FALSE(server.isRunning());
-  TEST_ASSERT_TRUE(server.begin(1234));
+  TEST_ASSERT_TRUE(server.begin(device));
   TEST_ASSERT_TRUE(server.isRunning());
   TEST_ASSERT_EQUAL_UINT32(1234, server.deviceInstance());
   TEST_ASSERT_EQUAL_UINT16(BacnetServer::kDefaultPort, server.port());
+  TEST_ASSERT_EQUAL_UINT16(BacnetServer::kDefaultPort, transport.lastBeginPort);
+  TEST_ASSERT_EQUAL_UINT16(kTestVendorId, server.device().vendorId);
 
   server.end();
   TEST_ASSERT_FALSE(server.isRunning());
+  TEST_ASSERT_EQUAL_UINT32(1, transport.endCalls);
+
+  BacnetServer invalidServer(transport);
+  TEST_ASSERT_FALSE(invalidServer.begin(0x400000));
+  TEST_ASSERT_EQUAL_UINT32(1, transport.beginCalls);
+}
+
+void test_bacnet_server_poll_answers_who_is_at_source_endpoint() {
+  MemoryBacnetDatagramTransport transport;
+  BacnetServer server(transport);
+  BacnetServerDevice device;
+  device.deviceInstance = 1234;
+  device.vendorId = kTestVendorId;
+  device.maxApduLengthAccepted = 1024;
+  device.segmentationSupported = 3;
+  TEST_ASSERT_TRUE(server.begin(device));
+
+  uint8_t whoIs[BacnetProtocol::kWhoIsRequestSize] = {};
+  TEST_ASSERT_EQUAL_UINT32(sizeof(whoIs),
+                           BacnetProtocol::buildWhoIsRequest(whoIs,
+                                                             sizeof(whoIs)));
+  const BacnetIpEndpoint source(192, 0, 2, 44, 47809);
+  transport.queue(whoIs, sizeof(whoIs), source);
+
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetServerPollResult::IAmSent),
+                          static_cast<uint8_t>(server.poll()));
+  TEST_ASSERT_EQUAL_UINT32(1, transport.sendCalls);
+  TEST_ASSERT_EQUAL_UINT8(192, transport.lastDestination.address[0]);
+  TEST_ASSERT_EQUAL_UINT8(44, transport.lastDestination.address[3]);
+  TEST_ASSERT_EQUAL_UINT16(47809, transport.lastDestination.port);
+
+  BacnetIAmDeviceInfo parsed;
+  TEST_ASSERT_TRUE(BacnetProtocol::parseIAmResponse(transport.lastSent,
+                                                    transport.lastSentLength,
+                                                    parsed));
+  TEST_ASSERT_EQUAL_UINT32(1234, parsed.deviceInstance);
+  TEST_ASSERT_EQUAL_UINT32(1024, parsed.maxApduLengthAccepted);
+  TEST_ASSERT_EQUAL_UINT8(3, parsed.segmentationSupported);
+  TEST_ASSERT_EQUAL_UINT16(kTestVendorId, parsed.vendorId);
+}
+
+void test_bacnet_server_poll_honors_who_is_range() {
+  MemoryBacnetDatagramTransport transport;
+  BacnetServer server(transport);
+  BacnetServerDevice device;
+  device.deviceInstance = 42;
+  TEST_ASSERT_TRUE(server.begin(device));
+
+  const uint8_t includedWhoIs[] = {
+    0x81,
+    0x0B,
+    0x00,
+    0x0C,
+    0x01,
+    0x00,
+    0x10,
+    0x08,
+    0x09,
+    0x28,
+    0x19,
+    0x2A,
+  };
+  transport.queue(includedWhoIs, sizeof(includedWhoIs), BacnetIpEndpoint(192, 0, 2, 45, 47810));
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetServerPollResult::IAmSent),
+                          static_cast<uint8_t>(server.poll()));
+
+  const uint8_t excludedWhoIs[] = {
+    0x81,
+    0x0B,
+    0x00,
+    0x0C,
+    0x01,
+    0x00,
+    0x10,
+    0x08,
+    0x09,
+    0x2B,
+    0x19,
+    0x2C,
+  };
+  transport.queue(excludedWhoIs, sizeof(excludedWhoIs), BacnetIpEndpoint(192, 0, 2, 46, 47811));
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetServerPollResult::Ignored),
+                          static_cast<uint8_t>(server.poll()));
+  TEST_ASSERT_EQUAL_UINT32(1, transport.sendCalls);
+
+  const uint8_t incompleteRange[] = {
+    0x81,
+    0x0B,
+    0x00,
+    0x0A,
+    0x01,
+    0x00,
+    0x10,
+    0x08,
+    0x09,
+    0x2A,
+  };
+  transport.queue(incompleteRange, sizeof(incompleteRange), BacnetIpEndpoint(192, 0, 2, 47, 47812));
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetServerPollResult::Malformed),
+                          static_cast<uint8_t>(server.poll()));
+  TEST_ASSERT_EQUAL_UINT32(1, transport.sendCalls);
+
+  const uint8_t invalidRange[] = {
+    0x81,
+    0x0B,
+    0x00,
+    0x10,
+    0x01,
+    0x00,
+    0x10,
+    0x08,
+    0x0B,
+    0x40,
+    0x00,
+    0x00,
+    0x1B,
+    0x40,
+    0x00,
+    0x01,
+  };
+  transport.queue(invalidRange, sizeof(invalidRange), BacnetIpEndpoint(192, 0, 2, 48, 47813));
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetServerPollResult::Malformed),
+                          static_cast<uint8_t>(server.poll()));
+  TEST_ASSERT_EQUAL_UINT32(1, transport.sendCalls);
+}
+
+void test_bacnet_server_poll_rejects_confirmed_service_and_ignores_malformed() {
+  MemoryBacnetDatagramTransport transport;
+  BacnetServer server(transport);
+  TEST_ASSERT_TRUE(server.begin(1234));
+
+  const uint8_t confirmedReadProperty[] = {
+    0x81,
+    0x0A,
+    0x00,
+    0x0A,
+    0x01,
+    0x04,
+    0x00,
+    0x05,
+    0x42,
+    0x0C,
+  };
+  transport.queue(confirmedReadProperty, sizeof(confirmedReadProperty), BacnetIpEndpoint(192, 0, 2, 47, 47812));
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetServerPollResult::RejectSent),
+                          static_cast<uint8_t>(server.poll()));
+  TEST_ASSERT_EQUAL_UINT32(BacnetProtocol::kRejectResponseSize,
+                           transport.lastSentLength);
+  TEST_ASSERT_EQUAL_UINT8(0x60, transport.lastSent[6]);
+  TEST_ASSERT_EQUAL_UINT8(0x42, transport.lastSent[7]);
+  TEST_ASSERT_EQUAL_UINT8(BacnetServer::kRejectReasonUnrecognizedService,
+                          transport.lastSent[8]);
+
+  const uint8_t malformed[] = {0x81, 0x0B, 0x00, 0x08, 0x01};
+  transport.queue(malformed, sizeof(malformed), BacnetIpEndpoint(192, 0, 2, 48, 47813));
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetServerPollResult::Malformed),
+                          static_cast<uint8_t>(server.poll()));
+  TEST_ASSERT_EQUAL_UINT32(1, transport.sendCalls);
+
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetServerPollResult::NoDatagram),
+                          static_cast<uint8_t>(server.poll()));
+  TEST_ASSERT_EQUAL_UINT32(3, transport.receiveCalls);
+}
+
+void test_bacnet_server_poll_discards_truncated_confirmed_request() {
+  MemoryBacnetDatagramTransport transport;
+  BacnetServer server(transport);
+  TEST_ASSERT_TRUE(server.begin(1234));
+
+  const uint8_t truncatedConfirmed[] = {
+    0x81,
+    0x0A,
+    0x00,
+    0x09,
+    0x01,
+    0x04,
+    0x00,
+    0x05,
+    0x42,
+  };
+  transport.queue(truncatedConfirmed, sizeof(truncatedConfirmed), BacnetIpEndpoint(192, 0, 2, 48, 47813));
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetServerPollResult::Malformed),
+                          static_cast<uint8_t>(server.poll()));
+  TEST_ASSERT_EQUAL_UINT32(0, transport.sendCalls);
 }
 
 void test_bacnet_subscribe_options_defaults() {
@@ -2215,6 +2484,10 @@ void setup() {
   RUN_TEST(test_bacnet_object_list_scan_job_reports_send_failure);
   RUN_TEST(test_bacnet_object_list_scan_job_busy_protects_blocking_read);
   RUN_TEST(test_bacnet_server_lifecycle);
+  RUN_TEST(test_bacnet_server_poll_answers_who_is_at_source_endpoint);
+  RUN_TEST(test_bacnet_server_poll_honors_who_is_range);
+  RUN_TEST(test_bacnet_server_poll_rejects_confirmed_service_and_ignores_malformed);
+  RUN_TEST(test_bacnet_server_poll_discards_truncated_confirmed_request);
   RUN_TEST(test_bacnet_subscribe_options_defaults);
   RUN_TEST(test_bacnet_property_subscription_is_move_only);
   RUN_TEST(test_bacnet_property_subscribe_exposes_identity_and_defaults);

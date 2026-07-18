@@ -3,6 +3,23 @@
 This changelog is a curated overview. The canonical library version is in
 `library.json`.
 
+## 0.35.0 - 2026-07-18
+
+### Added
+
+- Added the first portable `BacnetServer` runtime foundation with injected
+  datagram transport, non-blocking polling, configurable Device identity,
+  Who-Is range matching, I-Am responses, and Reject responses for unsupported
+  confirmed services.
+- Added portable protocol helpers and focused fake-transport coverage for
+  Who-Is/I-Am dispatch, source-port preservation, rejected confirmed services,
+  malformed datagrams, and server-only native compilation.
+
+### Notes
+
+- This release does not add an ESP32 server adapter, object/property model,
+  ReadProperty, COV, WriteProperty, or real I/O binding.
+
 ## 0.34.0 - 2026-07-17
 
 ### Added
