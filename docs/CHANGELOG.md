@@ -3,6 +3,23 @@
 This changelog is a curated overview. The canonical library version is in
 `library.json`.
 
+## 0.36.0 - 2026-07-18
+
+### Added
+
+- Added portable, caller-owned read-only Analog Input and Binary Input server
+  object profiles with shared ReadProperty, Object_List, Property_List, and
+  optional metadata/state-provider support.
+- Added `examples/io-example`, a ConfigManager-backed ESP32 WiFi input station
+  with LDR, DS18B20, three debounced buttons, and an SSD1306 live display.
+
+### Notes
+
+- This development slice deliberately excludes BACnet outputs, WriteProperty,
+  Priority_Array, Relinquish_Default, PWM, output failsafes, alarms, and
+  Intrinsic Reporting. Real WiFi/BACnet/OLED HIL is accepted for the read-only
+  input profile; future output slices require their own HIL.
+
 ## 0.35.0 - 2026-07-18
 
 ### Added
