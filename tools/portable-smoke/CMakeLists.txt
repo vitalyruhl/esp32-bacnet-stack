@@ -33,6 +33,7 @@ target_compile_features(server_analog_value_tests PRIVATE cxx_std_17)
 target_link_libraries(server_analog_value_tests PRIVATE bacnet_portable bacnet_server)
 
 if(BUILD_TESTING)
+  add_test(NAME portable_smoke COMMAND portable_smoke)
   add_test(NAME server_analog_value_tests COMMAND server_analog_value_tests)
 endif()
 

@@ -1,0 +1,57 @@
+name: Server CI
+
+on:
+  pull_request:
+    branches:
+      - server
+  push:
+    branches:
+      - server
+  workflow_dispatch:
+
+concurrency:
+  group: server-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  server-checks:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install PlatformIO
+        run: python -m pip install --upgrade platformio
+
+      - name: Install cppcheck
+        run: sudo apt-get update && sudo apt-get install -y cppcheck
+
+      - name: Run focused cppcheck
+        run: >
+          pwsh -NoProfile -ExecutionPolicy Bypass -File tools/run-cppcheck.ps1
+          src/BacnetServer.cpp src/BacnetServer.h
+          src/portable/BacnetProtocol.cpp src/portable/BacnetProtocol.h
+          src/portable/BacnetTypes.h src/portable/BacnetRuntime.h
+
+      - name: Check whitespace
+        run: git diff --check HEAD^ HEAD
+
+      - name: Configure portable server build
+        run: cmake -S tools/portable-smoke -B build/server-ci
+
+      - name: Build portable server targets
+        run: cmake --build build/server-ci --target portable_smoke server_analog_value_tests
+
+      - name: Run portable server smoke and AV wire tests
+        run: ctest --test-dir build/server-ci -R "portable_smoke|server_analog_value_tests" --output-on-failure
+
+      - name: Build server demo
+        run: pio run -d examples/server-demo -e usb -e eth
