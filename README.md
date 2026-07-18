@@ -2,8 +2,9 @@
 
 ESP32 BACnet Stack provides a platform-neutral BACnet/IP client core in C++.
 ESP32 Arduino/PlatformIO and native Windows applications use the same portable
-core through dedicated platform adapters. BACnet server support is planned and
-is not implemented as a usable server feature.
+core through dedicated platform adapters. BACnet server support currently has
+a portable Who-Is/I-Am runtime foundation, but it is not yet a usable ESP32
+server feature.
 Native Windows CLI tools provide Who-Is/I-Am discovery and property reads.
 
 | Target platform | Status | Integration |
@@ -11,7 +12,7 @@ Native Windows CLI tools provide Who-Is/I-Am discovery and property reads.
 | ESP32 WiFi | Available | Arduino/PlatformIO |
 | ESP32 Ethernet | Available | Arduino/PlatformIO |
 | Windows | Available | CMake/Winsock |
-| BACnet Server | Planned | Not implemented |
+| BACnet Server | Foundation | Portable Who-Is/I-Am runtime; no ESP32 adapter |
 
 Start with the [ESP32 WiFi and Ethernet examples](#wifi-and-ethernet-examples)
 for PlatformIO projects, or use the [native Windows build and CLI tools](#native-windows-foundation)
@@ -23,8 +24,9 @@ coverage are still evolving.
 ## Current Status
 
 The portable BACnet/IP client core is available for ESP32 WiFi, ESP32 Ethernet,
-and native Windows applications. BACnet/IP server support remains planned and
-is not an implemented server feature. `API` in the Windows column means the
+and native Windows applications. BACnet/IP server support currently provides
+only a portable discovery runtime; it is not an implemented ESP32 server
+feature. `API` in the Windows column means the
 native C++ API is available but the productive CLI does not expose that feature
 directly.
 
@@ -40,7 +42,7 @@ directly.
 | WriteProperty / Priority | Opt-in | Opt-in | Opt-in CLI |
 | Rich Client Demo | Yes | Yes | No |
 | Native CLI | No | No | Yes |
-| BACnet Server | Planned | Planned | Planned |
+| BACnet Server | Foundation | Foundation | Foundation |
 
 The WiFi and Ethernet rich demos share the same BACnet application and feature
 set. They differ only in network transport, board, and connection parameters.
@@ -53,15 +55,16 @@ shows at most eight rows to bound RAM and UI payloads; per-property failures
 remain visible instead of being reported as successful fallback data. See the
 [Client Guide](docs/client/README.md) for lifecycle and API details.
 
-Repository release `0.34.0` is dated 2026-07-17. Package metadata and the
+Repository version `0.35.0` includes the portable server runtime foundation.
+Package metadata and the
 currently available installation version are listed in the
 [PlatformIO Registry](https://registry.platformio.org/libraries/vitaly.ruhl/ESP32%20BACnet%20Stack).
 
 ## Goals
 
 - Provide one portable public `BacnetClient` role for BACnet/IP client workflows.
-- Plan a future portable `BacnetServer` role without presenting its placeholder
-  as a usable server implementation.
+- Provide a portable `BacnetServer` runtime foundation without presenting it as
+  a complete server implementation.
 - Keep the BACnet protocol core independent from Arduino, ESP32, Windows, and
   transport-specific APIs.
 - Support Arduino/PlatformIO through dedicated ESP32 adapters.
@@ -210,8 +213,9 @@ void loop() {}
 
 - Client-only Arduino projects include `BacnetClient.h` and
   `ArduinoBacnetClient.h`; they do not include server declarations.
-- Server-only Arduino projects include `ArduinoBacnetServer.h`; the server
-  remains a placeholder API and does not provide BACnet server services.
+- Portable server projects include `BacnetServer.h`. `ArduinoBacnetServer.h`
+  exposes the same portable role, but an Arduino network adapter is not yet
+  delivered.
 - `ArduinoEspBacnet.h` is the optional combined Arduino import.
 - `EspBacnet.h` remains a legacy compatibility umbrella and imports both roles;
   use one of the narrower imports in new projects.
