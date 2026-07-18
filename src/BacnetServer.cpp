@@ -180,10 +180,29 @@ BacnetServerPollResult BacnetServer::handleReadProperty(
     BacnetPropertyId::Units,
     BacnetPropertyId::PropertyList,
   };
+  static constexpr BacnetPropertyId kAnalogValueMetadataProperties[] = {
+    BacnetPropertyId::ObjectIdentifier,
+    BacnetPropertyId::ObjectName,
+    BacnetPropertyId::ObjectType,
+    BacnetPropertyId::PresentValue,
+    BacnetPropertyId::Description,
+    BacnetPropertyId::StatusFlags,
+    BacnetPropertyId::EventState,
+    BacnetPropertyId::OutOfService,
+    BacnetPropertyId::Units,
+    BacnetPropertyId::MinPresentValue,
+    BacnetPropertyId::MaxPresentValue,
+    BacnetPropertyId::Resolution,
+    BacnetPropertyId::Reliability,
+    BacnetPropertyId::PropertyList,
+  };
   const size_t devicePropertyCount =
     sizeof(kDeviceProperties) / sizeof(kDeviceProperties[0]);
   const size_t analogValuePropertyCount =
     sizeof(kAnalogValueProperties) / sizeof(kAnalogValueProperties[0]);
+  const size_t analogValueMetadataPropertyCount =
+    sizeof(kAnalogValueMetadataProperties) /
+    sizeof(kAnalogValueMetadataProperties[0]);
   size_t responseSize = 0;
   const bool isDevice =
     request.request.object.type == static_cast<uint16_t>(BacnetObjectType::Device) &&
@@ -223,7 +242,9 @@ BacnetServerPollResult BacnetServer::handleReadProperty(
     }
   } else if (request.request.property == BacnetPropertyId::PropertyList) {
     if (request.request.arrayIndex != kBacnetNoArrayIndex &&
-        request.request.arrayIndex > analogValuePropertyCount) {
+        request.request.arrayIndex > (analogValue->metadata == nullptr
+                                        ? analogValuePropertyCount
+                                        : analogValueMetadataPropertyCount)) {
       errorClass = 2;
       errorCode = 42;
     }
@@ -253,8 +274,10 @@ BacnetServerPollResult BacnetServer::handleReadProperty(
         response,
         sizeof(response),
         request,
-        kAnalogValueProperties,
-        analogValuePropertyCount);
+        analogValue->metadata == nullptr ? kAnalogValueProperties
+                                         : kAnalogValueMetadataProperties,
+        analogValue->metadata == nullptr ? analogValuePropertyCount
+                                         : analogValueMetadataPropertyCount);
     } else if (isDevice && request.request.property == BacnetPropertyId::DeviceAddressBinding) {
       responseSize = BacnetProtocol::buildReadPropertyEmptyListAck(
         response, sizeof(response), request);
@@ -396,11 +419,19 @@ bool BacnetServer::readAnalogValueProperty(
     case BacnetPropertyId::StatusFlags:
       value.type = BacnetValueType::BitString;
       value.bitStringValue = analogValue.outOfService ? 1UL << 3U : 0;
+      if (analogValue.metadata != nullptr) {
+        if (analogValue.metadata->inAlarm)
+          value.bitStringValue |= 1UL;
+        if (analogValue.metadata->fault)
+          value.bitStringValue |= 1UL << 1U;
+      }
       value.bitStringBitCount = 4;
       return true;
     case BacnetPropertyId::EventState:
       value.type = BacnetValueType::Enumerated;
-      value.unsignedValue = 0;
+      value.unsignedValue = analogValue.metadata == nullptr
+                              ? 0
+                              : analogValue.metadata->eventState;
       return true;
     case BacnetPropertyId::OutOfService:
       value.type = BacnetValueType::Boolean;
@@ -409,6 +440,40 @@ bool BacnetServer::readAnalogValueProperty(
     case BacnetPropertyId::Units:
       value.type = BacnetValueType::Enumerated;
       value.unsignedValue = analogValue.units;
+      return true;
+    case BacnetPropertyId::Description:
+      if (analogValue.metadata == nullptr || analogValue.metadata->description == nullptr) {
+        return false;
+      }
+      value.textLength = std::strlen(analogValue.metadata->description);
+      if (value.textLength >= sizeof(value.text))
+        return false;
+      std::memcpy(value.text, analogValue.metadata->description, value.textLength + 1U);
+      value.type = BacnetValueType::CharacterString;
+      return true;
+    case BacnetPropertyId::MinPresentValue:
+      if (analogValue.metadata == nullptr)
+        return false;
+      value.type = BacnetValueType::Real;
+      value.realValue = analogValue.metadata->minPresentValue;
+      return true;
+    case BacnetPropertyId::MaxPresentValue:
+      if (analogValue.metadata == nullptr)
+        return false;
+      value.type = BacnetValueType::Real;
+      value.realValue = analogValue.metadata->maxPresentValue;
+      return true;
+    case BacnetPropertyId::Resolution:
+      if (analogValue.metadata == nullptr)
+        return false;
+      value.type = BacnetValueType::Real;
+      value.realValue = analogValue.metadata->resolution;
+      return true;
+    case BacnetPropertyId::Reliability:
+      if (analogValue.metadata == nullptr)
+        return false;
+      value.type = BacnetValueType::Enumerated;
+      value.unsignedValue = analogValue.metadata->reliability;
       return true;
     default:
       return false;

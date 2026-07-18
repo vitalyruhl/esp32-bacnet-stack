@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later WITH GCC-exception-2.0
 
 #include "BacnetServer.h"
+#include "portable/BacnetAnalogValueLimits.h"
 
 #include <cstring>
 
@@ -148,9 +149,11 @@ bool testRegisteredAnalogValues() {
   device.deviceInstance = 1234;
   device.objectName = "AV Test Device";
   ProviderState provider{7.25F, 0};
+  BacnetServerAnalogValueMetadata providerMetadata{
+    "Provider metadata", -10.0F, 50.0F, 0.1F, 3, 2, true, true};
   BacnetServerAnalogValue values[] = {
     {100, "Stored AV", 1.25F, 62, true, nullptr, nullptr},
-    {101, "Provider AV", 0.0F, 95, false, readProviderValue, &provider},
+    {101, "Provider AV", 0.0F, 95, false, readProviderValue, &provider, &providerMetadata},
   };
   if (!server.setAnalogValues(values, 2) || server.analogValueCount() != 2 ||
       !server.begin(device)) {
@@ -292,6 +295,23 @@ bool testRegisteredAnalogValues() {
                     11,
                     value) ||
       value.type != BacnetValueType::Enumerated || value.unsignedValue != 62) {
+    return false;
+  }
+  if (!readProperty(transport, server, source,
+                    BacnetPropertyRequest{providerObject, BacnetPropertyId::Description,
+                                          kBacnetNoArrayIndex}, 36, value) ||
+      std::strcmp(value.displayText(), "Provider metadata") != 0 ||
+      !readProperty(transport, server, source,
+                    BacnetPropertyRequest{providerObject, BacnetPropertyId::MinPresentValue,
+                                          kBacnetNoArrayIndex}, 37, value) ||
+      value.type != BacnetValueType::Real || !equals(value.realValue, -10.0F) ||
+      !readProperty(transport, server, source,
+                    BacnetPropertyRequest{providerObject, BacnetPropertyId::Reliability,
+                                          kBacnetNoArrayIndex}, 38, value) ||
+      value.type != BacnetValueType::Enumerated || value.unsignedValue != 2 ||
+      !readProperty(transport, server, source,
+                    BacnetPropertyRequest{providerObject, BacnetPropertyId::PropertyList, 0},
+                    39, value) || value.unsignedValue != 14) {
     return false;
   }
 
@@ -533,11 +553,30 @@ bool testStartConfigurationAndVersionFallback() {
   return true;
 }
 
+bool testLimitStates() {
+  const BacnetAnalogValueLimitConfig limits{-40.0F, -5.0F, 25.0F, 40.0F, 0.5F};
+  return bacnetAnalogValueLimitConfigIsValid(limits) &&
+         bacnetAnalogValueLimitEvaluate(10.0F, true, limits).state ==
+           BacnetAnalogValueLimitState::Normal &&
+         bacnetAnalogValueLimitEvaluate(-6.0F, true, limits).state ==
+           BacnetAnalogValueLimitState::LowWarning &&
+         bacnetAnalogValueLimitEvaluate(26.0F, true, limits).state ==
+           BacnetAnalogValueLimitState::HighWarning &&
+         bacnetAnalogValueLimitEvaluate(-41.0F, true, limits).fault &&
+         bacnetAnalogValueLimitEvaluate(41.0F, true, limits).fault &&
+         bacnetAnalogValueLimitEvaluate(0.0F, false, limits).state ==
+           BacnetAnalogValueLimitState::SensorFault &&
+         bacnetAnalogValueLimitEvaluate(-4.8F, true, limits,
+           BacnetAnalogValueLimitState::LowWarning).state ==
+           BacnetAnalogValueLimitState::Normal &&
+         !bacnetAnalogValueLimitConfigIsValid({0.0F, 10.0F, 5.0F, 20.0F, 0.0F});
+}
+
 } // namespace
 
 int main() {
   return testRegisteredAnalogValues() && testDisabledAnalogValues() &&
-             testStartConfigurationAndVersionFallback()
+           testStartConfigurationAndVersionFallback() && testLimitStates()
            ? 0
            : 1;
 }

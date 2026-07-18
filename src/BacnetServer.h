@@ -29,6 +29,19 @@ struct BacnetServerDevice {
 
 using BacnetServerAnalogValueProvider = float (*)(void* context);
 
+// Optional caller-owned engineering and state metadata. A null pointer
+// preserves the minimal AV profile and does not advertise these properties.
+struct BacnetServerAnalogValueMetadata {
+  const char* description = nullptr;
+  float minPresentValue = 0.0F;
+  float maxPresentValue = 0.0F;
+  float resolution = 0.0F;
+  uint8_t eventState = 0;  // BACnet EVENT_STATE_NORMAL.
+  uint8_t reliability = 0; // BACnet RELIABILITY_NO_FAULT_DETECTED.
+  bool inAlarm = false;
+  bool fault = false;
+};
+
 // Caller-owned Analog Value configuration. The server borrows this array and
 // does not allocate an object database. A provider is polled only while
 // encoding Present_Value; a null provider exposes the stored presentValue.
@@ -40,6 +53,7 @@ struct BacnetServerAnalogValue {
   bool outOfService = false;
   BacnetServerAnalogValueProvider presentValueProvider = nullptr;
   void* presentValueContext = nullptr;
+  const BacnetServerAnalogValueMetadata* metadata = nullptr;
 };
 
 enum class BacnetServerPollResult : uint8_t {
