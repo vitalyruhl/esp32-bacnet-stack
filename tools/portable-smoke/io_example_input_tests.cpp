@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later WITH GCC-exception-2.0
 
 #include "IoInputLogic.h"
+#include "LedOutputLogic.h"
 
 #include <cmath>
 
@@ -41,8 +42,20 @@ bool testButtonDebouncing() {
   return !button.stableLevel();
 }
 
+bool testLedElectricalMapping() {
+  return !io_example::ledElectricalLevel(false, false, false) &&
+         io_example::ledElectricalLevel(true, false, false) &&
+         io_example::ledElectricalLevel(false, false, true) &&
+         !io_example::ledElectricalLevel(true, false, true) &&
+         !io_example::ledElectricalLevel(true, true, false) &&
+         io_example::ledElectricalLevel(true, true, true);
+}
+
 } // namespace
 
 int main() {
-  return testAdcScaling() && testDs18b20FaultMapping() && testButtonDebouncing() ? 0 : 1;
+  return testAdcScaling() && testDs18b20FaultMapping() && testButtonDebouncing() &&
+           testLedElectricalMapping()
+           ? 0
+           : 1;
 }

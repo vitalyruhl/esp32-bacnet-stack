@@ -2,8 +2,8 @@
 
 This is the authoritative physical connection reference for
 `examples/io-example` on the ESP32-WROOM-32 / ESP32-D0WD-V3 development board.
-It documents the real station, including reserved future outputs; only the
-read-only inputs are initialized by the current slice.
+It documents the real station. The current slice initializes the read-only
+inputs and the two LED Binary Outputs; relays remain reserved.
 
 | Function | GPIO | Current use / constraint |
 | --- | ---: | --- |
@@ -15,8 +15,8 @@ read-only inputs are initialized by the current slice.
 | Set button | 4 | button to GND, `INPUT_PULLUP`, low-active; strapping pin |
 | OLED / BME280 SDA | 21 | shared I2C bus |
 | OLED / BME280 SCL | 22 | shared I2C bus |
-| LED 1, reserved | 25 | GPIO -> resistor -> LED -> GND; not driven |
-| LED 2, reserved | 26 | GPIO -> resistor -> LED -> GND; not driven |
+| LED 1 / BO0 | 25 | GPIO -> resistor -> LED -> GND; active-high by default, commandable |
+| LED 2 / BO1 | 26 | GPIO -> resistor -> LED -> GND; active-high by default, commandable |
 | Relay 1, reserved | 19 | not driven; moved from GPIO12 to avoid its boot strapping function |
 | Relay 2, reserved | 27 | not driven |
 | Relay 3, reserved | 23 | not driven |
@@ -31,5 +31,6 @@ read-only inputs are initialized by the current slice.
   used by the current read-only input slice.
 - GPIO34-GPIO39 are input-only and have no internal pull resistors. WiFi uses
   ADC1 GPIO32-GPIO39 for reliable analog reads; ADC2 is not used for inputs.
-- The BME280 remains physically connected on the I2C bus for station parity,
-  but `io-example` does not initialize or publish BME280 measurements.
+- The OLED and BME280 remain physically connected on the I2C bus for station
+  parity, but `io-example` does not initialize either device or publish BME280
+  measurements.

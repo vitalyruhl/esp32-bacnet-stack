@@ -10,6 +10,9 @@ using BacnetObjectListEntryProvider = bool (*)(const void* context,
 using BacnetPropertyListEntryProvider = bool (*)(const void* context,
                                                  size_t index,
                                                  BacnetPropertyId& property);
+using BacnetPriorityArrayEntryProvider = bool (*)(const void* context,
+                                                  size_t index,
+                                                  BacnetValue& value);
 
 class BacnetProtocol {
 public:
@@ -32,6 +35,10 @@ public:
     const uint8_t* buffer,
     size_t length,
     BacnetReadPropertyRequestHeader& request);
+  static BacnetWritePropertyRequestParseStatus parseWritePropertyRequest(
+    const uint8_t* buffer,
+    size_t length,
+    BacnetWritePropertyRequestHeader& request);
   static size_t buildReadPropertyAck(uint8_t* buffer,
                                      size_t bufferSize,
                                      const BacnetReadPropertyRequestHeader& request,
@@ -41,6 +48,26 @@ public:
                                        uint8_t invokeId,
                                        uint32_t errorClass,
                                        uint32_t errorCode);
+  static size_t buildReadPropertyPriorityArrayAck(
+    uint8_t* buffer,
+    size_t bufferSize,
+    const BacnetReadPropertyRequestHeader& request,
+    const BacnetPriorityArray& values);
+  static size_t buildReadPropertyPriorityArrayAck(
+    uint8_t* buffer,
+    size_t bufferSize,
+    const BacnetReadPropertyRequestHeader& request,
+    size_t slotCount,
+    BacnetPriorityArrayEntryProvider valueAt,
+    const void* context);
+  static size_t buildWritePropertyAck(uint8_t* buffer,
+                                      size_t bufferSize,
+                                      uint8_t invokeId);
+  static size_t buildWritePropertyError(uint8_t* buffer,
+                                        size_t bufferSize,
+                                        uint8_t invokeId,
+                                        uint32_t errorClass,
+                                        uint32_t errorCode);
   static size_t buildReadPropertyObjectListAck(
     uint8_t* buffer,
     size_t bufferSize,

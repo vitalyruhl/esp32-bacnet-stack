@@ -1000,6 +1000,57 @@ BacnetReadPropertyRequestParseStatus BacnetProtocol::parseReadPropertyRequest(
   return BacnetReadPropertyRequestParseStatus::ReadProperty;
 }
 
+BacnetWritePropertyRequestParseStatus BacnetProtocol::parseWritePropertyRequest(
+  const uint8_t* buffer,
+  size_t length,
+  BacnetWritePropertyRequestHeader& request) {
+  request = BacnetWritePropertyRequestHeader{};
+  BacnetConfirmedRequestHeader confirmed;
+  const auto confirmedStatus = parseConfirmedRequestHeader(buffer, length, confirmed);
+  if (confirmedStatus == BacnetConfirmedRequestParseStatus::Malformed)
+    return BacnetWritePropertyRequestParseStatus::Malformed;
+  if (confirmedStatus != BacnetConfirmedRequestParseStatus::Confirmed ||
+      confirmed.serviceChoice != kServiceWriteProperty) {
+    return BacnetWritePropertyRequestParseStatus::Unrelated;
+  }
+
+  size_t offset = confirmed.apduOffset + 4U;
+  uint32_t objectIdentifier = 0;
+  uint32_t propertyIdentifier = 0;
+  if (!readContextValue(buffer, length, offset, 0, objectIdentifier) ||
+      !readContextValue(buffer, length, offset, 1, propertyIdentifier) ||
+      (objectIdentifier >> 22) > 1023U) {
+    return BacnetWritePropertyRequestParseStatus::Malformed;
+  }
+  uint32_t arrayIndex = kBacnetNoArrayIndex;
+  if (offset < length && (buffer[offset] >> 4U) == 2U &&
+      (buffer[offset] & 0x08U) != 0U &&
+      !readContextValue(buffer, length, offset, 2, arrayIndex)) {
+    return BacnetWritePropertyRequestParseStatus::Malformed;
+  }
+  if (offset >= length || buffer[offset++] != 0x3EU ||
+      !parseReadPropertyApplicationValue(buffer, length, offset, static_cast<BacnetPropertyId>(propertyIdentifier), request.value, arrayIndex) ||
+      offset >= length || buffer[offset++] != 0x3FU) {
+    return BacnetWritePropertyRequestParseStatus::Malformed;
+  }
+  if (offset < length) {
+    uint32_t priority = 0;
+    if (!readContextValue(buffer, length, offset, 4, priority) || priority > UINT8_MAX)
+      return BacnetWritePropertyRequestParseStatus::Malformed;
+    request.hasPriority = true;
+    request.priority = static_cast<uint8_t>(priority);
+  }
+  if (offset != length)
+    return BacnetWritePropertyRequestParseStatus::Malformed;
+
+  request.invokeId = confirmed.invokeId;
+  request.request.object = BacnetObjectId{
+    static_cast<uint16_t>(objectIdentifier >> 22), objectIdentifier & kObjectInstanceMask};
+  request.request.property = static_cast<BacnetPropertyId>(propertyIdentifier);
+  request.request.arrayIndex = arrayIndex;
+  return BacnetWritePropertyRequestParseStatus::WriteProperty;
+}
+
 size_t BacnetProtocol::buildReadPropertyAck(
   uint8_t* buffer,
   size_t bufferSize,
@@ -1081,6 +1132,59 @@ size_t BacnetProtocol::buildReadPropertyError(uint8_t* buffer,
   return offset;
 }
 
+size_t BacnetProtocol::buildWritePropertyAck(uint8_t* buffer,
+                                             size_t bufferSize,
+                                             uint8_t invokeId) {
+  if (buffer == nullptr || bufferSize < 9)
+    return 0;
+  buffer[0] = kBvlcTypeBacnetIp;
+  buffer[1] = kBvlcOriginalUnicastNpdu;
+  buffer[2] = 0;
+  buffer[3] = 9;
+  buffer[4] = kNpduVersion;
+  buffer[5] = 0;
+  buffer[6] = 0x20;
+  buffer[7] = invokeId;
+  buffer[8] = kServiceWriteProperty;
+  return 9;
+}
+
+size_t BacnetProtocol::buildWritePropertyError(uint8_t* buffer,
+                                               size_t bufferSize,
+                                               uint8_t invokeId,
+                                               uint32_t errorClass,
+                                               uint32_t errorCode) {
+  if (buffer == nullptr || bufferSize < 13)
+    return 0;
+  size_t offset = 0;
+  buffer[offset++] = kBvlcTypeBacnetIp;
+  buffer[offset++] = kBvlcOriginalUnicastNpdu;
+  buffer[offset++] = 0;
+  buffer[offset++] = 0;
+  buffer[offset++] = kNpduVersion;
+  buffer[offset++] = 0;
+  buffer[offset++] = kApduError;
+  buffer[offset++] = invokeId;
+  buffer[offset++] = kServiceWriteProperty;
+  BacnetValue errorClassValue;
+  errorClassValue.type = BacnetValueType::Enumerated;
+  errorClassValue.unsignedValue = errorClass;
+  BacnetValue errorCodeValue;
+  errorCodeValue.type = BacnetValueType::Enumerated;
+  errorCodeValue.unsignedValue = errorCode;
+  const size_t classSize = encodeApplicationValue(buffer + offset, bufferSize - offset, errorClassValue);
+  if (classSize == 0)
+    return 0;
+  offset += classSize;
+  const size_t codeSize = encodeApplicationValue(buffer + offset, bufferSize - offset, errorCodeValue);
+  if (codeSize == 0)
+    return 0;
+  offset += codeSize;
+  buffer[2] = static_cast<uint8_t>(offset >> 8U);
+  buffer[3] = static_cast<uint8_t>(offset);
+  return offset;
+}
+
 namespace {
 bool objectListArrayEntry(const void* context,
                           size_t index,
@@ -1124,7 +1228,75 @@ bool finishReadPropertyAck(uint8_t* buffer, size_t offset) {
   buffer[3] = static_cast<uint8_t>(offset);
   return true;
 }
+
+bool priorityArrayValueEntry(const void* context, size_t index, BacnetValue& value) {
+  const auto* values = static_cast<const BacnetPriorityArray*>(context);
+  if (values == nullptr || index >= BacnetPriorityArray::kSlotCount || !values->present[index]) {
+    return false;
+  }
+  value = values->slots[index];
+  return true;
+}
 } // namespace
+
+size_t BacnetProtocol::buildReadPropertyPriorityArrayAck(
+  uint8_t* buffer,
+  size_t bufferSize,
+  const BacnetReadPropertyRequestHeader& request,
+  const BacnetPriorityArray& values) {
+  return buildReadPropertyPriorityArrayAck(buffer,
+                                           bufferSize,
+                                           request,
+                                           BacnetPriorityArray::kSlotCount,
+                                           priorityArrayValueEntry,
+                                           &values);
+}
+
+size_t BacnetProtocol::buildReadPropertyPriorityArrayAck(
+  uint8_t* buffer,
+  size_t bufferSize,
+  const BacnetReadPropertyRequestHeader& request,
+  size_t slotCount,
+  BacnetPriorityArrayEntryProvider valueAt,
+  const void* context) {
+  if (request.request.property != BacnetPropertyId::PriorityArray)
+    return 0;
+  if (slotCount == 0 || valueAt == nullptr)
+    return 0;
+  size_t offset = writeReadPropertyAckPrefix(buffer, bufferSize, request);
+  if (offset == 0 || offset + 2 > bufferSize)
+    return 0;
+  buffer[offset++] = 0x3EU;
+  const auto appendValue = [&](const BacnetValue& value) {
+    const size_t encoded = encodeApplicationValue(buffer + offset, bufferSize - offset - 1U, value);
+    if (encoded == 0)
+      return false;
+    offset += encoded;
+    return true;
+  };
+  if (request.request.arrayIndex == 0) {
+    BacnetValue count;
+    count.type = BacnetValueType::Unsigned;
+    count.unsignedValue = static_cast<uint32_t>(slotCount);
+    if (!appendValue(count))
+      return 0;
+  } else if (request.request.arrayIndex != kBacnetNoArrayIndex) {
+    const size_t slot = request.request.arrayIndex - 1U;
+    BacnetValue value;
+    if (slot >= slotCount || !valueAt(context, slot, value) || !appendValue(value))
+      return 0;
+  } else {
+    for (size_t slot = 0; slot < slotCount; ++slot) {
+      BacnetValue value;
+      if (!valueAt(context, slot, value) || !appendValue(value))
+        return 0;
+    }
+  }
+  if (offset >= bufferSize)
+    return 0;
+  buffer[offset++] = 0x3FU;
+  return finishReadPropertyAck(buffer, offset) ? offset : 0;
+}
 
 size_t BacnetProtocol::buildReadPropertyObjectListAck(
   uint8_t* buffer, size_t bufferSize, const BacnetReadPropertyRequestHeader& request, const BacnetObjectId* objects, size_t objectCount) {

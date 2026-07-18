@@ -7,6 +7,7 @@
 
 #include "portable/BacnetProtocol.h"
 #include "portable/BacnetRuntime.h"
+#include "portable/BacnetCommandPriority.h"
 
 struct BacnetServerDevice {
   // Required BACnet Device identity and profile values.
@@ -30,6 +31,9 @@ struct BacnetServerDevice {
 
 using BacnetServerAnalogValueProvider = float (*)(void* context);
 using BacnetServerBinaryInputProvider = bool (*)(void* context);
+using BacnetServerBinaryOutputApply = void (*)(void* context,
+                                               bool presentValue,
+                                               bool outOfService);
 using BacnetServerPropertyProvider = bool (*)(const void* context, BacnetValue& value);
 
 // Caller-owned optional property descriptor. Register only properties that an
@@ -80,6 +84,19 @@ struct BacnetServerBinaryInput {
   void* presentValueContext = nullptr;
 };
 
+// Caller-owned commandable Binary Output. The priority state is portable and
+// retained by the application-owned object; a physical binding is optional.
+struct BacnetServerBinaryOutput {
+  uint32_t instance = 0;
+  const char* objectName = nullptr;
+  BacnetCommandPriority<bool> priority;
+  bool outOfService = false;
+  uint32_t polarity = 0;
+  uint32_t reliability = 0;
+  BacnetServerBinaryOutputApply apply = nullptr;
+  void* applyContext = nullptr;
+};
+
 enum class BacnetServerPollResult : uint8_t {
   NotRunning,
   NoDatagram,
@@ -89,6 +106,8 @@ enum class BacnetServerPollResult : uint8_t {
   RejectSent,
   ReadPropertyAckSent,
   ReadPropertyErrorSent,
+  WritePropertyAckSent,
+  WritePropertyErrorSent,
   SendFailed,
 };
 
@@ -127,6 +146,9 @@ public:
   bool setBinaryInputs(BacnetServerBinaryInput* binaryInputs,
                        size_t count);
   size_t binaryInputCount() const;
+  bool setBinaryOutputs(BacnetServerBinaryOutput* binaryOutputs,
+                        size_t count);
+  size_t binaryOutputCount() const;
   // Optional caller-owned ReadProperty descriptors. Registrations extend an
   // object's Property_List only when present and must remain valid while the
   // server is running. Passing nullptr with zero entries unregisters all.
@@ -147,6 +169,9 @@ private:
   BacnetServerPollResult handleReadProperty(
     const BacnetIpEndpoint& source,
     const BacnetReadPropertyRequestHeader& request);
+  BacnetServerPollResult handleWriteProperty(
+    const BacnetIpEndpoint& source,
+    const BacnetWritePropertyRequestHeader& request);
   bool readDeviceProperty(BacnetPropertyId property, BacnetValue& value) const;
   bool readAnalogValueProperty(const BacnetServerAnalogValue& analogValue,
                                BacnetPropertyId property,
@@ -157,9 +182,13 @@ private:
   bool readBinaryInputProperty(const BacnetServerBinaryInput& binaryInput,
                                BacnetPropertyId property,
                                BacnetValue& value) const;
+  bool readBinaryOutputProperty(const BacnetServerBinaryOutput& binaryOutput,
+                                BacnetPropertyId property,
+                                BacnetValue& value) const;
   const BacnetServerAnalogValue* findAnalogValue(uint32_t instance) const;
   const BacnetServerAnalogInput* findAnalogInput(uint32_t instance) const;
   const BacnetServerBinaryInput* findBinaryInput(uint32_t instance) const;
+  BacnetServerBinaryOutput* findBinaryOutput(uint32_t instance) const;
   const BacnetServerPropertyRegistration* findPropertyRegistration(
     BacnetObjectId object,
     BacnetPropertyId property) const;
@@ -173,6 +202,9 @@ private:
   static bool objectPropertyEntry(const void* context,
                                   size_t index,
                                   BacnetPropertyId& property);
+  static bool binaryOutputPriorityEntry(const void* context,
+                                        size_t index,
+                                        BacnetValue& value);
 
   BacnetDatagramTransport* transport_ = nullptr; // Non-owning.
   bool running_ = false;
@@ -186,4 +218,6 @@ private:
   size_t binaryInputCount_ = 0;
   const BacnetServerPropertyRegistration* propertyRegistrations_ = nullptr;
   size_t propertyRegistrationCount_ = 0;
+  BacnetServerBinaryOutput* binaryOutputs_ = nullptr; // Caller-owned.
+  size_t binaryOutputCount_ = 0;
 };

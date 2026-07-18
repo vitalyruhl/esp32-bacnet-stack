@@ -963,13 +963,168 @@ bool testReadOnlyInputObjects() {
          value.unsignedValue == 6;
 }
 
+struct OutputApplyState {
+  uint32_t calls = 0;
+  bool presentValue = false;
+  bool outOfService = false;
+};
+
+void applyOutput(void* context, bool presentValue, bool outOfService) {
+  auto* state = static_cast<OutputApplyState*>(context);
+  if (state == nullptr)
+    return;
+  ++state->calls;
+  state->presentValue = presentValue;
+  state->outOfService = outOfService;
+}
+
+bool writeOutput(TestTransport& transport,
+                 BacnetServer& server,
+                 const BacnetIpEndpoint& source,
+                 BacnetObjectId object,
+                 BacnetPropertyId property,
+                 const BacnetValue& value,
+                 const BacnetWritePropertyOptions& options,
+                 uint8_t invokeId) {
+  uint8_t frame[BacnetProtocol::kMaxWritePropertyRequestSize] = {};
+  const size_t frameSize = BacnetProtocol::buildWritePropertyRequest(
+    frame, sizeof(frame), object, property, value, options, invokeId);
+  if (frameSize == 0)
+    return false;
+  transport.queue(frame, frameSize, source);
+  return server.poll() == BacnetServerPollResult::WritePropertyAckSent &&
+         BacnetProtocol::classifyWritePropertyResponse(transport.lastSent,
+                                                        transport.lastSentLength,
+                                                        invokeId) ==
+           BacnetWritePropertyResponseKind::Ack;
+}
+
+bool writeOutputError(TestTransport& transport,
+                      BacnetServer& server,
+                      const BacnetIpEndpoint& source,
+                      BacnetObjectId object,
+                      BacnetPropertyId property,
+                      const BacnetValue& value,
+                      const BacnetWritePropertyOptions& options,
+                      uint8_t invokeId,
+                      uint8_t expectedCode) {
+  uint8_t frame[BacnetProtocol::kMaxWritePropertyRequestSize] = {};
+  const size_t frameSize = BacnetProtocol::buildWritePropertyRequest(
+    frame, sizeof(frame), object, property, value, options, invokeId);
+  if (frameSize == 0)
+    return false;
+  transport.queue(frame, frameSize, source);
+  return server.poll() == BacnetServerPollResult::WritePropertyErrorSent &&
+         transport.lastSentLength >= 13 && transport.lastSent[6] == 0x50 &&
+         transport.lastSent[7] == invokeId && transport.lastSent[8] == 0x0F &&
+         transport.lastSent[12] == expectedCode;
+}
+
+bool testCommandableBinaryOutputs() {
+  TestTransport transport;
+  BacnetServer server(transport);
+  OutputApplyState applied;
+  BacnetServerBinaryOutput outputs[] = {{0, "LED 1"}};
+  outputs[0].priority.relinquishDefault = false;
+  outputs[0].apply = applyOutput;
+  outputs[0].applyContext = &applied;
+  BacnetServerDevice device;
+  device.deviceInstance = 7890;
+  if (!server.setBinaryOutputs(outputs, 1) || !server.begin(device))
+    return false;
+  const BacnetIpEndpoint source(192, 0, 2, 44, 47809);
+  const BacnetObjectId object{static_cast<uint16_t>(BacnetObjectType::BinaryOutput), 0};
+  BacnetValue value;
+  if (!readProperty(transport, server, source,
+                    {object, BacnetPropertyId::PresentValue, kBacnetNoArrayIndex}, 1,
+                    value) || value.type != BacnetValueType::Enumerated || value.unsignedValue != 0 ||
+      !readProperty(transport, server, source,
+                    {object, BacnetPropertyId::PriorityArray, 0}, 2, value) ||
+      value.type != BacnetValueType::Unsigned ||
+      value.unsignedValue != BacnetPriorityArray::kSlotCount ||
+      !readProperty(transport, server, source,
+                    {object, BacnetPropertyId::PriorityArray, 16}, 3, value) ||
+      value.type != BacnetValueType::Null) {
+    return false;
+  }
+  BacnetValue active;
+  active.type = BacnetValueType::Enumerated;
+  active.unsignedValue = 1;
+  BacnetValue inactive;
+  inactive.type = BacnetValueType::Enumerated;
+  inactive.unsignedValue = 0;
+  BacnetValue nullValue;
+  nullValue.type = BacnetValueType::Null;
+  BacnetWritePropertyOptions priority16;
+  priority16.hasPriority = true;
+  priority16.priority = 16;
+  BacnetWritePropertyOptions priority8;
+  priority8.hasPriority = true;
+  priority8.priority = 8;
+  BacnetWritePropertyOptions noPriority;
+  if (!writeOutput(transport, server, source, object, BacnetPropertyId::PresentValue,
+                   active, noPriority, 4) || !applied.presentValue ||
+      !writeOutput(transport, server, source, object, BacnetPropertyId::PresentValue,
+                   nullValue, priority16, 5) || applied.presentValue ||
+      !writeOutput(transport, server, source, object, BacnetPropertyId::PresentValue,
+                   active, priority16, 6) || !applied.presentValue || applied.outOfService ||
+      !writeOutput(transport, server, source, object, BacnetPropertyId::PresentValue,
+                   inactive, priority8, 7) || applied.presentValue ||
+      !writeOutput(transport, server, source, object, BacnetPropertyId::PresentValue,
+                   active, priority16, 8) || applied.presentValue ||
+      !writeOutput(transport, server, source, object, BacnetPropertyId::PresentValue,
+                   nullValue, priority8, 9) || !applied.presentValue ||
+      !writeOutput(transport, server, source, object, BacnetPropertyId::PresentValue,
+                   nullValue, priority16, 10) || applied.presentValue ||
+      !readProperty(transport, server, source,
+                    {object, BacnetPropertyId::PresentValue, kBacnetNoArrayIndex}, 11,
+                    value) || value.unsignedValue != 0) {
+    return false;
+  }
+  BacnetWritePropertyOptions invalidPriority;
+  invalidPriority.hasPriority = true;
+  invalidPriority.priority = 1;
+  uint8_t invalidFrame[BacnetProtocol::kMaxWritePropertyRequestSize] = {};
+  size_t invalidSize = BacnetProtocol::buildWritePropertyRequest(
+    invalidFrame, sizeof(invalidFrame), object, BacnetPropertyId::PresentValue,
+    active, invalidPriority, 12);
+  if (invalidSize == 0)
+    return false;
+  invalidFrame[invalidSize - 1U] = 0;
+  transport.queue(invalidFrame, invalidSize, source);
+  if (server.poll() != BacnetServerPollResult::WritePropertyErrorSent ||
+      transport.lastSentLength < 13 || transport.lastSent[12] != 37) {
+    return false;
+  }
+  BacnetValue invalidType;
+  invalidType.type = BacnetValueType::Real;
+  invalidType.realValue = 1.0F;
+  if (!writeOutputError(transport, server, source, object,
+                        BacnetPropertyId::PresentValue, invalidType, priority16, 13, 9) ||
+      !writeOutputError(transport, server, source, object,
+                        BacnetPropertyId::PriorityArray, active, priority16, 14, 40)) {
+    return false;
+  }
+  BacnetValue outOfService;
+  outOfService.type = BacnetValueType::Boolean;
+  outOfService.booleanValue = true;
+  if (!writeOutput(transport, server, source, object, BacnetPropertyId::OutOfService,
+                   outOfService, noPriority, 15) || !applied.outOfService ||
+      !readProperty(transport, server, source,
+                    {object, BacnetPropertyId::OutOfService, kBacnetNoArrayIndex}, 16,
+                    value) || !value.booleanValue) {
+    return false;
+  }
+  return true;
+}
+
 } // namespace
 
 int main() {
   return testRegisteredAnalogValues() && testDisabledAnalogValues() &&
            testIndividuallyRegisteredOptionalProperties() &&
            testStartConfigurationAndVersionFallback() && testLimitStates()
-           && testReadOnlyInputObjects()
+           && testReadOnlyInputObjects() && testCommandableBinaryOutputs()
            ? 0
            : 1;
 }

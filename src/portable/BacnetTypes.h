@@ -82,6 +82,7 @@ enum class BacnetPropertyId : uint32_t {
   OutOfService = 81,
   PresentValue = 85,
   PriorityArray = 87,
+  Polarity = 84,
   ProtocolObjectTypesSupported = 96,
   ProtocolServicesSupported = 97,
   ProtocolVersion = 98,
@@ -308,6 +309,8 @@ inline const char* bacnetPropertyName(BacnetPropertyId property) {
       return "outOfService";
     case BacnetPropertyId::PresentValue:
       return "presentValue";
+    case BacnetPropertyId::Polarity:
+      return "polarity";
     case BacnetPropertyId::ProtocolRevision:
       return "protocolRevision";
     case BacnetPropertyId::ProtocolVersion:
@@ -373,10 +376,24 @@ struct BacnetReadPropertyRequestHeader {
   BacnetPropertyRequest request;
 };
 
+struct BacnetWritePropertyRequestHeader {
+  uint8_t invokeId = 0;
+  BacnetPropertyRequest request;
+  BacnetValue value;
+  bool hasPriority = false;
+  uint8_t priority = 0;
+};
+
 enum class BacnetReadPropertyRequestParseStatus : uint8_t {
   Unrelated,
   Malformed,
   ReadProperty,
+};
+
+enum class BacnetWritePropertyRequestParseStatus : uint8_t {
+  Unrelated,
+  Malformed,
+  WriteProperty,
 };
 
 struct BacnetIpEndpoint {

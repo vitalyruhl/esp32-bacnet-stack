@@ -11,14 +11,18 @@ This changelog is a curated overview. The canonical library version is in
   object profiles with shared ReadProperty, Object_List, Property_List, and
   optional metadata/state-provider support.
 - Added `examples/io-example`, a ConfigManager-backed ESP32 WiFi input station
-  with LDR, DS18B20, three debounced buttons, and an SSD1306 live display.
+  with LDR, DS18B20, and three debounced buttons. The physically installed
+  SSD1306 is intentionally not initialized by the firmware.
+- Added reusable command-priority Binary Output support and BO0/BO1 LED
+  bindings for `examples/io-example`.
 
 ### Notes
 
-- This development slice deliberately excludes BACnet outputs, WriteProperty,
-  Priority_Array, Relinquish_Default, PWM, output failsafes, alarms, and
-  Intrinsic Reporting. Real WiFi/BACnet/OLED HIL is accepted for the read-only
-  input profile; future output slices require their own HIL.
+- The development station supports commandable Binary Output LEDs through
+  WriteProperty Present Value, a 16-slot Priority_Array, and Relinquish Default.
+  Priority_Array remains read-only. Real WiFi/BACnet input and LED HIL is
+  accepted. Relays, Analog Output/PWM, output failsafes, alarms, and Intrinsic
+  Reporting remain future work.
 
 ## 0.35.0 - 2026-07-18
 

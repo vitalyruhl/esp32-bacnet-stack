@@ -2,8 +2,8 @@
 
 The portable `BacnetServer` runtime accepts an injected
 `BacnetDatagramTransport`, is driven by non-blocking `poll()`, decodes Who-Is,
-emits I-Am, and serves read-only Device and registered Analog Value objects
-through ReadProperty.
+emits I-Am, serves caller-owned objects through ReadProperty, and supports
+WriteProperty for registered commandable Binary Outputs.
 
 The active Device profile exposes its mandatory identity, protocol-capability,
 and transport properties, an Object List, Property List, and an empty Device
@@ -47,7 +47,12 @@ shared profile is Device `1682127` plus AV200 (stored sine) and AV201
 (polling/callback uptime). The demo-specific networking, identity, and value
 binding remain outside the portable core.
 
+Commandable Binary Outputs retain a caller-owned 16-slot priority array. A
+Present Value write uses priority 16 when omitted; a BACnet NULL relinquishes
+only the selected priority, and the highest active priority determines the
+effective value or Relinquish Default. Priority Array itself is read-only.
+
 This is not a complete BACnet/IP server feature: there is no COV,
-EventNotification, priority, WriteProperty, or real I/O.
+EventNotification, Analog Output/PWM, or generic real-I/O policy.
 
 See [Planned Server Work](planned.md) for the current scope boundary.

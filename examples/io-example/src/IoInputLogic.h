@@ -77,7 +77,9 @@ public:
       stableLevel_ = candidateLevel_;
   }
 
-  bool stableLevel() const { return stableLevel_; }
+  bool stableLevel() const {
+    return stableLevel_;
+  }
 
 private:
   bool initialized_ = false;

@@ -56,7 +56,8 @@ remain visible instead of being reported as successful fallback data. See the
 [Client Guide](docs/client/README.md) for lifecycle and API details.
 
 Repository version `0.36.0` includes the portable server runtime, read-only
-Analog Input/Binary Input profile, and ESP32 server examples.
+Analog Input/Binary Input profile, commandable Binary Output priority support,
+and ESP32 server examples.
 Package metadata and the
 currently available installation version are listed in the
 [PlatformIO Registry](https://registry.platformio.org/libraries/vitaly.ruhl/ESP32%20BACnet%20Stack).
