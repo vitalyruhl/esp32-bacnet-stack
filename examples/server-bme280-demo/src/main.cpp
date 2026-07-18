@@ -8,7 +8,16 @@
 #include <WiFiUdp.h>
 
 #include "core/CoreSettings.h"
+#include "core/CoreWiFiServices.h"
 #include "portable/BacnetAnalogValueLimits.h"
+
+#if __has_include("secret/secrets.h")
+#include "secret/secrets.h"
+#define BME_DEMO_HAS_SECRETS 1
+#else
+#include "secret/secrets.example.h"
+#define BME_DEMO_HAS_SECRETS 0
+#endif
 
 namespace {
 
@@ -18,6 +27,7 @@ constexpr uint32_t kAvBaseDefault = 300;
 constexpr uint16_t kBmeAddressDefault = 0x76;
 constexpr uint32_t kReadIntervalMs = 1000;
 constexpr char kVersion[] = "0.35.0";
+constexpr char kAppName[] = "BACnet BME280 Server";
 
 constexpr BacnetAnalogValueLimitConfig kDewPointDefaults{-40.0F, -5.0F, 25.0F, 40.0F, 0.5F};
 
@@ -43,9 +53,30 @@ struct Settings {
     errorMaximum = &ConfigManager.addSettingFloat("dewErrorMax").name("Dew Point Error Maximum").category("Dew Point").defaultValue(kDewPointDefaults.errorMaximum).build();
     hysteresis = &ConfigManager.addSettingFloat("dewDeadband").name("Dew Point Deadband/Hysteresis").category("Dew Point").defaultValue(kDewPointDefaults.hysteresis).build();
   }
+
+  void placeInUi() const {
+    ConfigManager.addSettingsPage("BACnet", 20);
+    ConfigManager.addSettingsGroup("BACnet", "BACnet", "Startup (restart required)", 20);
+    ConfigManager.addToSettingsGroup(deviceInstance->getKey(), "BACnet", "BACnet", "Startup (restart required)", 10);
+    ConfigManager.addToSettingsGroup(udpPort->getKey(), "BACnet", "BACnet", "Startup (restart required)", 20);
+    ConfigManager.addToSettingsGroup(avBaseInstance->getKey(), "BACnet", "BACnet", "Startup (restart required)", 30);
+    ConfigManager.addSettingsPage("Sensor", 30);
+    ConfigManager.addSettingsGroup("Sensor", "Sensor", "BME280 and Dew Point", 30);
+    ConfigManager.addToSettingsGroup(bmeAddress->getKey(), "Sensor", "Sensor", "BME280 and Dew Point", 10);
+    ConfigManager.addToSettingsGroup(warningMinimum->getKey(), "Sensor", "Sensor", "BME280 and Dew Point", 20);
+    ConfigManager.addToSettingsGroup(warningMaximum->getKey(), "Sensor", "Sensor", "BME280 and Dew Point", 30);
+    ConfigManager.addToSettingsGroup(errorMinimum->getKey(), "Sensor", "Sensor", "BME280 and Dew Point", 40);
+    ConfigManager.addToSettingsGroup(errorMaximum->getKey(), "Sensor", "Sensor", "BME280 and Dew Point", 50);
+    ConfigManager.addToSettingsGroup(hysteresis->getKey(), "Sensor", "Sensor", "BME280 and Dew Point", 60);
+  }
 };
 
 Settings settings;
+static cm::CoreSettings& coreSettings = cm::CoreSettings::instance();
+static cm::CoreSystemSettings& systemSettings = coreSettings.system;
+static cm::CoreWiFiSettings& wifiSettings = coreSettings.wifi;
+static cm::CoreNtpSettings& ntpSettings = coreSettings.ntp;
+static cm::CoreWiFiServices wifiServices;
 WiFiUDP udp;
 ArduinoUdpDatagramTransport transport(udp);
 BacnetServer bacnetServer(transport);
@@ -60,6 +91,17 @@ BacnetServerAnalogValueMetadata metadata[] = {
 BacnetServerAnalogValue values[4];
 BacnetAnalogValueLimitState dewState = BacnetAnalogValueLimitState::Normal;
 uint32_t lastReadMs = 0;
+bool bacnetConfigured = false;
+bool bacnetBound = false;
+uint32_t configuredDeviceInstance = 0;
+uint32_t configuredAvBase = 0;
+uint16_t configuredPort = 0;
+uint8_t configuredBmeAddress = 0;
+
+void onWiFiConnected();
+void onWiFiDisconnected();
+void onWiFiAPMode();
+static void setupNetworkDefaults();
 
 float dewPointCelsius(float temperature, float humidity) {
   if (!isfinite(temperature) || !isfinite(humidity) || humidity <= 0.0F || humidity > 100.0F)
@@ -127,42 +169,58 @@ bool validStartupSettings(uint32_t& deviceInstance, uint16_t& port, uint32_t& av
   return valid;
 }
 
+void configureBacnetAndSensor() {
+  validStartupSettings(configuredDeviceInstance, configuredPort, configuredAvBase, configuredBmeAddress);
+  values[0] = {configuredAvBase, "AV Temperature", 0.0F, BacnetEngineeringUnits::DegreesCelsius, false, nullptr, nullptr, &metadata[0]};
+  values[1] = {configuredAvBase + 1U, "AV Relative Humidity", 0.0F, BacnetEngineeringUnits::PercentRelativeHumidity, false, nullptr, nullptr, &metadata[1]};
+  values[2] = {configuredAvBase + 2U, "AV Pressure", 0.0F, BacnetEngineeringUnits::Pascals, false, nullptr, nullptr, &metadata[2]};
+  values[3] = {configuredAvBase + 3U, "AV Dew Point", 0.0F, BacnetEngineeringUnits::DegreesCelsius, false, nullptr, nullptr, &metadata[3]};
+  bme.setAddress(configuredBmeAddress, 21, 22);
+  if (!bme.begin(bme.BME280_STANDBY_0_5, bme.BME280_FILTER_OFF, bme.BME280_SPI3_DISABLE, bme.BME280_OVERSAMPLING_1, bme.BME280_OVERSAMPLING_1, bme.BME280_OVERSAMPLING_1, bme.BME280_MODE_NORMAL)) {
+    Serial.println("[E] BME280 initialization failed; AVs report sensor fault");
+  }
+  bacnetConfigured = bacnetServer.setAnalogValues(values, 4);
+  Serial.print("[I] BME280 address 0x");
+  Serial.println(configuredBmeAddress, HEX);
+  Serial.print("[I] BACnet Device Instance ");
+  Serial.println(configuredDeviceInstance);
+  Serial.print("[I] BACnet UDP Port ");
+  Serial.println(configuredPort);
+  Serial.print("[I] BACnet AV range ");
+  Serial.print(configuredAvBase);
+  Serial.print("-");
+  Serial.println(configuredAvBase + 3U);
+}
+
+void startBacnetWhenConnected() {
+  if (bacnetBound || !bacnetConfigured)
+    return;
+  const BacnetServerDevice device{configuredDeviceInstance, kVendorId, "ESP32 BME280 BACnet Server", "Unregistered BACnet Test Server", "ESP32 BME280 Server Demo", kVersion, nullptr};
+  bacnetBound = bacnetServer.begin(device, configuredPort);
+  if (!bacnetBound)
+    Serial.println("[E] BACnet UDP bind failed");
+}
+
 } // namespace
 
 void setup() {
   Serial.begin(115200);
-  ConfigManager.setAppName("BACnet BME280 Server");
-  ConfigManager.setAppTitle("BACnet BME280 Server");
+  ConfigManager.setAppName(kAppName);
+  ConfigManager.setAppTitle(kAppName);
   ConfigManager.setVersion(kVersion);
   ConfigManager.enableBuiltinSystemProvider();
+  coreSettings.attachWiFi(ConfigManager);
+  coreSettings.attachSystem(ConfigManager);
+  coreSettings.attachNtp(ConfigManager);
   settings.create();
+  settings.placeInUi();
   ConfigManager.loadAll();
-  uint32_t deviceInstance = 0;
-  uint32_t avBase = 0;
-  uint16_t port = 0;
-  uint8_t address = 0;
-  validStartupSettings(deviceInstance, port, avBase, address);
-  const BacnetAnalogValueLimitConfig limits{settings.errorMinimum->get(), settings.warningMinimum->get(), settings.warningMaximum->get(), settings.errorMaximum->get(), settings.hysteresis->get()};
-  if (!bacnetAnalogValueLimitConfigIsValid(limits))
-    Serial.println("[E] Invalid dew point limits; using safe defaults at runtime");
-  values[0] = {avBase + 0U, "AV Temperature", 0.0F, BacnetEngineeringUnits::DegreesCelsius, false, nullptr, nullptr, &metadata[0]};
-  values[1] = {avBase + 1U, "AV Relative Humidity", 0.0F, BacnetEngineeringUnits::PercentRelativeHumidity, false, nullptr, nullptr, &metadata[1]};
-  values[2] = {avBase + 2U, "AV Pressure", 0.0F, BacnetEngineeringUnits::Pascals, false, nullptr, nullptr, &metadata[2]};
-  values[3] = {avBase + 3U, "AV Dew Point", 0.0F, BacnetEngineeringUnits::DegreesCelsius, false, nullptr, nullptr, &metadata[3]};
-  bme.setAddress(address, 21, 22);
-  if (!bme.begin(bme.BME280_STANDBY_0_5,
-                 bme.BME280_FILTER_OFF,
-                 bme.BME280_SPI3_DISABLE,
-                 bme.BME280_OVERSAMPLING_1,
-                 bme.BME280_OVERSAMPLING_1,
-                 bme.BME280_OVERSAMPLING_1,
-                 bme.BME280_MODE_NORMAL))
-    Serial.println("[E] BME280 initialization failed; AVs report sensor fault");
-  const BacnetServerDevice device{deviceInstance, kVendorId, "ESP32 BME280 BACnet Server", "Unregistered BACnet Test Server", "ESP32 BME280 Server Demo", kVersion, nullptr};
-  if (!bacnetServer.setAnalogValues(values, 4) || !bacnetServer.begin(device, port)) {
-    Serial.println("[E] BACnet server startup failed");
-    return;
-  }
+  Serial.println("[I] Persisted settings loaded");
+  setupNetworkDefaults();
+  configureBacnetAndSensor();
+#if defined(WIFI_FILTER_MAC_PRIORITY)
+  ConfigManager.setAccessPointMacPriority(WIFI_FILTER_MAC_PRIORITY);
+#endif
   ConfigManager.startWebServer();
 }
 
@@ -173,5 +231,52 @@ void loop() {
     lastReadMs = millis();
     readSensor();
   }
-  static_cast<void>(bacnetServer.poll());
+  if (bacnetBound)
+    static_cast<void>(bacnetServer.poll());
 }
+
+void onWiFiConnected() {
+  wifiServices.onConnected(ConfigManager, kAppName, systemSettings, ntpSettings);
+  Serial.print("[I] WiFi connected, local IP ");
+  Serial.println(WiFi.localIP());
+  startBacnetWhenConnected();
+}
+
+void onWiFiDisconnected() {
+  wifiServices.onDisconnected();
+  if (bacnetBound)
+    bacnetServer.end();
+  bacnetBound = false;
+  Serial.println("[W] WiFi disconnected");
+}
+
+void onWiFiAPMode() {
+  wifiServices.onAPMode();
+  Serial.print("[I] WiFi AP mode IP ");
+  Serial.println(WiFi.softAPIP());
+}
+
+namespace {
+
+static void setupNetworkDefaults() {
+  if (!wifiSettings.wifiSsid.get().isEmpty())
+    return;
+#if BME_DEMO_HAS_SECRETS
+  Serial.println("[I] Applying local WiFi defaults once");
+  wifiSettings.wifiSsid.set(MY_WIFI_SSID);
+  wifiSettings.wifiPassword.set(MY_WIFI_PASSWORD);
+  wifiSettings.staticIp.set(MY_WIFI_IP);
+  wifiSettings.useDhcp.set(MY_USE_DHCP);
+  wifiSettings.gateway.set(MY_GATEWAY_IP);
+  wifiSettings.subnet.set(MY_SUBNET_MASK);
+  wifiSettings.dnsPrimary.set(MY_DNS_IP);
+  ConfigManager.saveAll();
+  Serial.println("[I] Restarting after saving WiFi defaults");
+  delay(500);
+  ESP.restart();
+#else
+  Serial.println("[W] WiFi settings empty and secret/secrets.h is missing");
+#endif
+}
+
+} // namespace

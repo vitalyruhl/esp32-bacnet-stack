@@ -21,10 +21,24 @@ invalid and marks all AVs with `fault=true`, `Event_State=fault`, and
 - Dew Point Error Minimum/Maximum
 - Dew Point Deadband/Hysteresis
 
+The demo attaches ConfigManager Core WiFi, System, and NTP settings before it
+loads these values. On a first start with no stored SSID, an ignored local
+`src/secret/secrets.h` may seed WiFi, static-IP, gateway, subnet, DNS, and
+DHCP values once; it saves them and performs one controlled restart. Later
+starts never overwrite persisted WiFi settings from that file. Copy the tracked
+`secrets.example.h` to create the local file.
+
 The startup validator requires four non-colliding AV instances and
 `errorMin <= warningMin < warningMax <= errorMax`. Invalid persisted BACnet or
 sensor settings use safe defaults and log an error. Invalid dew-point limits
 also fall back to documented defaults for state evaluation.
+
+BACnet objects and the BME280 are configured from the loaded settings once at
+startup. The UDP socket is bound exactly once in the ConfigManager WiFi
+connected hook, after a station connection exists. A disconnect closes the
+socket; a subsequent connected hook may bind it again without re-registering
+objects. The loop continues to service ConfigManager, the non-blocking sensor
+interval, and BACnet polling without a second WiFi initialization.
 
 ## BACnet object mapping
 
