@@ -108,7 +108,7 @@
       "id": "led1",
       "top": -22.8,
       "left": -178.2,
-      "attrs": { "color": "red", "label": "LED 1 reserved", "flip": "" }
+      "attrs": { "color": "red", "label": "LED 1 BO0 GPIO25", "flip": "" }
     },
     {
       "type": "wokwi-resistor",
@@ -123,7 +123,7 @@
       "id": "led2",
       "top": 34.8,
       "left": -303.4,
-      "attrs": { "color": "yellow", "label": "LED 2 reserved", "flip": "" }
+      "attrs": { "color": "yellow", "label": "LED 2 BO1 GPIO26", "flip": "" }
     },
     {
       "type": "wokwi-resistor",
@@ -142,7 +142,7 @@
       "top": -355.2,
       "left": 201.6,
       "attrs": {
-        "text": "Reserved, not driven: LED1 GPIO25; LED2 GPIO26; Relay1 GPIO19; Relay2 GPIO27; Relay3 GPIO23"
+        "text": "Commandable: LED1 BO0 GPIO25; LED2 BO1 GPIO26. Reserved, not driven: Relay1 GPIO19; Relay2 GPIO27; Relay3 GPIO23"
       }
     }
   ],
