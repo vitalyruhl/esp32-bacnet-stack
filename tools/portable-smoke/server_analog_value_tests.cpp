@@ -8,7 +8,9 @@ namespace {
 
 class TestTransport final : public BacnetDatagramTransport {
 public:
-  bool begin(uint16_t) override {
+  bool begin(uint16_t localPort) override {
+    lastBeginPort = localPort;
+    ++beginCalls;
     return true;
   }
 
@@ -61,6 +63,8 @@ public:
   size_t lastSentLength = 0;
   BacnetIpEndpoint lastDestination;
   uint32_t sendCalls = 0;
+  uint16_t lastBeginPort = 0;
+  uint32_t beginCalls = 0;
 };
 
 struct ProviderState {
@@ -475,8 +479,65 @@ bool testDisabledAnalogValues() {
                    31);
 }
 
+bool testStartConfigurationAndVersionFallback() {
+  BacnetServerDevice device;
+  device.deviceInstance = 1234;
+  device.objectName = "Server Test Device";
+  device.firmwareRevision = "9.9.9";
+  const BacnetIpEndpoint source(192, 0, 2, 44, 47809);
+  const BacnetObjectId deviceObject{static_cast<uint16_t>(BacnetObjectType::Device),
+                                    device.deviceInstance};
+  BacnetValue value;
+
+  TestTransport defaultTransport;
+  BacnetServer defaultServer(defaultTransport);
+  if (!defaultServer.begin(device) ||
+      defaultTransport.beginCalls != 1 ||
+      defaultTransport.lastBeginPort != BacnetServer::kDefaultPort ||
+      defaultServer.port() != BacnetServer::kDefaultPort ||
+      !readProperty(defaultTransport,
+                    defaultServer,
+                    source,
+                    BacnetPropertyRequest{deviceObject,
+                                          BacnetPropertyId::ApplicationSoftwareVersion,
+                                          kBacnetNoArrayIndex},
+                    50,
+                    value) ||
+      value.type != BacnetValueType::CharacterString ||
+      std::strcmp(value.displayText(), "9.9.9") != 0) {
+    return false;
+  }
+  defaultServer.end();
+
+  device.applicationSoftwareVersion = "";
+  TestTransport customTransport;
+  BacnetServer customServer(customTransport);
+  constexpr uint16_t kCustomPort = 47809;
+  if (!customServer.begin(device, kCustomPort) ||
+      customTransport.beginCalls != 1 ||
+      customTransport.lastBeginPort != kCustomPort ||
+      customServer.port() != kCustomPort ||
+      !readProperty(customTransport,
+                    customServer,
+                    source,
+                    BacnetPropertyRequest{deviceObject,
+                                          BacnetPropertyId::ApplicationSoftwareVersion,
+                                          kBacnetNoArrayIndex},
+                    51,
+                    value) ||
+      value.type != BacnetValueType::CharacterString ||
+      std::strcmp(value.displayText(), "9.9.9") != 0) {
+    return false;
+  }
+  customServer.end();
+  return true;
+}
+
 } // namespace
 
 int main() {
-  return testRegisteredAnalogValues() && testDisabledAnalogValues() ? 0 : 1;
+  return testRegisteredAnalogValues() && testDisabledAnalogValues() &&
+             testStartConfigurationAndVersionFallback()
+           ? 0
+           : 1;
 }

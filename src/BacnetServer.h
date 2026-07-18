@@ -8,6 +8,7 @@
 #include "portable/BacnetRuntime.h"
 
 struct BacnetServerDevice {
+  // Required BACnet Device identity and profile values.
   uint32_t deviceInstance = 0;
   // Supplied by the final device provider; no production ID is assigned here.
   uint16_t vendorId = 0;
@@ -15,6 +16,7 @@ struct BacnetServerDevice {
   const char* vendorName = nullptr;
   const char* modelName = nullptr;
   const char* firmwareRevision = nullptr;
+  // Optional. A null or empty value exposes firmwareRevision instead.
   const char* applicationSoftwareVersion = nullptr;
   uint32_t maxApduLengthAccepted = 1476;
   uint32_t apduTimeout = 3000;
@@ -69,9 +71,11 @@ public:
   // be shared between concurrently running server instances.
   // This stateless MVP does not require a clock or logger yet.
   bool setTransport(BacnetDatagramTransport& transport);
+  // Binds the borrowed transport to localPort. Omitting it uses BACnet/IP UDP
+  // port 47808; this is the sole local-port configuration for the server.
   bool begin(const BacnetServerDevice& configuredDevice,
-             uint16_t portValue = kDefaultPort);
-  bool begin(uint32_t deviceInstanceValue, uint16_t portValue = kDefaultPort);
+             uint16_t localPort = kDefaultPort);
+  bool begin(uint32_t deviceInstanceValue, uint16_t localPort = kDefaultPort);
   void end();
 
   // The caller keeps the array and all referenced strings alive while the

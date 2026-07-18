@@ -33,10 +33,13 @@ namespace {
 constexpr uint32_t kSerialBaud = 115200;
 constexpr uint32_t kNetworkConnectTimeoutMs = 20000;
 constexpr uint32_t kNetworkRetryDelayMs = 250;
+// The sole BACnet/IP UDP bind-port setting. Change it only to use a
+// non-default local port; BacnetServer::kDefaultPort is UDP 47808.
 constexpr uint16_t kBacnetPort = BacnetServer::kDefaultPort;
 constexpr uint32_t kDemoDeviceInstance = 1682127;
 // ASHRAE-reserved; local test/example use only.
 constexpr uint16_t kDemoVendorId = 555;
+constexpr char kDemoVersion[] = "0.35.0";
 constexpr uint32_t kStoredValueUpdateMs = 250;
 constexpr float kStoredValueOffset = 20.0F;
 constexpr float kStoredValueAmplitude = 10.0F;
@@ -54,21 +57,6 @@ ArduinoUdpDatagramTransport bacnetTransport(bacnetUdp);
 BacnetServer bacnetServer(bacnetTransport);
 PollingDemoState pollingDemo;
 
-BacnetServerAnalogValue analogValues[] = {
-  {200, "AV200 Stored Sine", kStoredValueOffset, kPercentUnits, false, nullptr, nullptr},
-  {201, "AV201 Polling Uptime", 0.0F, kSecondsUnits, false, nullptr, &pollingDemo},
-};
-
-const BacnetServerDevice kDevice{
-  kDemoDeviceInstance,
-  kDemoVendorId,
-  "ESP32 BACnet Test Server",
-  "Unregistered BACnet Test Server",
-  "ESP32 BACnet Server Demo",
-  "0.35.0",
-  "0.35.0",
-};
-
 // The portable provider ABI intentionally accepts mutable void* context.
 // cppcheck-suppress constParameterCallback
 float readPollingUptime(void* context) {
@@ -78,6 +66,44 @@ float readPollingUptime(void* context) {
   }
   return static_cast<float>(millis() - state->startedAtMs) / 1000.0F;
 }
+
+BacnetServerAnalogValue analogValues[] = {
+  {
+    200,                 // instance: BACnet Analog Value object instance
+    "AV200 Stored Sine", // objectName: required, caller-owned text
+    kStoredValueOffset,  // presentValue: stored value used with no provider
+    kPercentUnits,       // units: BACnet EngineeringUnits code 98 (percent)
+    false,               // outOfService: false reports normal service
+    nullptr,             // presentValueProvider: null selects stored presentValue
+    nullptr,             // presentValueContext: unused without a provider
+  },
+  {
+    201,                    // instance: BACnet Analog Value object instance
+    "AV201 Polling Uptime", // objectName: required, caller-owned text
+    0.0F,                   // presentValue: ignored while a provider is set
+    kSecondsUnits,          // units: BACnet EngineeringUnits code 73 (seconds)
+    false,                  // outOfService: false reports normal service
+    readPollingUptime,      // presentValueProvider: called for each property read
+    &pollingDemo,           // presentValueContext: caller-owned provider state
+  },
+};
+
+const BacnetServerDevice kDevice{
+  kDemoDeviceInstance,               // deviceInstance: required BACnet Device instance
+  kDemoVendorId,                     // vendorId: required; replace for a product
+  "ESP32 BACnet Test Server",        // objectName: required Device Object_Name
+  "Unregistered BACnet Test Server", // vendorName: required Device Vendor_Name
+  "ESP32 BACnet Server Demo",        // modelName: required Device Model_Name
+  kDemoVersion,                      // firmwareRevision: required Device Firmware_Revision
+  nullptr,                           // applicationSoftwareVersion: optional; falls back to firmwareRevision
+  1476,                              // maxApduLengthAccepted: Device Max_APDU_Length_Accepted
+  3000,                              // apduTimeout: Device APDU_Timeout in milliseconds
+  3,                                 // numberOfApduRetries: Device Number_Of_APDU_Retries
+  0,                                 // databaseRevision: Device Database_Revision
+  1,                                 // protocolVersion: BACnet protocol version
+  14,                                // protocolRevision: BACnet protocol revision
+  3,                                 // segmentationSupported: Device Segmentation_Supported code
+};
 
 bool connectNetwork() {
 #if EXAMPLE_USE_ETHERNET
@@ -146,7 +172,6 @@ void setup() {
   }
 
   pollingDemo.startedAtMs = millis();
-  analogValues[1].presentValueProvider = readPollingUptime;
   updateStoredSine(pollingDemo.startedAtMs, true);
   if (!bacnetServer.setAnalogValues(analogValues,
                                     sizeof(analogValues) / sizeof(analogValues[0]))) {

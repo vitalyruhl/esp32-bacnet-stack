@@ -14,6 +14,24 @@ The demo listens on BACnet/IP UDP port `47808` and exposes Device `1682127`:
 - AV201 is a polling/callback value in seconds. Its provider returns elapsed
   uptime and does not keep a second stored Present Value copy.
 
+## BACnet server configuration
+
+`BacnetServer::begin(device, localPort)` is the single server-side UDP bind
+configuration. Omitting `localPort` binds the transport to
+`BacnetServer::kDefaultPort` (`47808`); passing a value binds that local UDP
+port instead. The demo passes `kBacnetPort`, which defaults to `47808` and is
+the only place to change the demo's BACnet/IP port.
+
+`BacnetServerDevice` holds Device object properties only; it deliberately has
+no transport or port field. The demo initializes every currently available
+field with an adjacent comment. `applicationSoftwareVersion` is optional: a
+null or empty value makes the server expose `firmwareRevision` for that
+property, so this demo has one version source (`kDemoVersion`).
+
+Each caller-owned `BacnetServerAnalogValue` entry similarly documents its
+instance, object name, stored value, units, Out_Of_Service state, optional
+Present_Value provider, and optional provider context directly in `main.cpp`.
+
 Vendor ID `555` and Vendor Name `Unregistered BACnet Test Server` are public
 example identity, not secrets. `555` is ASHRAE-reserved for local test/example
 use only; it is not a private BACnet number range. Product providers must
