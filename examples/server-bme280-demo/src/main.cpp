@@ -128,7 +128,8 @@ void readSensor() {
   bme.read();
   const float temperature = bme.data.temperature;
   const float humidity = bme.data.humidity;
-  const float pressure = bme.data.pressure;
+  // BME280_I2C exposes pressure in hPa; BACnet publishes this AV in Pascals.
+  const float pressure = bme.data.pressure * 100.0F;
   const float dewPoint = dewPointCelsius(temperature, humidity);
   const bool valid = isfinite(temperature) && isfinite(humidity) && isfinite(pressure) && isfinite(dewPoint);
   if (!valid) {
