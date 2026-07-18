@@ -33,7 +33,7 @@ powershell -ExecutionPolicy Bypass -File tools/release/backcheck-global-example.
 Force a specific published version:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File tools/release/backcheck-global-example.ps1 -Version "0.34.0"
+powershell -ExecutionPolicy Bypass -File tools/release/backcheck-global-example.ps1 -Version "0.35.0"
 ```
 
 Select a different example and PlatformIO environment:

@@ -49,6 +49,9 @@ jobs:
       - name: Build server demo
         run: pio run -d examples/server-demo -e usb -e eth
 
+      - name: Build BME280 server demo
+        run: pio run -d examples/server-bme280-demo -e usb
+
       - name: Compile tests
         run: pio test -e usb --without-uploading --without-testing
 

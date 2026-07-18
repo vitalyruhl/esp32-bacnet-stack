@@ -1193,7 +1193,27 @@ size_t BacnetProtocol::buildReadPropertyObjectListAck(
 
 size_t BacnetProtocol::buildReadPropertyPropertyListAck(
   uint8_t* buffer, size_t bufferSize, const BacnetReadPropertyRequestHeader& request, const BacnetPropertyId* properties, size_t propertyCount) {
-  if (properties == nullptr || propertyCount == 0)
+  if (properties == nullptr)
+    return 0;
+  const auto propertyAt = [](const void* context, size_t index, BacnetPropertyId& property) {
+    const auto* entries = static_cast<const BacnetPropertyId*>(context);
+    if (entries == nullptr)
+      return false;
+    property = entries[index];
+    return true;
+  };
+  return buildReadPropertyPropertyListAck(
+    buffer, bufferSize, request, propertyCount, propertyAt, properties);
+}
+
+size_t BacnetProtocol::buildReadPropertyPropertyListAck(
+  uint8_t* buffer,
+  size_t bufferSize,
+  const BacnetReadPropertyRequestHeader& request,
+  size_t propertyCount,
+  BacnetPropertyListEntryProvider propertyAt,
+  const void* context) {
+  if (propertyAt == nullptr || propertyCount == 0)
     return 0;
   size_t offset = writeReadPropertyAckPrefix(buffer, bufferSize, request);
   if (offset == 0 || offset + 2 > bufferSize)
@@ -1201,9 +1221,12 @@ size_t BacnetProtocol::buildReadPropertyPropertyListAck(
   buffer[offset++] = 0x3E;
   if (request.request.arrayIndex == kBacnetNoArrayIndex) {
     for (size_t index = 0; index < propertyCount; ++index) {
+      BacnetPropertyId property;
+      if (!propertyAt(context, index, property))
+        return 0;
       BacnetValue value;
       value.type = BacnetValueType::Enumerated;
-      value.unsignedValue = static_cast<uint32_t>(properties[index]);
+      value.unsignedValue = static_cast<uint32_t>(property);
       const size_t encoded = encodeApplicationValue(buffer + offset, bufferSize - offset - 1, value);
       if (encoded == 0)
         return 0;
@@ -1221,9 +1244,12 @@ size_t BacnetProtocol::buildReadPropertyPropertyListAck(
     const size_t index = request.request.arrayIndex - 1U;
     if (index >= propertyCount)
       return 0;
+    BacnetPropertyId property;
+    if (!propertyAt(context, index, property))
+      return 0;
     BacnetValue value;
     value.type = BacnetValueType::Enumerated;
-    value.unsignedValue = static_cast<uint32_t>(properties[index]);
+    value.unsignedValue = static_cast<uint32_t>(property);
     const size_t encoded = encodeApplicationValue(buffer + offset, bufferSize - offset - 1, value);
     if (encoded == 0)
       return 0;

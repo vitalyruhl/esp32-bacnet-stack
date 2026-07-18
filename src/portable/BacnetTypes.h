@@ -23,6 +23,14 @@ enum class BacnetObjectType : uint16_t {
   MultiStateValue = 19,
 };
 
+namespace BacnetEngineeringUnits {
+constexpr uint32_t Pascals = 53;
+constexpr uint32_t DegreesCelsius = 62;
+constexpr uint32_t PercentRelativeHumidity = 29;
+constexpr uint32_t Seconds = 73;
+constexpr uint32_t Percent = 98;
+} // namespace BacnetEngineeringUnits
+
 inline const char* bacnetObjectTypeText(BacnetObjectType objectType) {
   switch (objectType) {
     case BacnetObjectType::AnalogInput:
