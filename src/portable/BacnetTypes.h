@@ -23,6 +23,14 @@ enum class BacnetObjectType : uint16_t {
   MultiStateValue = 19,
 };
 
+namespace BacnetEngineeringUnits {
+constexpr uint32_t Pascals = 53;
+constexpr uint32_t DegreesCelsius = 62;
+constexpr uint32_t PercentRelativeHumidity = 29;
+constexpr uint32_t Seconds = 73;
+constexpr uint32_t Percent = 98;
+} // namespace BacnetEngineeringUnits
+
 inline const char* bacnetObjectTypeText(BacnetObjectType objectType) {
   switch (objectType) {
     case BacnetObjectType::AnalogInput:
@@ -54,14 +62,18 @@ inline const char* bacnetObjectTypeText(uint16_t objectType) {
 }
 
 enum class BacnetPropertyId : uint32_t {
+  ApduTimeout = 10,
   ApplicationSoftwareVersion = 12,
   CovIncrement = 22,
   Description = 28,
+  DeviceAddressBinding = 30,
   EventState = 36,
   FirmwareRevision = 44,
+  MaxApduLengthAccepted = 62,
   MaxPresentValue = 65,
   MinPresentValue = 69,
   ModelName = 70,
+  NumberOfApduRetries = 73,
   NumberOfStates = 74,
   ObjectIdentifier = 75,
   ObjectList = 76,
@@ -70,16 +82,21 @@ enum class BacnetPropertyId : uint32_t {
   OutOfService = 81,
   PresentValue = 85,
   PriorityArray = 87,
+  ProtocolObjectTypesSupported = 96,
+  ProtocolServicesSupported = 97,
   ProtocolVersion = 98,
   Reliability = 103,
   RelinquishDefault = 104,
   Resolution = 106,
   StateText = 110,
   StatusFlags = 111,
+  SystemStatus = 112,
   Units = 117,
   VendorIdentifier = 120,
   VendorName = 121,
   ProtocolRevision = 139,
+  DatabaseRevision = 155,
+  SegmentationSupported = 107,
   PropertyList = 371,
 };
 
@@ -112,6 +129,7 @@ enum class BacnetValueType : uint8_t {
   Error,
   NotCommandable,
   Unsupported,
+  PropertyIdentifierList,
 };
 
 // Stable BACnet error names used by protocol decoders and presentation layers.
@@ -175,6 +193,8 @@ inline const char* bacnetValueTypeName(BacnetValueType type) {
       return "not-commandable";
     case BacnetValueType::Unsupported:
       return "unsupported";
+    case BacnetValueType::PropertyIdentifierList:
+      return "property-id-list";
   }
   return "unknown";
 }
@@ -322,6 +342,41 @@ struct BacnetIAmDeviceInfo {
   uint32_t maxApduLengthAccepted = 0;
   uint8_t segmentationSupported = 0;
   uint16_t vendorId = 0;
+};
+
+struct BacnetWhoIsRequest {
+  bool hasDeviceInstanceRange = false;
+  uint32_t lowDeviceInstance = 0;
+  uint32_t highDeviceInstance = 0;
+
+  bool includes(uint32_t deviceInstance) const {
+    return !hasDeviceInstanceRange ||
+           (deviceInstance >= lowDeviceInstance &&
+            deviceInstance <= highDeviceInstance);
+  }
+};
+
+struct BacnetConfirmedRequestHeader {
+  uint8_t invokeId = 0;
+  uint8_t serviceChoice = 0;
+  size_t apduOffset = 0;
+};
+
+enum class BacnetConfirmedRequestParseStatus : uint8_t {
+  Unrelated,
+  Malformed,
+  Confirmed,
+};
+
+struct BacnetReadPropertyRequestHeader {
+  uint8_t invokeId = 0;
+  BacnetPropertyRequest request;
+};
+
+enum class BacnetReadPropertyRequestParseStatus : uint8_t {
+  Unrelated,
+  Malformed,
+  ReadProperty,
 };
 
 struct BacnetIpEndpoint {

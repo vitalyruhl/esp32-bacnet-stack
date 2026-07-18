@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-or-later WITH GCC-exception-2.0
 
 #include <Arduino.h>
+#include <ArduinoBacnetClient.h>
 #include <ArduinoBacnetServer.h>
+#include <WiFiUdp.h>
 
 #ifndef EXAMPLE_USE_ETHERNET
 #define EXAMPLE_USE_ETHERNET 0
@@ -10,109 +12,185 @@
 #if EXAMPLE_USE_ETHERNET
 #include <ETH.h>
 #include <ExampleEthernet.h>
+#else
+#include <Esp32WiFiNetwork.h>
+#endif
 
 #if __has_include("secret/secrets.h")
 #include "secret/secrets.h"
 #else
 #include "secret/secrets.example.h"
 #endif
-#endif
 
-#if 0
-#include <BME280_I2C.h>
-#include <Ticker.h>
+#if EXAMPLE_USE_ETHERNET && !defined(MY_ETHERNET_IP)
+#define MY_ETHERNET_IP MY_WIFI_IP
+#endif
 
 #include <math.h>
 
-#ifndef BME280_ADDRESS
-#define BME280_ADDRESS 0x76
-#endif
+namespace {
 
-#define I2C_SDA 21
-#define I2C_SCL 22
+constexpr uint32_t kSerialBaud = 115200;
+constexpr uint32_t kNetworkConnectTimeoutMs = 20000;
+constexpr uint32_t kNetworkRetryDelayMs = 250;
+// The sole BACnet/IP UDP bind-port setting. Change it only to use a
+// non-default local port; BacnetServer::kDefaultPort is UDP 47808.
+constexpr uint16_t kBacnetPort = BacnetServer::kDefaultPort;
+constexpr uint32_t kDemoDeviceInstance = 1682127;
+// ASHRAE-reserved; local test/example use only.
+constexpr uint16_t kDemoVendorId = 555;
+constexpr char kDemoVersion[] = "0.35.0";
+constexpr uint32_t kStoredValueUpdateMs = 250;
+constexpr float kStoredValueOffset = 20.0F;
+constexpr float kStoredValueAmplitude = 10.0F;
+constexpr float kStoredValuePeriodMs = 60000.0F;
+constexpr float kTwoPi = 6.28318530718F;
+constexpr uint32_t kPercentUnits = 98;
+constexpr uint32_t kSecondsUnits = 73;
 
-static const char GLOBAL_THEME_OVERRIDE[] PROGMEM = R"CSS(
-.live-cards {
-  align-items: flex-start !important;
-  grid-template-columns: minmax(620px, 820px) minmax(280px, 1fr) !important;
-})CSS";
+struct PollingDemoState {
+  uint32_t startedAtMs = 0;
+};
 
-static BME280_I2C bme280;
-static Ticker environmentalTicker;
-static float bacnetTemperatureC = 0.0f;
-static float bacnetHumidityPct = 0.0f;
-static float bacnetDewPointC = 0.0f;
-static float bacnetPressureHpa = 0.0f;
+WiFiUDP bacnetUdp;
+ArduinoUdpDatagramTransport bacnetTransport(bacnetUdp);
+BacnetServer bacnetServer(bacnetTransport);
+PollingDemoState pollingDemo;
 
-static float computeDewPointC(float temperatureC, float humidityPct) {
-  static constexpr float kA = 17.62f;
-  static constexpr float kB = 243.12f;
-  const float safeHumidity = constrain(humidityPct, 1.0f, 100.0f);
-  const float gamma =
-    log(safeHumidity / 100.0f) + (kA * temperatureC) / (kB + temperatureC);
-  return (kB * gamma) / (kA - gamma);
-}
-
-static void readBme280ForBacnet() {
-  bme280.read();
-  bacnetTemperatureC = bme280.data.temperature;
-  bacnetHumidityPct = bme280.data.humidity;
-  bacnetPressureHpa = bme280.data.pressure;
-  bacnetDewPointC = computeDewPointC(bacnetTemperatureC, bacnetHumidityPct);
-}
-
-static void setupBme280ForBacnet() {
-  Serial.println("[I] Initializing BME280 sensor");
-  bme280.setAddress(BME280_ADDRESS, I2C_SDA, I2C_SCL);
-  const bool ok = bme280.begin(
-    bme280.BME280_STANDBY_0_5,
-    bme280.BME280_FILTER_OFF,
-    bme280.BME280_SPI3_DISABLE,
-    bme280.BME280_OVERSAMPLING_1,
-    bme280.BME280_OVERSAMPLING_1,
-    bme280.BME280_OVERSAMPLING_1,
-    bme280.BME280_MODE_NORMAL);
-  if (!ok) {
-    Serial.println("[W] BME280 not initialized, continuing without sensor");
-    return;
+// The portable provider ABI intentionally accepts mutable void* context.
+// cppcheck-suppress constParameterCallback
+float readPollingUptime(void* context) {
+  const auto* state = static_cast<const PollingDemoState*>(context);
+  if (state == nullptr) {
+    return 0.0F;
   }
-
-  Serial.println("[I] BME280 ready");
-  environmentalTicker.attach(30.0f, readBme280ForBacnet);
-  readBme280ForBacnet();
+  return static_cast<float>(millis() - state->startedAtMs) / 1000.0F;
 }
-#endif
 
-BacnetServer bacnetServer;
+BacnetServerAnalogValue analogValues[] = {
+  {
+    200,                 // instance: BACnet Analog Value object instance
+    "AV200 Stored Sine", // objectName: required, caller-owned text
+    kStoredValueOffset,  // presentValue: stored value used with no provider
+    kPercentUnits,       // units: BACnet EngineeringUnits code 98 (percent)
+    false,               // outOfService: false reports normal service
+    nullptr,             // presentValueProvider: null selects stored presentValue
+    nullptr,             // presentValueContext: unused without a provider
+  },
+  {
+    201,                    // instance: BACnet Analog Value object instance
+    "AV201 Polling Uptime", // objectName: required, caller-owned text
+    0.0F,                   // presentValue: ignored while a provider is set
+    kSecondsUnits,          // units: BACnet EngineeringUnits code 73 (seconds)
+    false,                  // outOfService: false reports normal service
+    readPollingUptime,      // presentValueProvider: called for each property read
+    &pollingDemo,           // presentValueContext: caller-owned provider state
+  },
+};
 
-void setup() {
-  Serial.begin(115200);
+const BacnetServerDevice kDevice{
+  kDemoDeviceInstance,               // deviceInstance: required BACnet Device instance
+  kDemoVendorId,                     // vendorId: required; replace for a product
+  "ESP32 BACnet Test Server",        // objectName: required Device Object_Name
+  "Unregistered BACnet Test Server", // vendorName: required Device Vendor_Name
+  "ESP32 BACnet Server Demo",        // modelName: required Device Model_Name
+  kDemoVersion,                      // firmwareRevision: required Device Firmware_Revision
+  nullptr,                           // applicationSoftwareVersion: optional; falls back to firmwareRevision
+  1476,                              // maxApduLengthAccepted: Device Max_APDU_Length_Accepted
+  3000,                              // apduTimeout: Device APDU_Timeout in milliseconds
+  3,                                 // numberOfApduRetries: Device Number_Of_APDU_Retries
+  0,                                 // databaseRevision: Device Database_Revision
+  1,                                 // protocolVersion: BACnet protocol version
+  14,                                // protocolRevision: BACnet protocol revision
+  3,                                 // segmentationSupported: Device Segmentation_Supported code
+};
+
+bool connectNetwork() {
 #if EXAMPLE_USE_ETHERNET
-  const bacnet_example::EthernetConfig ethernetConfig{
+  const bacnet_example::EthernetConfig config{
     MY_USE_DHCP,
     MY_ETHERNET_IP,
     MY_GATEWAY_IP,
     MY_SUBNET_MASK,
     MY_DNS_IP,
   };
-  if (!bacnet_example::EthernetNetwork::begin(
-        "bacnet-server-demo", ethernetConfig) ||
-      !bacnet_example::EthernetNetwork::waitForIp(20000)) {
-    Serial.println("[E] BACnet server network startup failed");
-    return;
+  if (!bacnet_example::EthernetNetwork::begin("bacnet-server-demo", config) ||
+      !bacnet_example::EthernetNetwork::waitForIp(kNetworkConnectTimeoutMs)) {
+    return false;
   }
-#endif
-  bacnetServer.begin(1234);
-#if 0
-  setupBme280ForBacnet();
-#endif
-  Serial.println("[I] BACnet server demo started");
-#if EXAMPLE_USE_ETHERNET
-  Serial.print("[I] BACnet server Ethernet IP: ");
+  Serial.print("[I] BACnet server Ethernet IP ");
   Serial.println(bacnet_example::EthernetNetwork::localIp());
+  return true;
+#else
+  const bacnet_example::WiFiNetworkConfig config{
+    MY_USE_DHCP,
+    MY_WIFI_SSID,
+    MY_WIFI_PASSWORD,
+    MY_WIFI_IP,
+    MY_GATEWAY_IP,
+    MY_SUBNET_MASK,
+    MY_DNS_IP,
+    kNetworkConnectTimeoutMs,
+    kNetworkRetryDelayMs,
+    true,
+  };
+  return bacnet_example::Esp32WiFiNetwork::begin(config);
 #endif
 }
 
+void updateStoredSine(uint32_t nowMs, bool force = false) {
+  static uint32_t lastUpdateMs = 0;
+  if (!force && nowMs - lastUpdateMs < kStoredValueUpdateMs) {
+    return;
+  }
+  lastUpdateMs = nowMs;
+  const float phase = kTwoPi * static_cast<float>(nowMs % 60000U) /
+                      kStoredValuePeriodMs;
+  analogValues[0].presentValue = kStoredValueOffset +
+                                 kStoredValueAmplitude * sinf(phase);
+}
+
+void printServerIdentity() {
+  Serial.print("[I] BACnet Device ID ");
+  Serial.println(kDemoDeviceInstance);
+  Serial.print("[I] BACnet UDP port ");
+  Serial.println(kBacnetPort);
+  Serial.print("[I] BACnet Vendor ID ");
+  Serial.println(kDemoVendorId);
+}
+
+} // namespace
+
+void setup() {
+  Serial.begin(kSerialBaud);
+  Serial.println();
+  Serial.println("[I] Starting ESP32 BACnet server demo");
+
+  if (!connectNetwork()) {
+    Serial.println("[E] BACnet server network startup failed");
+    return;
+  }
+
+  pollingDemo.startedAtMs = millis();
+  updateStoredSine(pollingDemo.startedAtMs, true);
+  if (!bacnetServer.setAnalogValues(analogValues,
+                                    sizeof(analogValues) / sizeof(analogValues[0]))) {
+    Serial.println("[E] BACnet Analog Value configuration failed");
+    return;
+  }
+  if (!bacnetServer.begin(kDevice, kBacnetPort)) {
+    Serial.println("[E] BACnet server UDP startup failed");
+    return;
+  }
+
+  printServerIdentity();
+  Serial.println("[I] BACnet server demo started");
+}
+
 void loop() {
-  delay(1000);
+  if (!bacnetServer.isRunning()) {
+    return;
+  }
+  updateStoredSine(millis());
+  static_cast<void>(bacnetServer.poll());
 }

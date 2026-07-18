@@ -3,6 +3,37 @@
 This changelog is a curated overview. The canonical library version is in
 `library.json`.
 
+## 0.35.0 - 2026-07-18
+
+### Added
+
+- Added the first portable `BacnetServer` runtime foundation with injected
+  datagram transport, non-blocking polling, configurable Device identity,
+  Who-Is range matching, I-Am responses, and Reject responses for unsupported
+  confirmed services.
+- Added portable protocol helpers and focused fake-transport coverage for
+  Who-Is/I-Am dispatch, source-port preservation, rejected confirmed services,
+  malformed datagrams, and server-only native compilation.
+- Added the read-only ESP32 WiFi/Ethernet server demo with Device `1682127`,
+  stored AV200 sine data, and callback-backed AV201 uptime data.
+- Added the ConfigManager-backed, No-OTA BME280 WiFi server demo with
+  persisted startup configuration, AV300–AV303 temperature, relative humidity,
+  pressure, and Magnus dew-point values, plus a Live View that reads the same
+  retained Present_Value data as BACnet.
+- Added individually registered caller-owned AV engineering properties
+  (Description, Min/Max Present Value, and Resolution) and optional runtime
+  Reliability/Status/Limit state without metadata storage in baseline AVs.
+- Corrected BME280 pressure publication from hPa to Pascals and added
+  non-notifying dew-point limit/hysteresis state exposure.
+- Validated Windows BACnet interoperability and Home Assistant discovery with
+  real ESP32/BME280 hardware; AV300–AV303 match the Live View.
+
+### Notes
+
+- This release adds no COV, EventNotification/Intrinsic Reporting,
+  WriteProperty, priority, or production real-I/O binding to the read-only
+  server profile.
+
 ## 0.34.0 - 2026-07-17
 
 ### Added

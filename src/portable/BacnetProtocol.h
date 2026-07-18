@@ -4,14 +4,80 @@
 
 #include "BacnetTypes.h"
 
+using BacnetObjectListEntryProvider = bool (*)(const void* context,
+                                               size_t index,
+                                               BacnetObjectId& object);
+using BacnetPropertyListEntryProvider = bool (*)(const void* context,
+                                                 size_t index,
+                                                 BacnetPropertyId& property);
+
 class BacnetProtocol {
 public:
   static constexpr size_t kWhoIsRequestSize = 8;
+  static constexpr size_t kMaxIAmResponseSize = 26;
+  static constexpr size_t kRejectResponseSize = 9;
   static constexpr size_t kMaxReadPropertyRequestSize = 25;
   static constexpr size_t kMaxWritePropertyRequestSize = 544;
   static constexpr size_t kMaxSubscribeCovRequestSize = 32;
 
   static size_t buildWhoIsRequest(uint8_t* buffer, size_t bufferSize);
+  static bool parseWhoIsRequest(const uint8_t* buffer,
+                                size_t length,
+                                BacnetWhoIsRequest& request);
+  static BacnetConfirmedRequestParseStatus parseConfirmedRequestHeader(
+    const uint8_t* buffer,
+    size_t length,
+    BacnetConfirmedRequestHeader& header);
+  static BacnetReadPropertyRequestParseStatus parseReadPropertyRequest(
+    const uint8_t* buffer,
+    size_t length,
+    BacnetReadPropertyRequestHeader& request);
+  static size_t buildReadPropertyAck(uint8_t* buffer,
+                                     size_t bufferSize,
+                                     const BacnetReadPropertyRequestHeader& request,
+                                     const BacnetValue& value);
+  static size_t buildReadPropertyError(uint8_t* buffer,
+                                       size_t bufferSize,
+                                       uint8_t invokeId,
+                                       uint32_t errorClass,
+                                       uint32_t errorCode);
+  static size_t buildReadPropertyObjectListAck(
+    uint8_t* buffer,
+    size_t bufferSize,
+    const BacnetReadPropertyRequestHeader& request,
+    const BacnetObjectId* objects,
+    size_t objectCount);
+  static size_t buildReadPropertyObjectListAck(
+    uint8_t* buffer,
+    size_t bufferSize,
+    const BacnetReadPropertyRequestHeader& request,
+    size_t objectCount,
+    BacnetObjectListEntryProvider objectAt,
+    const void* context);
+  static size_t buildReadPropertyPropertyListAck(
+    uint8_t* buffer,
+    size_t bufferSize,
+    const BacnetReadPropertyRequestHeader& request,
+    const BacnetPropertyId* properties,
+    size_t propertyCount);
+  static size_t buildReadPropertyPropertyListAck(
+    uint8_t* buffer,
+    size_t bufferSize,
+    const BacnetReadPropertyRequestHeader& request,
+    size_t propertyCount,
+    BacnetPropertyListEntryProvider propertyAt,
+    const void* context);
+  static size_t buildReadPropertyEmptyListAck(
+    uint8_t* buffer,
+    size_t bufferSize,
+    const BacnetReadPropertyRequestHeader& request);
+  static size_t buildIAmResponse(uint8_t* buffer,
+                                 size_t bufferSize,
+                                 const BacnetIAmDeviceInfo& device);
+  static size_t buildRejectResponse(uint8_t* buffer,
+                                    size_t bufferSize,
+                                    uint8_t invokeId,
+                                    uint8_t reason);
   static size_t encodeApplicationValue(uint8_t* buffer, size_t bufferSize, const BacnetValue& value);
   static size_t buildSubscribeCovRequest(uint8_t* buffer, size_t bufferSize, uint32_t processId, BacnetObjectId object, uint32_t lifetimeSeconds, bool issueConfirmedNotifications = false);
   static BacnetSubscribeCovResponseKind classifySubscribeCovResponse(

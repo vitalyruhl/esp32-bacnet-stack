@@ -1681,6 +1681,7 @@ bool BacnetDeviceSession::bacnetValueEquals(const BacnetValue& left,
              left.objectValue.instance == right.objectValue.instance;
     case BacnetValueType::CharacterString:
     case BacnetValueType::ObjectIdentifierList:
+    case BacnetValueType::PropertyIdentifierList:
     case BacnetValueType::Error:
     case BacnetValueType::Unsupported:
       return textEquals(left.text, right.text);

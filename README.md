@@ -1,9 +1,10 @@
 # ESP32 BACnet Stack
 
-ESP32 BACnet Stack provides a platform-neutral BACnet/IP client core in C++.
-ESP32 Arduino/PlatformIO and native Windows applications use the same portable
-core through dedicated platform adapters. BACnet server support is planned and
-is not implemented as a usable server feature.
+ESP32 BACnet Stack provides platform-neutral BACnet/IP client and read-only
+server roles in C++. ESP32 Arduino/PlatformIO and native Windows applications
+use the same portable core through dedicated platform adapters. The ESP32
+server demo binds the portable server runtime to Arduino UDP over WiFi or
+Ethernet; Windows remains a native client platform.
 Native Windows CLI tools provide Who-Is/I-Am discovery and property reads.
 
 | Target platform | Status | Integration |
@@ -11,7 +12,7 @@ Native Windows CLI tools provide Who-Is/I-Am discovery and property reads.
 | ESP32 WiFi | Available | Arduino/PlatformIO |
 | ESP32 Ethernet | Available | Arduino/PlatformIO |
 | Windows | Available | CMake/Winsock |
-| BACnet Server | Planned | Not implemented |
+| BACnet Server | Read-only demo | ESP32 WiFi/Ethernet Arduino UDP adapter |
 
 Start with the [ESP32 WiFi and Ethernet examples](#wifi-and-ethernet-examples)
 for PlatformIO projects, or use the [native Windows build and CLI tools](#native-windows-foundation)
@@ -23,8 +24,9 @@ coverage are still evolving.
 ## Current Status
 
 The portable BACnet/IP client core is available for ESP32 WiFi, ESP32 Ethernet,
-and native Windows applications. BACnet/IP server support remains planned and
-is not an implemented server feature. `API` in the Windows column means the
+and native Windows applications. BACnet/IP server support provides a small
+read-only ESP32 demo with Who-Is/I-Am and ReadProperty for its Device and
+Analog Values; it is not a full BACnet server. `API` in the Windows column means the
 native C++ API is available but the productive CLI does not expose that feature
 directly.
 
@@ -40,7 +42,7 @@ directly.
 | WriteProperty / Priority | Opt-in | Opt-in | Opt-in CLI |
 | Rich Client Demo | Yes | Yes | No |
 | Native CLI | No | No | Yes |
-| BACnet Server | Planned | Planned | Planned |
+| BACnet Server | Read-only demo | Read-only demo | Client only |
 
 The WiFi and Ethernet rich demos share the same BACnet application and feature
 set. They differ only in network transport, board, and connection parameters.
@@ -53,15 +55,39 @@ shows at most eight rows to bound RAM and UI payloads; per-property failures
 remain visible instead of being reported as successful fallback data. See the
 [Client Guide](docs/client/README.md) for lifecycle and API details.
 
-Repository release `0.34.0` is dated 2026-07-17. Package metadata and the
+Repository version `0.35.0` includes the portable server runtime, Device and
+Analog Value profile, and ESP32 server demo.
+Package metadata and the
 currently available installation version are listed in the
 [PlatformIO Registry](https://registry.platformio.org/libraries/vitaly.ruhl/ESP32%20BACnet%20Stack).
+
+## BACnet Vendor Identifier
+
+BACnet has no private or generally free Vendor ID range. ASHRAE assigns Vendor
+IDs uniquely, and the final provider of a BACnet device or software product is
+responsible for configuring the appropriate value. The library does not assign
+a production Vendor ID. Configure `vendorIdentifier` (currently
+`BacnetServerDevice::vendorId`) and, when supported, `vendorName` for the
+final product. When integrating this library into an existing product, use the
+Vendor ID of that responsible product provider.
+
+BACnet software and open-source implementors may request their own Vendor ID;
+own hardware is not a prerequisite and the assignment is free. Use the
+[BACnet Vendor IDs overview and assigned-ID list](https://bacnet.org/vendor-ids/)
+as the primary reference and the
+[ASHRAE Vendor ID assignment procedure](https://www.ashrae.org/file%20library/technical%20resources/standards%20and%20guidelines/procedures-vendor-id-rev7-5-2023.pdf)
+for the official request process.
+
+This project uses Vendor ID `555` only in clearly labelled local tests and
+examples. It is ASHRAE-reserved for test/example use, is not a BACnet analogue
+of a private IP range, and must not be copied into shipped or production
+devices.
 
 ## Goals
 
 - Provide one portable public `BacnetClient` role for BACnet/IP client workflows.
-- Plan a future portable `BacnetServer` role without presenting its placeholder
-  as a usable server implementation.
+- Provide a portable `BacnetServer` runtime foundation without presenting it as
+  a complete server implementation.
 - Keep the BACnet protocol core independent from Arduino, ESP32, Windows, and
   transport-specific APIs.
 - Support Arduino/PlatformIO through dedicated ESP32 adapters.
@@ -130,7 +156,7 @@ wiring.
 | `examples/common/` | Shared example-only Ethernet and client-demo implementation helpers |
 | `examples/client-object-list-scan-basic/` | Canonical serial-only basic BACnet/IP client example |
 | `examples/hil-wago-client-acceptance/` | Local ESP32/WAGO client acceptance HIL runner |
-| `examples/server-demo/` | Minimal BACnet server role demo |
+| `examples/server-demo/` | Read-only ESP32 WiFi/Ethernet BACnet server demo |
 | `test/` | PlatformIO Unity tests |
 | `docs/` | Project documentation |
 
@@ -210,8 +236,9 @@ void loop() {}
 
 - Client-only Arduino projects include `BacnetClient.h` and
   `ArduinoBacnetClient.h`; they do not include server declarations.
-- Server-only Arduino projects include `ArduinoBacnetServer.h`; the server
-  remains a placeholder API and does not provide BACnet server services.
+- Portable server projects include `BacnetServer.h`. ESP32 server examples use
+  `ArduinoBacnetServer.h` with the existing generic Arduino UDP adapter from
+  `ArduinoBacnetClient.h`; the adapter is independent of the demo profile.
 - `ArduinoEspBacnet.h` is the optional combined Arduino import.
 - `EspBacnet.h` remains a legacy compatibility umbrella and imports both roles;
   use one of the narrower imports in new projects.

@@ -1,7 +1,53 @@
 # Server Guide
 
-Server documentation is intentionally short at the moment.
+The portable `BacnetServer` runtime accepts an injected
+`BacnetDatagramTransport`, is driven by non-blocking `poll()`, decodes Who-Is,
+emits I-Am, and serves read-only Device and registered Analog Value objects
+through ReadProperty.
 
-The repository exposes a `BacnetServer` role and keeps server-related public naming reserved, but BACnet/IP server support is not documented here as a completed feature set.
+The active Device profile exposes its mandatory identity, protocol-capability,
+and transport properties, an Object List, Property List, and an empty Device
+Address Binding list. It returns BACnet errors for unknown objects/properties
+and invalid array indices. Object and property lists support full, count
+(`index 0`), and individual-entry reads.
+
+Analog Values are supplied in caller-owned `BacnetServerAnalogValue` storage
+through `setAnalogValues()`. Registering no entries consumes no object-table
+storage in the server and does not advertise Analog Value support. Each entry
+provides Object Identifier, Object Name, Object Type, Present Value, Status
+Flags, Event State, Out Of Service, Units, and Property List. The compact AV
+profile reports only the implemented Out Of Service bit and a normal Event
+State. Optional caller-owned `BacnetServerPropertyRegistration` entries add
+only the properties they describe. They may override Status Flags or Event
+State and add Reliability, Description, Min_Pres_Value, Max_Pres_Value, or
+Resolution without reserving metadata storage in baseline AV entries.
+
+The Present Value is read from the entry's stored `presentValue` when no
+provider is configured. A configured `BacnetServerAnalogValueProvider` is a
+function pointer plus caller context and is invoked only while serving a
+Present Value read. The server neither owns the entries, strings, nor provider
+context; all must remain valid while the server is running.
+
+Property registrations are also caller-owned and use a function pointer plus
+const context. Their presence is the single source for both `Property_List`
+and ReadProperty: an unregistered property is neither advertised nor readable.
+Optional runtime state can expose `inAlarm`/`fault` through Status Flags,
+Low/High Limit Event State, and Reliability. It remains read-only and sends no
+EventNotification; Out Of Service remains an AV field.
+
+The runtime borrows the transport; the caller keeps that transport alive for
+the server lifetime and does not share it between running server instances. It
+does not allocate from the heap in its normal request path and intentionally
+does not store a clock or logger. Later features that need either must use the
+existing portable clock and logging abstractions.
+
+The ESP32 server demo uses the existing Arduino UDP adapter with separate WiFi
+and Ethernet network setup, then injects it into this portable runtime. Its
+shared profile is Device `1682127` plus AV200 (stored sine) and AV201
+(polling/callback uptime). The demo-specific networking, identity, and value
+binding remain outside the portable core.
+
+This is not a complete BACnet/IP server feature: there is no COV,
+EventNotification, priority, WriteProperty, or real I/O.
 
 See [Planned Server Work](planned.md) for the current scope boundary.
