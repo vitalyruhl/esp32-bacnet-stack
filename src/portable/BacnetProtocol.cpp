@@ -1041,6 +1041,17 @@ size_t BacnetProtocol::buildReadPropertyError(uint8_t* buffer,
 }
 
 namespace {
+bool objectListArrayEntry(const void* context,
+                          size_t index,
+                          BacnetObjectId& object) {
+  const auto* objects = static_cast<const BacnetObjectId*>(context);
+  if (objects == nullptr) {
+    return false;
+  }
+  object = objects[index];
+  return true;
+}
+
 size_t writeReadPropertyAckPrefix(uint8_t* buffer, size_t bufferSize, const BacnetReadPropertyRequestHeader& request) {
   if (buffer == nullptr || bufferSize < 16 || request.request.object.type > 1023 ||
       request.request.object.instance > kObjectInstanceMask) {
@@ -1076,7 +1087,22 @@ bool finishReadPropertyAck(uint8_t* buffer, size_t offset) {
 
 size_t BacnetProtocol::buildReadPropertyObjectListAck(
   uint8_t* buffer, size_t bufferSize, const BacnetReadPropertyRequestHeader& request, const BacnetObjectId* objects, size_t objectCount) {
-  if (objects == nullptr || objectCount == 0) {
+  return buildReadPropertyObjectListAck(buffer,
+                                        bufferSize,
+                                        request,
+                                        objectCount,
+                                        objectListArrayEntry,
+                                        objects);
+}
+
+size_t BacnetProtocol::buildReadPropertyObjectListAck(
+  uint8_t* buffer,
+  size_t bufferSize,
+  const BacnetReadPropertyRequestHeader& request,
+  size_t objectCount,
+  BacnetObjectListEntryProvider objectAt,
+  const void* context) {
+  if (objectAt == nullptr || objectCount == 0) {
     return 0;
   }
   size_t offset = writeReadPropertyAckPrefix(buffer, bufferSize, request);
@@ -1098,7 +1124,9 @@ size_t BacnetProtocol::buildReadPropertyObjectListAck(
       return 0;
     BacnetValue value;
     value.type = BacnetValueType::ObjectIdentifier;
-    value.objectValue = objects[index];
+    if (!objectAt(context, index, value.objectValue)) {
+      return 0;
+    }
     const size_t encoded = encodeApplicationValue(buffer + offset, bufferSize - offset - 1, value);
     if (encoded == 0)
       return 0;
@@ -1107,7 +1135,9 @@ size_t BacnetProtocol::buildReadPropertyObjectListAck(
     for (size_t index = 0; index < objectCount; ++index) {
       BacnetValue value;
       value.type = BacnetValueType::ObjectIdentifier;
-      value.objectValue = objects[index];
+      if (!objectAt(context, index, value.objectValue)) {
+        return 0;
+      }
       const size_t encoded = encodeApplicationValue(buffer + offset, bufferSize - offset - 1, value);
       if (encoded == 0)
         return 0;
@@ -1128,20 +1158,8 @@ size_t BacnetProtocol::buildReadPropertyPropertyListAck(
   if (offset == 0 || offset + 2 > bufferSize)
     return 0;
   buffer[offset++] = 0x3E;
-  const size_t first = request.request.arrayIndex == kBacnetNoArrayIndex ? 0 : request.request.arrayIndex;
-  const size_t last = request.request.arrayIndex == kBacnetNoArrayIndex ? propertyCount : first;
-  if (request.request.arrayIndex == 0) {
-    BacnetValue count;
-    count.type = BacnetValueType::Unsigned;
-    count.unsignedValue = static_cast<uint32_t>(propertyCount);
-    const size_t encoded = encodeApplicationValue(buffer + offset, bufferSize - offset - 1, count);
-    if (encoded == 0)
-      return 0;
-    offset += encoded;
-  } else {
-    if (first == 0 || first > propertyCount)
-      return 0;
-    for (size_t index = first - 1; index < last; ++index) {
+  if (request.request.arrayIndex == kBacnetNoArrayIndex) {
+    for (size_t index = 0; index < propertyCount; ++index) {
       BacnetValue value;
       value.type = BacnetValueType::Enumerated;
       value.unsignedValue = static_cast<uint32_t>(properties[index]);
@@ -1150,6 +1168,25 @@ size_t BacnetProtocol::buildReadPropertyPropertyListAck(
         return 0;
       offset += encoded;
     }
+  } else if (request.request.arrayIndex == 0) {
+    BacnetValue count;
+    count.type = BacnetValueType::Unsigned;
+    count.unsignedValue = static_cast<uint32_t>(propertyCount);
+    const size_t encoded = encodeApplicationValue(buffer + offset, bufferSize - offset - 1, count);
+    if (encoded == 0)
+      return 0;
+    offset += encoded;
+  } else {
+    const size_t index = request.request.arrayIndex - 1U;
+    if (index >= propertyCount)
+      return 0;
+    BacnetValue value;
+    value.type = BacnetValueType::Enumerated;
+    value.unsignedValue = static_cast<uint32_t>(properties[index]);
+    const size_t encoded = encodeApplicationValue(buffer + offset, bufferSize - offset - 1, value);
+    if (encoded == 0)
+      return 0;
+    offset += encoded;
   }
   if (offset >= bufferSize)
     return 0;

@@ -4,6 +4,10 @@
 
 #include "BacnetTypes.h"
 
+using BacnetObjectListEntryProvider = bool (*)(const void* context,
+                                               size_t index,
+                                               BacnetObjectId& object);
+
 class BacnetProtocol {
 public:
   static constexpr size_t kWhoIsRequestSize = 8;
@@ -40,6 +44,13 @@ public:
     const BacnetReadPropertyRequestHeader& request,
     const BacnetObjectId* objects,
     size_t objectCount);
+  static size_t buildReadPropertyObjectListAck(
+    uint8_t* buffer,
+    size_t bufferSize,
+    const BacnetReadPropertyRequestHeader& request,
+    size_t objectCount,
+    BacnetObjectListEntryProvider objectAt,
+    const void* context);
   static size_t buildReadPropertyPropertyListAck(
     uint8_t* buffer,
     size_t bufferSize,

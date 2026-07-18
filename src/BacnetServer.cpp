@@ -42,6 +42,39 @@ void BacnetServer::end() {
   running_ = false;
 }
 
+bool BacnetServer::setAnalogValues(BacnetServerAnalogValue* analogValues,
+                                   size_t count) {
+  if (count == 0) {
+    analogValues_ = nullptr;
+    analogValueCount_ = 0;
+    return true;
+  }
+  if (analogValues == nullptr) {
+    return false;
+  }
+
+  for (size_t index = 0; index < count; ++index) {
+    const BacnetServerAnalogValue& analogValue = analogValues[index];
+    if (analogValue.instance > 0x003FFFFFUL || analogValue.objectName == nullptr ||
+        std::strlen(analogValue.objectName) >= BacnetValue::kMaxTextLength) {
+      return false;
+    }
+    for (size_t previous = 0; previous < index; ++previous) {
+      if (analogValues[previous].instance == analogValue.instance) {
+        return false;
+      }
+    }
+  }
+
+  analogValues_ = analogValues;
+  analogValueCount_ = count;
+  return true;
+}
+
+size_t BacnetServer::analogValueCount() const {
+  return analogValueCount_;
+}
+
 bool BacnetServer::isRunning() const {
   return running_;
 }
@@ -135,49 +168,93 @@ BacnetServerPollResult BacnetServer::handleReadProperty(
     BacnetPropertyId::DeviceAddressBinding,
     BacnetPropertyId::DatabaseRevision,
   };
-  const BacnetObjectId deviceObject{
-    static_cast<uint16_t>(BacnetObjectType::Device), device_.deviceInstance};
-  const size_t propertyCount = sizeof(kDeviceProperties) / sizeof(kDeviceProperties[0]);
+  static constexpr BacnetPropertyId kAnalogValueProperties[] = {
+    BacnetPropertyId::ObjectIdentifier,
+    BacnetPropertyId::ObjectName,
+    BacnetPropertyId::ObjectType,
+    BacnetPropertyId::PresentValue,
+    BacnetPropertyId::StatusFlags,
+    BacnetPropertyId::EventState,
+    BacnetPropertyId::OutOfService,
+    BacnetPropertyId::Units,
+    BacnetPropertyId::PropertyList,
+  };
+  const size_t devicePropertyCount =
+    sizeof(kDeviceProperties) / sizeof(kDeviceProperties[0]);
+  const size_t analogValuePropertyCount =
+    sizeof(kAnalogValueProperties) / sizeof(kAnalogValueProperties[0]);
   size_t responseSize = 0;
-  if (request.request.object.type !=
-        static_cast<uint16_t>(BacnetObjectType::Device) ||
-      request.request.object.instance != device_.deviceInstance) {
+  const bool isDevice =
+    request.request.object.type == static_cast<uint16_t>(BacnetObjectType::Device) &&
+    request.request.object.instance == device_.deviceInstance;
+  const BacnetServerAnalogValue* analogValue =
+    request.request.object.type == static_cast<uint16_t>(BacnetObjectType::AnalogValue)
+      ? findAnalogValue(request.request.object.instance)
+      : nullptr;
+
+  if (!isDevice && analogValue == nullptr) {
     errorClass = 1;
     errorCode = 31;
-  } else if (request.request.property == BacnetPropertyId::ObjectList) {
-    if (request.request.arrayIndex != kBacnetNoArrayIndex &&
-        request.request.arrayIndex > 1) {
+  } else if (isDevice) {
+    if (request.request.property == BacnetPropertyId::ObjectList) {
+      if (request.request.arrayIndex != kBacnetNoArrayIndex &&
+          request.request.arrayIndex > analogValueCount_ + 1U) {
+        errorClass = 2;
+        errorCode = 42;
+      }
+    } else if (request.request.property == BacnetPropertyId::PropertyList) {
+      if (request.request.arrayIndex != kBacnetNoArrayIndex &&
+          request.request.arrayIndex > devicePropertyCount) {
+        errorClass = 2;
+        errorCode = 42;
+      }
+    } else if (request.request.property == BacnetPropertyId::DeviceAddressBinding) {
+      if (request.request.arrayIndex != kBacnetNoArrayIndex) {
+        errorClass = 2;
+        errorCode = 42;
+      }
+    } else if (request.request.arrayIndex != kBacnetNoArrayIndex) {
       errorClass = 2;
       errorCode = 42;
+    } else if (!readDeviceProperty(request.request.property, value)) {
+      errorClass = 2;
+      errorCode = 32;
     }
   } else if (request.request.property == BacnetPropertyId::PropertyList) {
     if (request.request.arrayIndex != kBacnetNoArrayIndex &&
-        request.request.arrayIndex > propertyCount) {
-      errorClass = 2;
-      errorCode = 42;
-    }
-  } else if (request.request.property == BacnetPropertyId::DeviceAddressBinding) {
-    if (request.request.arrayIndex != kBacnetNoArrayIndex) {
+        request.request.arrayIndex > analogValuePropertyCount) {
       errorClass = 2;
       errorCode = 42;
     }
   } else if (request.request.arrayIndex != kBacnetNoArrayIndex) {
     errorClass = 2;
     errorCode = 42;
-  } else if (!readDeviceProperty(request.request.property, value)) {
+  } else if (!readAnalogValueProperty(*analogValue, request.request.property, value)) {
     errorClass = 2;
     errorCode = 32;
   }
 
   uint8_t response[kMaxDatagramSize] = {};
   if (errorCode == 0) {
-    if (request.request.property == BacnetPropertyId::ObjectList) {
+    if (isDevice && request.request.property == BacnetPropertyId::ObjectList) {
       responseSize = BacnetProtocol::buildReadPropertyObjectListAck(
-        response, sizeof(response), request, &deviceObject, 1);
-    } else if (request.request.property == BacnetPropertyId::PropertyList) {
+        response,
+        sizeof(response),
+        request,
+        analogValueCount_ + 1U,
+        objectListEntry,
+        this);
+    } else if (isDevice && request.request.property == BacnetPropertyId::PropertyList) {
       responseSize = BacnetProtocol::buildReadPropertyPropertyListAck(
-        response, sizeof(response), request, kDeviceProperties, propertyCount);
-    } else if (request.request.property == BacnetPropertyId::DeviceAddressBinding) {
+        response, sizeof(response), request, kDeviceProperties, devicePropertyCount);
+    } else if (!isDevice && request.request.property == BacnetPropertyId::PropertyList) {
+      responseSize = BacnetProtocol::buildReadPropertyPropertyListAck(
+        response,
+        sizeof(response),
+        request,
+        kAnalogValueProperties,
+        analogValuePropertyCount);
+    } else if (isDevice && request.request.property == BacnetPropertyId::DeviceAddressBinding) {
       responseSize = BacnetProtocol::buildReadPropertyEmptyListAck(
         response, sizeof(response), request);
     } else {
@@ -274,11 +351,90 @@ bool BacnetServer::readDeviceProperty(BacnetPropertyId property,
     case BacnetPropertyId::ProtocolObjectTypesSupported:
       value.type = BacnetValueType::BitString;
       value.bitStringValue = 1UL << static_cast<uint16_t>(BacnetObjectType::Device);
+      if (analogValueCount_ != 0) {
+        value.bitStringValue |= 1UL << static_cast<uint16_t>(BacnetObjectType::AnalogValue);
+      }
       value.bitStringBitCount = 9;
       return true;
     default:
       return false;
   }
+}
+
+bool BacnetServer::readAnalogValueProperty(
+  const BacnetServerAnalogValue& analogValue,
+  BacnetPropertyId property,
+  BacnetValue& value) {
+  value = BacnetValue{};
+  switch (property) {
+    case BacnetPropertyId::ObjectIdentifier:
+      value.type = BacnetValueType::ObjectIdentifier;
+      value.objectValue = BacnetObjectId{
+        static_cast<uint16_t>(BacnetObjectType::AnalogValue), analogValue.instance};
+      return true;
+    case BacnetPropertyId::ObjectName: {
+      const size_t length = std::strlen(analogValue.objectName);
+      std::memcpy(value.text, analogValue.objectName, length + 1U);
+      value.textLength = length;
+      value.type = BacnetValueType::CharacterString;
+      return true;
+    }
+    case BacnetPropertyId::ObjectType:
+      value.type = BacnetValueType::Enumerated;
+      value.unsignedValue = static_cast<uint16_t>(BacnetObjectType::AnalogValue);
+      return true;
+    case BacnetPropertyId::PresentValue:
+      value.type = BacnetValueType::Real;
+      value.realValue = analogValue.presentValueProvider == nullptr
+                          ? analogValue.presentValue
+                          : analogValue.presentValueProvider(analogValue.presentValueContext);
+      return true;
+    case BacnetPropertyId::StatusFlags:
+      value.type = BacnetValueType::BitString;
+      value.bitStringValue = analogValue.outOfService ? 1UL << 3U : 0;
+      value.bitStringBitCount = 4;
+      return true;
+    case BacnetPropertyId::EventState:
+      value.type = BacnetValueType::Enumerated;
+      value.unsignedValue = 0;
+      return true;
+    case BacnetPropertyId::OutOfService:
+      value.type = BacnetValueType::Boolean;
+      value.booleanValue = analogValue.outOfService;
+      return true;
+    case BacnetPropertyId::Units:
+      value.type = BacnetValueType::Enumerated;
+      value.unsignedValue = analogValue.units;
+      return true;
+    default:
+      return false;
+  }
+}
+
+const BacnetServerAnalogValue* BacnetServer::findAnalogValue(uint32_t instance) const {
+  for (size_t index = 0; index < analogValueCount_; ++index) {
+    if (analogValues_[index].instance == instance) {
+      return &analogValues_[index];
+    }
+  }
+  return nullptr;
+}
+
+bool BacnetServer::objectListEntry(const void* context,
+                                   size_t index,
+                                   BacnetObjectId& object) {
+  const auto* server = static_cast<const BacnetServer*>(context);
+  if (server == nullptr || index > server->analogValueCount_) {
+    return false;
+  }
+  if (index == 0) {
+    object = BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::Device),
+                            server->device_.deviceInstance};
+    return true;
+  }
+  object = BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::AnalogValue),
+                          server->analogValues_[index - 1U].instance};
+  return true;
 }
 
 bool BacnetServer::sendIAm(const BacnetIpEndpoint& destination) {
