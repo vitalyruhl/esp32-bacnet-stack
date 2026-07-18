@@ -63,6 +63,11 @@ int main() {
   device.deviceInstance = 1234;
   device.vendorId = kTestVendorId;
   device.maxApduLengthAccepted = 1024;
+  device.objectName = "Test Device";
+  device.vendorName = "Test Vendor";
+  device.modelName = "Test Model";
+  device.firmwareRevision = "1.0";
+  device.applicationSoftwareVersion = "1.0";
   const BacnetIpEndpoint source(192, 0, 2, 44, 47809);
 
   const bool baseline =
@@ -184,7 +189,7 @@ int main() {
     0x00,
     0x05,
     0x42,
-    0x0C,
+    0x0D,
   };
   transport.queue(confirmedReadProperty, sizeof(confirmedReadProperty), source);
   const bool reject =
@@ -193,5 +198,108 @@ int main() {
     transport.lastSent[6] == 0x60 && transport.lastSent[7] == 0x42 &&
     transport.lastSent[8] == BacnetServer::kRejectReasonUnrecognizedService;
 
-  return whoIs && included && excluded && truncation && incomplete && invalid && reject ? 0 : 1;
+  const auto readProperty = [&](BacnetObjectId object, BacnetPropertyId property, uint32_t arrayIndex, uint8_t invokeId) {
+    uint8_t request[BacnetProtocol::kMaxReadPropertyRequestSize] = {};
+    const BacnetPropertyRequest read{object, property, arrayIndex};
+    const size_t requestSize = BacnetProtocol::buildReadPropertyRequest(
+      request, sizeof(request), read, invokeId);
+    if (requestSize == 0)
+      return false;
+    transport.queue(request, requestSize, source);
+    return server.poll() == BacnetServerPollResult::ReadPropertyAckSent;
+  };
+  const BacnetObjectId deviceObject{
+    static_cast<uint16_t>(BacnetObjectType::Device), device.deviceInstance};
+  const BacnetPropertyId scalarProperties[] = {
+    BacnetPropertyId::ObjectIdentifier,
+    BacnetPropertyId::ObjectName,
+    BacnetPropertyId::ObjectType,
+    BacnetPropertyId::SystemStatus,
+    BacnetPropertyId::VendorName,
+    BacnetPropertyId::VendorIdentifier,
+    BacnetPropertyId::ModelName,
+    BacnetPropertyId::FirmwareRevision,
+    BacnetPropertyId::ApplicationSoftwareVersion,
+    BacnetPropertyId::ProtocolVersion,
+    BacnetPropertyId::ProtocolRevision,
+    BacnetPropertyId::ProtocolServicesSupported,
+    BacnetPropertyId::ProtocolObjectTypesSupported,
+    BacnetPropertyId::MaxApduLengthAccepted,
+    BacnetPropertyId::SegmentationSupported,
+    BacnetPropertyId::ApduTimeout,
+    BacnetPropertyId::NumberOfApduRetries,
+    BacnetPropertyId::DatabaseRevision,
+  };
+  bool scalars = true;
+  uint8_t scalarInvoke = 10;
+  for (const auto property : scalarProperties) {
+    BacnetValue parsed;
+    scalars = scalars && readProperty(deviceObject, property, kBacnetNoArrayIndex, scalarInvoke) &&
+              BacnetProtocol::parseReadPropertyAck(
+                transport.lastSent, transport.lastSentLength, scalarInvoke, BacnetPropertyRequest{deviceObject, property, kBacnetNoArrayIndex}, parsed);
+    ++scalarInvoke;
+  }
+
+  BacnetValue objectList;
+  const bool objectListFull =
+    readProperty(deviceObject, BacnetPropertyId::ObjectList, kBacnetNoArrayIndex, 40) &&
+    BacnetProtocol::parseReadPropertyAck(transport.lastSent, transport.lastSentLength, 40, BacnetPropertyRequest{deviceObject, BacnetPropertyId::ObjectList, kBacnetNoArrayIndex}, objectList) &&
+    objectList.type == BacnetValueType::ObjectIdentifierList;
+  BacnetValue objectCount;
+  const bool objectListCount =
+    readProperty(deviceObject, BacnetPropertyId::ObjectList, 0, 41) &&
+    BacnetProtocol::parseReadPropertyAck(transport.lastSent, transport.lastSentLength, 41, BacnetPropertyRequest{deviceObject, BacnetPropertyId::ObjectList, 0}, objectCount) &&
+    objectCount.unsignedValue == 1;
+  BacnetValue objectEntry;
+  const bool objectListEntry =
+    readProperty(deviceObject, BacnetPropertyId::ObjectList, 1, 42) &&
+    BacnetProtocol::parseReadPropertyAck(transport.lastSent, transport.lastSentLength, 42, BacnetPropertyRequest{deviceObject, BacnetPropertyId::ObjectList, 1}, objectEntry) &&
+    objectEntry.objectValue.instance == device.deviceInstance;
+
+  uint8_t request[BacnetProtocol::kMaxReadPropertyRequestSize] = {};
+  const auto expectError = [&](BacnetPropertyRequest read, uint8_t invokeId, uint32_t expectedCode) {
+    const size_t requestSize = BacnetProtocol::buildReadPropertyRequest(
+      request, sizeof(request), read, invokeId);
+    if (requestSize == 0)
+      return false;
+    transport.queue(request, requestSize, source);
+    BacnetValue error;
+    uint32_t errorClass = 0;
+    uint32_t errorCode = 0;
+    return server.poll() == BacnetServerPollResult::ReadPropertyErrorSent &&
+           BacnetProtocol::parseReadPropertyError(transport.lastSent,
+                                                  transport.lastSentLength,
+                                                  invokeId,
+                                                  error,
+                                                  &errorClass,
+                                                  &errorCode) &&
+           errorCode == expectedCode;
+  };
+  const bool errors =
+    expectError(BacnetPropertyRequest{deviceObject, BacnetPropertyId::ObjectList, 2}, 43, 42) &&
+    expectError(BacnetPropertyRequest{deviceObject, BacnetPropertyId::ObjectName, 0}, 44, 42) &&
+    expectError(BacnetPropertyRequest{BacnetObjectId{8, 7}, BacnetPropertyId::ObjectName, kBacnetNoArrayIndex}, 45, 31) &&
+    expectError(BacnetPropertyRequest{deviceObject, static_cast<BacnetPropertyId>(999), kBacnetNoArrayIndex}, 46, 32);
+  const bool propertyList =
+    readProperty(deviceObject, BacnetPropertyId::PropertyList, 0, 47) &&
+    transport.lastSentLength > 16 && transport.lastSent[transport.lastSentLength - 1] == 0x3F &&
+    readProperty(deviceObject, BacnetPropertyId::PropertyList, 1, 48) &&
+    expectError(BacnetPropertyRequest{deviceObject, BacnetPropertyId::PropertyList, 21}, 49, 42);
+  const bool addressBinding =
+    readProperty(deviceObject, BacnetPropertyId::DeviceAddressBinding, kBacnetNoArrayIndex, 50) &&
+    transport.lastSent[transport.lastSentLength - 2] == 0x3E &&
+    transport.lastSent[transport.lastSentLength - 1] == 0x3F &&
+    expectError(BacnetPropertyRequest{deviceObject, BacnetPropertyId::DeviceAddressBinding, 0}, 51, 42);
+  const size_t malformedSize = BacnetProtocol::buildReadPropertyRequest(
+    request, sizeof(request), BacnetPropertyRequest{deviceObject, BacnetPropertyId::ObjectName, kBacnetNoArrayIndex}, 52);
+  const uint32_t sendsBeforeMalformed = transport.sendCalls;
+  transport.queue(request, malformedSize - 1, source);
+  const bool malformedRead = server.poll() == BacnetServerPollResult::Malformed &&
+                             transport.sendCalls == sendsBeforeMalformed;
+
+  return whoIs && included && excluded && truncation && incomplete && invalid && reject &&
+             scalars && objectListFull && objectListCount && objectListEntry && errors &&
+             propertyList && addressBinding && malformedRead
+           ? 0
+           : 1;
 }

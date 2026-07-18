@@ -2,7 +2,13 @@
 
 The portable `BacnetServer` runtime accepts an injected
 `BacnetDatagramTransport`, is driven by non-blocking `poll()`, decodes Who-Is,
-and emits I-Am or a Reject for a complete unsupported confirmed request.
+emits I-Am, and serves a minimal read-only Device Object through ReadProperty.
+
+The active Device profile exposes its mandatory identity, protocol-capability,
+and transport properties, a Device-only Object List, Property List, and an
+empty Device Address Binding list. It returns BACnet errors for unknown
+objects/properties and invalid array indices. Object and property lists support
+full, count (`index 0`), and individual-entry reads.
 
 The runtime borrows the transport; the caller keeps that transport alive for
 the server lifetime and does not share it between running server instances.

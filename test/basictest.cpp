@@ -2127,7 +2127,7 @@ void test_bacnet_server_poll_rejects_confirmed_service_and_ignores_malformed() {
     0x00,
     0x05,
     0x42,
-    0x0C,
+    0x0D,
   };
   transport.queue(confirmedReadProperty, sizeof(confirmedReadProperty), BacnetIpEndpoint(192, 0, 2, 47, 47812));
   TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(BacnetServerPollResult::RejectSent),

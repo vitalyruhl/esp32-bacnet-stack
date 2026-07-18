@@ -11,7 +11,17 @@ struct BacnetServerDevice {
   uint32_t deviceInstance = 0;
   // Supplied by the final device provider; no production ID is assigned here.
   uint16_t vendorId = 0;
+  const char* objectName = nullptr;
+  const char* vendorName = nullptr;
+  const char* modelName = nullptr;
+  const char* firmwareRevision = nullptr;
+  const char* applicationSoftwareVersion = nullptr;
   uint32_t maxApduLengthAccepted = 1476;
+  uint32_t apduTimeout = 3000;
+  uint32_t numberOfApduRetries = 3;
+  uint32_t databaseRevision = 0;
+  uint8_t protocolVersion = 1;
+  uint8_t protocolRevision = 14;
   uint8_t segmentationSupported = 3;
 };
 
@@ -22,6 +32,8 @@ enum class BacnetServerPollResult : uint8_t {
   Malformed,
   IAmSent,
   RejectSent,
+  ReadPropertyAckSent,
+  ReadPropertyErrorSent,
   SendFailed,
 };
 
@@ -56,6 +68,10 @@ public:
 private:
   bool sendIAm(const BacnetIpEndpoint& destination);
   bool sendReject(const BacnetIpEndpoint& destination, uint8_t invokeId);
+  BacnetServerPollResult handleReadProperty(
+    const BacnetIpEndpoint& source,
+    const BacnetReadPropertyRequestHeader& request);
+  bool readDeviceProperty(BacnetPropertyId property, BacnetValue& value) const;
 
   BacnetDatagramTransport* transport_ = nullptr; // Non-owning.
   bool running_ = false;
