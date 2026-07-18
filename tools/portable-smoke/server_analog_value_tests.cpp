@@ -898,12 +898,78 @@ bool testLimitStates() {
          !bacnetAnalogValueLimitConfigIsValid({0.0F, 10.0F, 5.0F, 20.0F, 0.0F});
 }
 
+bool readStatusFlagsProperty(const void* context, BacnetValue& value) {
+  const auto* flags = static_cast<const uint32_t*>(context);
+  if (flags == nullptr)
+    return false;
+  value = BacnetValue{};
+  value.type = BacnetValueType::BitString;
+  value.bitStringValue = *flags;
+  value.bitStringBitCount = 4;
+  return true;
+}
+
+bool testReadOnlyInputObjects() {
+  TestTransport transport;
+  BacnetServer server(transport);
+  BacnetServerDevice device;
+  device.deviceInstance = 4567;
+  BacnetServerAnalogInput analogInputs[] = {{0, "Light Sensor", 42.5F, BacnetEngineeringUnits::Percent},
+                                             {1, "Temperature", 20.0F, BacnetEngineeringUnits::DegreesCelsius}};
+  BacnetServerBinaryInput binaryInputs[] = {{0, "Reset Button", true},
+                                             {1, "Mid Button", false},
+                                             {2, "Set Button", true}};
+  const uint32_t noSensor = 1;
+  const uint32_t faultEvent = 1;
+  const uint32_t faultFlags = 1UL << 1U;
+  const BacnetObjectId temperatureObject{static_cast<uint16_t>(BacnetObjectType::AnalogInput), 1};
+  const BacnetObjectId resetObject{static_cast<uint16_t>(BacnetObjectType::BinaryInput), 0};
+  const BacnetServerPropertyRegistration properties[] = {
+    {temperatureObject, BacnetPropertyId::Reliability, readEnumeratedProperty, &noSensor},
+    {temperatureObject, BacnetPropertyId::EventState, readEnumeratedProperty, &faultEvent},
+    {temperatureObject, BacnetPropertyId::StatusFlags, readStatusFlagsProperty, &faultFlags},
+  };
+  if (!server.setAnalogInputs(analogInputs, 2) || !server.setBinaryInputs(binaryInputs, 3) ||
+      !server.setPropertyRegistrations(properties, 3) || !server.begin(device)) {
+    return false;
+  }
+  const BacnetIpEndpoint source(192, 0, 2, 44, 47809);
+  BacnetValue value;
+  const BacnetObjectId lightObject{static_cast<uint16_t>(BacnetObjectType::AnalogInput), 0};
+  if (!readProperty(transport, server, source,
+                    {lightObject, BacnetPropertyId::PresentValue, kBacnetNoArrayIndex}, 1, value) ||
+      value.type != BacnetValueType::Real || !equals(value.realValue, 42.5F) ||
+      !readProperty(transport, server, source,
+                    {lightObject, BacnetPropertyId::Units, kBacnetNoArrayIndex}, 2, value) ||
+      value.unsignedValue != BacnetEngineeringUnits::Percent ||
+      !readProperty(transport, server, source,
+                    {resetObject, BacnetPropertyId::PresentValue, kBacnetNoArrayIndex}, 3, value) ||
+      value.type != BacnetValueType::Enumerated || value.unsignedValue != 1 ||
+      !readProperty(transport, server, source,
+                    {temperatureObject, BacnetPropertyId::Reliability, kBacnetNoArrayIndex}, 4, value) ||
+      value.unsignedValue != noSensor ||
+      !readProperty(transport, server, source,
+                    {temperatureObject, BacnetPropertyId::EventState, kBacnetNoArrayIndex}, 5, value) ||
+      value.unsignedValue != faultEvent ||
+      !readProperty(transport, server, source,
+                    {temperatureObject, BacnetPropertyId::StatusFlags, kBacnetNoArrayIndex}, 6, value) ||
+      value.type != BacnetValueType::BitString || value.bitStringValue != faultFlags ||
+      value.bitStringBitCount != 4) {
+    return false;
+  }
+  return readProperty(transport, server, source,
+                      {BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::Device), device.deviceInstance},
+                       BacnetPropertyId::ObjectList, 0}, 7, value) &&
+         value.unsignedValue == 6;
+}
+
 } // namespace
 
 int main() {
   return testRegisteredAnalogValues() && testDisabledAnalogValues() &&
            testIndividuallyRegisteredOptionalProperties() &&
            testStartConfigurationAndVersionFallback() && testLimitStates()
+           && testReadOnlyInputObjects()
            ? 0
            : 1;
 }

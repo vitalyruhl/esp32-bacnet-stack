@@ -39,7 +39,7 @@ constexpr uint16_t kBacnetPort = BacnetServer::kDefaultPort;
 constexpr uint32_t kDemoDeviceInstance = 1682127;
 // ASHRAE-reserved; local test/example use only.
 constexpr uint16_t kDemoVendorId = 555;
-constexpr char kDemoVersion[] = "0.35.0";
+constexpr char kDemoVersion[] = "0.36.0";
 constexpr uint32_t kStoredValueUpdateMs = 250;
 constexpr float kStoredValueOffset = 20.0F;
 constexpr float kStoredValueAmplitude = 10.0F;

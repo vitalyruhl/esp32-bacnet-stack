@@ -29,6 +29,7 @@ struct BacnetServerDevice {
 };
 
 using BacnetServerAnalogValueProvider = float (*)(void* context);
+using BacnetServerBinaryInputProvider = bool (*)(void* context);
 using BacnetServerPropertyProvider = bool (*)(const void* context, BacnetValue& value);
 
 // Caller-owned optional property descriptor. Register only properties that an
@@ -52,6 +53,30 @@ struct BacnetServerAnalogValue {
   uint32_t units = 0;
   bool outOfService = false;
   BacnetServerAnalogValueProvider presentValueProvider = nullptr;
+  void* presentValueContext = nullptr;
+};
+
+// Caller-owned Analog Input configuration. This has the same read-only value
+// provider contract as Analog Value, while advertising the correct BACnet
+// process-object type.
+struct BacnetServerAnalogInput {
+  uint32_t instance = 0;
+  const char* objectName = nullptr;
+  float presentValue = 0.0F;
+  uint32_t units = 0;
+  bool outOfService = false;
+  BacnetServerAnalogValueProvider presentValueProvider = nullptr;
+  void* presentValueContext = nullptr;
+};
+
+// Caller-owned Binary Input configuration. Present_Value is encoded as the
+// BACnet binary enumeration (inactive=0, active=1), not as a Boolean.
+struct BacnetServerBinaryInput {
+  uint32_t instance = 0;
+  const char* objectName = nullptr;
+  bool presentValue = false;
+  bool outOfService = false;
+  BacnetServerBinaryInputProvider presentValueProvider = nullptr;
   void* presentValueContext = nullptr;
 };
 
@@ -96,6 +121,12 @@ public:
   bool setAnalogValues(BacnetServerAnalogValue* analogValues,
                        size_t count);
   size_t analogValueCount() const;
+  bool setAnalogInputs(BacnetServerAnalogInput* analogInputs,
+                       size_t count);
+  size_t analogInputCount() const;
+  bool setBinaryInputs(BacnetServerBinaryInput* binaryInputs,
+                       size_t count);
+  size_t binaryInputCount() const;
   // Optional caller-owned ReadProperty descriptors. Registrations extend an
   // object's Property_List only when present and must remain valid while the
   // server is running. Passing nullptr with zero entries unregisters all.
@@ -120,20 +151,28 @@ private:
   bool readAnalogValueProperty(const BacnetServerAnalogValue& analogValue,
                                BacnetPropertyId property,
                                BacnetValue& value) const;
+  bool readAnalogInputProperty(const BacnetServerAnalogInput& analogInput,
+                               BacnetPropertyId property,
+                               BacnetValue& value) const;
+  bool readBinaryInputProperty(const BacnetServerBinaryInput& binaryInput,
+                               BacnetPropertyId property,
+                               BacnetValue& value) const;
   const BacnetServerAnalogValue* findAnalogValue(uint32_t instance) const;
+  const BacnetServerAnalogInput* findAnalogInput(uint32_t instance) const;
+  const BacnetServerBinaryInput* findBinaryInput(uint32_t instance) const;
   const BacnetServerPropertyRegistration* findPropertyRegistration(
     BacnetObjectId object,
     BacnetPropertyId property) const;
-  size_t analogValuePropertyCount(const BacnetServerAnalogValue& analogValue) const;
-  bool analogValuePropertyAt(const BacnetServerAnalogValue& analogValue,
-                             size_t index,
-                             BacnetPropertyId& property) const;
+  size_t objectPropertyCount(BacnetObjectId object) const;
+  bool objectPropertyAt(BacnetObjectId object,
+                        size_t index,
+                        BacnetPropertyId& property) const;
   static bool objectListEntry(const void* context,
                               size_t index,
                               BacnetObjectId& object);
-  static bool analogValuePropertyEntry(const void* context,
-                                       size_t index,
-                                       BacnetPropertyId& property);
+  static bool objectPropertyEntry(const void* context,
+                                  size_t index,
+                                  BacnetPropertyId& property);
 
   BacnetDatagramTransport* transport_ = nullptr; // Non-owning.
   bool running_ = false;
@@ -141,6 +180,10 @@ private:
   uint16_t port_ = kDefaultPort;
   BacnetServerAnalogValue* analogValues_ = nullptr; // Caller-owned.
   size_t analogValueCount_ = 0;
+  BacnetServerAnalogInput* analogInputs_ = nullptr; // Caller-owned.
+  size_t analogInputCount_ = 0;
+  BacnetServerBinaryInput* binaryInputs_ = nullptr; // Caller-owned.
+  size_t binaryInputCount_ = 0;
   const BacnetServerPropertyRegistration* propertyRegistrations_ = nullptr;
   size_t propertyRegistrationCount_ = 0;
 };

@@ -1,0 +1,7 @@
+[wokwi]
+version = 1
+firmware = '.pio/build/wifi-com4/firmware.bin'
+elf = '.pio/build/wifi-com4/firmware.elf'
+
+gdbServerPort = 3333
+rfc2217ServerPort = 4000

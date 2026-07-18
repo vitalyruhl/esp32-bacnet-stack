@@ -29,7 +29,7 @@ constexpr uint16_t kVendorId = 555; // ASHRAE-reserved local demo value.
 constexpr uint32_t kAvBaseDefault = 300;
 constexpr uint16_t kBmeAddressDefault = 0x76;
 constexpr uint32_t kReadIntervalMs = 1000;
-constexpr char kVersion[] = "0.35.0";
+constexpr char kVersion[] = "0.36.0";
 constexpr char kAppName[] = "BACnet BME280 Server";
 
 constexpr BacnetAnalogValueLimitConfig kDewPointDefaults{-40.0F, -5.0F, 25.0F, 40.0F, 0.5F};
