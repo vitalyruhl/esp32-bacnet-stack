@@ -64,6 +64,8 @@
       "*.code-workspace",
       "tools/native/build",
       "tools/native/build/**",
+      "tools/native/test",
+      "tools/native/test/**",
       "tools/portable-smoke/build",
       "tools/portable-smoke/build/**",
       "src/main.cpp",

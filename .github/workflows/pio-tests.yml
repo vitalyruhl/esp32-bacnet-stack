@@ -31,6 +31,12 @@ jobs:
       - name: Run cppcheck governance gate
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File tools/run-cppcheck.ps1
 
+      - name: Pack and validate PlatformIO package content
+        run: |
+          mkdir -p .Temp/package-ci
+          pio pkg pack . -o .Temp/package-ci
+          python tools/release/check-package-content.py .Temp/package-ci/ESP32BACnetStack-0.35.0.tar.gz --version 0.35.0
+
       - name: Build root project
         run: pio run -e usb
 
