@@ -7,6 +7,8 @@
 #include <ConfigManager.h>
 #include <WiFiUdp.h>
 
+#include <cstdio>
+
 #include "core/CoreSettings.h"
 #include "core/CoreWiFiServices.h"
 #include "portable/BacnetAnalogValueLimits.h"
@@ -97,11 +99,13 @@ uint32_t configuredDeviceInstance = 0;
 uint32_t configuredAvBase = 0;
 uint16_t configuredPort = 0;
 uint8_t configuredBmeAddress = 0;
+char liveValueLabels[4][32] = {};
 
 void onWiFiConnected();
 void onWiFiDisconnected();
 void onWiFiAPMode();
 static void setupNetworkDefaults();
+static void setupRuntimeUI();
 
 float dewPointCelsius(float temperature, float humidity) {
   if (!isfinite(temperature) || !isfinite(humidity) || humidity <= 0.0F || humidity > 100.0F)
@@ -193,6 +197,37 @@ void configureBacnetAndSensor() {
   Serial.println(configuredAvBase + 3U);
 }
 
+static void setupRuntimeUI() {
+  std::snprintf(liveValueLabels[0], sizeof(liveValueLabels[0]), "Temperature (AV%lu)", static_cast<unsigned long>(values[0].instance));
+  std::snprintf(liveValueLabels[1], sizeof(liveValueLabels[1]), "Relative Humidity (AV%lu)", static_cast<unsigned long>(values[1].instance));
+  std::snprintf(liveValueLabels[2], sizeof(liveValueLabels[2]), "Pressure (AV%lu)", static_cast<unsigned long>(values[2].instance));
+  std::snprintf(liveValueLabels[3], sizeof(liveValueLabels[3]), "Dew Point (AV%lu)", static_cast<unsigned long>(values[3].instance));
+
+  auto live = ConfigManager.liveGroup("bme280Bacnet")
+                .page("Sensors", 10)
+                .card("BME280 BACnet Values");
+  live.value("temperature", []() { return values[0].presentValue; })
+    .label(liveValueLabels[0])
+    .unit("°C")
+    .precision(3)
+    .order(10);
+  live.value("humidity", []() { return values[1].presentValue; })
+    .label(liveValueLabels[1])
+    .unit("%RH")
+    .precision(3)
+    .order(20);
+  live.value("pressure", []() { return values[2].presentValue; })
+    .label(liveValueLabels[2])
+    .unit("Pa")
+    .precision(1)
+    .order(30);
+  live.value("dewPoint", []() { return values[3].presentValue; })
+    .label(liveValueLabels[3])
+    .unit("°C")
+    .precision(3)
+    .order(40);
+}
+
 void startBacnetWhenConnected() {
   if (bacnetBound || !bacnetConfigured)
     return;
@@ -219,6 +254,7 @@ void setup() {
   Serial.println("[I] Persisted settings loaded");
   setupNetworkDefaults();
   configureBacnetAndSensor();
+  setupRuntimeUI();
 #if defined(WIFI_FILTER_MAC_PRIORITY)
   ConfigManager.setAccessPointMacPriority(WIFI_FILTER_MAC_PRIORITY);
 #endif

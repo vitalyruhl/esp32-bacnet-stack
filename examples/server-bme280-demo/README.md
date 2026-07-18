@@ -52,6 +52,11 @@ Description, Units, Min/Max Present Value, Resolution, Status Flags, Event
 State, Out Of Service, Reliability, and Property List. Min/Max are technical
 measurement/display bounds, not warning or error thresholds.
 
+The ConfigManager `Sensors` page contains a `BME280 BACnet Values` live card.
+Its four labels include the configured AV instances and read the same retained
+`Present_Value` storage as BACnet; temperature and dew point use `°C`, relative
+humidity `%RH`, and pressure `Pa` without a separate sensor read or conversion.
+
 The dew point uses the Magnus approximation with `a=17.62` and `b=243.12 °C`.
 Non-finite values and humidity outside `(0, 100]` are rejected.
 
