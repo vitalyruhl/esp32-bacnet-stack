@@ -83,6 +83,7 @@ bool bacnetNativeParseProperty(const char* text, BacnetPropertyId& property) {
     {"status-flags", BacnetPropertyId::StatusFlags}, {"statusFlags", BacnetPropertyId::StatusFlags}, {"event-state", BacnetPropertyId::EventState},
     {"reliability", BacnetPropertyId::Reliability}, {"out-of-service", BacnetPropertyId::OutOfService}, {"outOfService", BacnetPropertyId::OutOfService},
     {"priority-array", BacnetPropertyId::PriorityArray}, {"priorityArray", BacnetPropertyId::PriorityArray},
+    {"units", BacnetPropertyId::Units},
     {"vendor-name", BacnetPropertyId::VendorName}, {"vendorName", BacnetPropertyId::VendorName},
     {"vendor-id", BacnetPropertyId::VendorIdentifier}, {"vendorIdentifier", BacnetPropertyId::VendorIdentifier},
     {"model-name", BacnetPropertyId::ModelName}, {"modelName", BacnetPropertyId::ModelName},
