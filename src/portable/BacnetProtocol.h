@@ -21,6 +21,35 @@ public:
     const uint8_t* buffer,
     size_t length,
     BacnetConfirmedRequestHeader& header);
+  static BacnetReadPropertyRequestParseStatus parseReadPropertyRequest(
+    const uint8_t* buffer,
+    size_t length,
+    BacnetReadPropertyRequestHeader& request);
+  static size_t buildReadPropertyAck(uint8_t* buffer,
+                                     size_t bufferSize,
+                                     const BacnetReadPropertyRequestHeader& request,
+                                     const BacnetValue& value);
+  static size_t buildReadPropertyError(uint8_t* buffer,
+                                       size_t bufferSize,
+                                       uint8_t invokeId,
+                                       uint32_t errorClass,
+                                       uint32_t errorCode);
+  static size_t buildReadPropertyObjectListAck(
+    uint8_t* buffer,
+    size_t bufferSize,
+    const BacnetReadPropertyRequestHeader& request,
+    const BacnetObjectId* objects,
+    size_t objectCount);
+  static size_t buildReadPropertyPropertyListAck(
+    uint8_t* buffer,
+    size_t bufferSize,
+    const BacnetReadPropertyRequestHeader& request,
+    const BacnetPropertyId* properties,
+    size_t propertyCount);
+  static size_t buildReadPropertyEmptyListAck(
+    uint8_t* buffer,
+    size_t bufferSize,
+    const BacnetReadPropertyRequestHeader& request);
   static size_t buildIAmResponse(uint8_t* buffer,
                                  size_t bufferSize,
                                  const BacnetIAmDeviceInfo& device);
