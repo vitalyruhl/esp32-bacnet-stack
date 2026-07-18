@@ -3,8 +3,8 @@
 This minimal server-role placeholder preserves its existing `usb` build and
 adds an `eth` environment for the WT32-ETH01 V1.4. The Ethernet build brings up
 the LAN8720 interface and prints its wired IP before starting the existing
-server role. The server role itself is still a placeholder and does not yet
-implement a complete BACnet server runtime.
+server role. The example still has no transport binding for the portable server
+runtime, so it is not a usable BACnet/IP server demonstration.
 
 ```sh
 pio run -d examples/server-demo -e usb

@@ -25,6 +25,21 @@ struct BacnetServerDevice {
   uint8_t segmentationSupported = 3;
 };
 
+using BacnetServerAnalogValueProvider = float (*)(void* context);
+
+// Caller-owned Analog Value configuration. The server borrows this array and
+// does not allocate an object database. A provider is polled only while
+// encoding Present_Value; a null provider exposes the stored presentValue.
+struct BacnetServerAnalogValue {
+  uint32_t instance = 0;
+  const char* objectName = nullptr;
+  float presentValue = 0.0F;
+  uint32_t units = 0;
+  bool outOfService = false;
+  BacnetServerAnalogValueProvider presentValueProvider = nullptr;
+  void* presentValueContext = nullptr;
+};
+
 enum class BacnetServerPollResult : uint8_t {
   NotRunning,
   NoDatagram,
@@ -59,6 +74,12 @@ public:
   bool begin(uint32_t deviceInstanceValue, uint16_t portValue = kDefaultPort);
   void end();
 
+  // The caller keeps the array and all referenced strings alive while the
+  // server is running. Passing nullptr with zero entries unregisters all AVs.
+  bool setAnalogValues(BacnetServerAnalogValue* analogValues,
+                       size_t count);
+  size_t analogValueCount() const;
+
   bool isRunning() const;
   const BacnetServerDevice& device() const;
   uint32_t deviceInstance() const;
@@ -72,9 +93,18 @@ private:
     const BacnetIpEndpoint& source,
     const BacnetReadPropertyRequestHeader& request);
   bool readDeviceProperty(BacnetPropertyId property, BacnetValue& value) const;
+  static bool readAnalogValueProperty(const BacnetServerAnalogValue& analogValue,
+                                      BacnetPropertyId property,
+                                      BacnetValue& value);
+  const BacnetServerAnalogValue* findAnalogValue(uint32_t instance) const;
+  static bool objectListEntry(const void* context,
+                              size_t index,
+                              BacnetObjectId& object);
 
   BacnetDatagramTransport* transport_ = nullptr; // Non-owning.
   bool running_ = false;
   BacnetServerDevice device_;
   uint16_t port_ = kDefaultPort;
+  BacnetServerAnalogValue* analogValues_ = nullptr; // Caller-owned.
+  size_t analogValueCount_ = 0;
 };
