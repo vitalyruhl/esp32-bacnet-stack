@@ -42,6 +42,8 @@ constexpr float kStoredValueOffset = 20.0F;
 constexpr float kStoredValueAmplitude = 10.0F;
 constexpr float kStoredValuePeriodMs = 60000.0F;
 constexpr float kTwoPi = 6.28318530718F;
+constexpr uint32_t kPercentUnits = 98;
+constexpr uint32_t kSecondsUnits = 73;
 
 struct PollingDemoState {
   uint32_t startedAtMs = 0;
@@ -53,8 +55,8 @@ BacnetServer bacnetServer(bacnetTransport);
 PollingDemoState pollingDemo;
 
 BacnetServerAnalogValue analogValues[] = {
-  {200, "AV200 Stored Sine", kStoredValueOffset, 62, false, nullptr, nullptr},
-  {201, "AV201 Polling Uptime", 0.0F, 73, false, nullptr, &pollingDemo},
+  {200, "AV200 Stored Sine", kStoredValueOffset, kPercentUnits, false, nullptr, nullptr},
+  {201, "AV201 Polling Uptime", 0.0F, kSecondsUnits, false, nullptr, &pollingDemo},
 };
 
 const BacnetServerDevice kDevice{

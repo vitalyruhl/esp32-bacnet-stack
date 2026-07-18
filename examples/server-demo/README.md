@@ -8,7 +8,7 @@ BACnet object configuration is shared.
 
 The demo listens on BACnet/IP UDP port `47808` and exposes Device `1682127`:
 
-- AV200 is a stored sine value in degrees Celsius. It uses offset `20`,
+- AV200 is a stored sine value in percent. It uses offset `20`,
   amplitude `10`, period `60 s`, and is updated at most every `250 ms` through
   the normal server object model.
 - AV201 is a polling/callback value in seconds. Its provider returns elapsed
