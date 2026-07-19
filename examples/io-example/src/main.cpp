@@ -9,6 +9,7 @@
 #include <WiFiUdp.h>
 
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 
 #include <ArduinoBacnetServer.h>
@@ -23,7 +24,7 @@ namespace {
 
 constexpr char kAppName[] = "ESP32 BACnet I/O Server";
 constexpr char kVersion[] = "0.36.0";
-constexpr uint16_t kVendorId = 0;
+constexpr uint16_t kDevelopmentVendorId = 0;
 constexpr uint32_t kDeviceInstanceDefault = 1682127;
 constexpr int kDs18b20DefaultGpio = 18;
 constexpr uint32_t kInputPollMs = 250;
@@ -33,6 +34,7 @@ constexpr uint32_t kRecentActivityMs = 60000;
 struct Settings {
   Config<int>* deviceInstance = nullptr;
   Config<int>* udpPort = nullptr;
+  Config<int>* vendorId = nullptr;
   Config<bool>* dsEnabled = nullptr;
   Config<int>* dsGpio = nullptr;
 
@@ -47,6 +49,11 @@ struct Settings {
                  .category("BACnet")
                  .defaultValue(BacnetServer::kDefaultPort)
                  .build();
+    vendorId = &ConfigManager.addSettingInt("bacnetVendorId")
+                  .name("BACnet Vendor ID (restart required)")
+                  .category("BACnet")
+                  .defaultValue(kDevelopmentVendorId)
+                  .build();
     dsEnabled = &ConfigManager.addSettingBool("dsEnabled")
                    .name("DS18B20 Enabled (restart required)")
                    .category("DS18B20")
@@ -80,6 +87,19 @@ struct BacnetActivityState {
   char peerText[32] = "No recent BACnet activity";
 };
 
+struct CovLiveState {
+  char peer[32] = "No active subscriptions";
+  char object[32] = "None";
+  char property[32] = "None";
+  char mode[24] = "None";
+  char state[24] = "Inactive";
+  uint32_t processId = 0;
+  uint32_t lifetimeSeconds = 0;
+  uint32_t lastSentMs = 0;
+  uint32_t lastAckMs = 0;
+  size_t count = 0;
+};
+
 Settings settings;
 cm::IOManager ioManager;
 cm::CoreSettings& coreSettings = cm::CoreSettings::instance();
@@ -87,6 +107,7 @@ cm::CoreWiFiServices wifiServices;
 WiFiUDP udp;
 ArduinoUdpDatagramTransport transport(udp);
 BacnetServer bacnetServer(transport);
+ArduinoMonotonicClock bacnetClock;
 OneWire oneWire(kDs18b20DefaultGpio);
 DallasTemperature ds18b20(&oneWire);
 
@@ -129,12 +150,14 @@ ObjectActivity setButtonActivity;
 ObjectActivity led1Activity;
 ObjectActivity led2Activity;
 BacnetActivityState bacnetActivity;
+CovLiveState covLive;
 
 bool dsConfigured = false;
 bool bacnetConfigured = false;
 bool bacnetBound = false;
 uint32_t deviceInstance = kDeviceInstanceDefault;
 uint16_t udpPort = BacnetServer::kDefaultPort;
+uint16_t vendorId = kDevelopmentVendorId;
 uint32_t lastInputPollMs = 0;
 uint32_t lastDsReadMs = 0;
 
@@ -179,9 +202,61 @@ const char* propertyText(BacnetPropertyId property) {
       return "Property_List";
     case BacnetPropertyId::PriorityArray:
       return "Priority_Array";
+    case BacnetPropertyId::StatusFlags:
+      return "Status_Flags";
+    case BacnetPropertyId::Reliability:
+      return "Reliability";
+    case BacnetPropertyId::OutOfService:
+      return "Out_Of_Service";
     default:
       return "Other property";
   }
+}
+
+const char* covStateText(BacnetServerCovSubscriptionState state) {
+  switch (state) {
+    case BacnetServerCovSubscriptionState::Active:
+      return "Active";
+    case BacnetServerCovSubscriptionState::AwaitingConfirmedAck:
+      return "Pending ACK";
+    default:
+      return "Inactive";
+  }
+}
+
+const char* objectText(BacnetObjectId object);
+
+void refreshCovLiveState() {
+  covLive.count = bacnetServer.covSubscriptionCount();
+  if (covLive.count == 0) {
+    std::snprintf(covLive.peer, sizeof(covLive.peer), "%s", "No active subscriptions");
+    std::snprintf(covLive.object, sizeof(covLive.object), "%s", "None");
+    std::snprintf(covLive.property, sizeof(covLive.property), "%s", "None");
+    std::snprintf(covLive.mode, sizeof(covLive.mode), "%s", "None");
+    std::snprintf(covLive.state, sizeof(covLive.state), "%s", "Inactive");
+    covLive.processId = 0;
+    covLive.lifetimeSeconds = 0;
+    covLive.lastSentMs = 0;
+    covLive.lastAckMs = 0;
+    return;
+  }
+  BacnetServerCovSubscription subscription;
+  if (!bacnetServer.covSubscriptionAt(0, subscription)) {
+    return;
+  }
+  std::snprintf(covLive.peer, sizeof(covLive.peer), "%u.%u.%u.%u:%u",
+                subscription.peer.address[0], subscription.peer.address[1],
+                subscription.peer.address[2], subscription.peer.address[3],
+                subscription.peer.port);
+  std::snprintf(covLive.object, sizeof(covLive.object), "%s", objectText(subscription.object));
+  std::snprintf(covLive.property, sizeof(covLive.property), "%s", propertyText(subscription.property));
+  std::snprintf(covLive.mode, sizeof(covLive.mode), "%s",
+                subscription.confirmed ? "Confirmed" : "Unconfirmed");
+  std::snprintf(covLive.state, sizeof(covLive.state), "%s", covStateText(subscription.state));
+  covLive.processId = subscription.processId;
+  covLive.lifetimeSeconds = subscription.lifetimeSeconds;
+  covLive.lastSentMs = subscription.lastSentMs;
+  covLive.lastAckMs = subscription.lastAckMs;
 }
 
 const char* objectText(BacnetObjectId object) {
@@ -354,18 +429,18 @@ void registerIoBindings() {
   ioManager.addAnalogInputToLive("ldr_s", 11, "Live I/O", "Hardware Inputs", "LDR", "Light Sensor raw", true);
 
   ioManager.addDigitalInput("reset", "Reset Button", 14, true, true, false, true);
-  ioManager.addDigitalInputToSettingsGroup("reset", "I/O", "Digital Inputs", "Reset Button", 20);
-  ioManager.addDigitalInputToLive("reset", 20, "Live I/O", "Hardware Inputs", "Buttons", "Reset Button", false);
+  ioManager.addDigitalInputToSettingsGroup("reset", "I/O", "Digital Inputs", "Reset Button", 14);
+  ioManager.addDigitalInputToLive("reset", 14, "Live I/O", "Hardware Inputs", "Buttons", "Reset Button", false);
   ioManager.addDigitalInput("mid", "Mid Button", 33, true, true, false, true);
   ioManager.addDigitalInputToSettingsGroup("mid", "I/O", "Digital Inputs", "Mid Button", 30);
   ioManager.addDigitalInputToLive("mid", 30, "Live I/O", "Hardware Inputs", "Buttons", "Mid Button", false);
-  ioManager.addDigitalInput("set", "Set Button", 4, true, true, false, true);
-  ioManager.addDigitalInputToSettingsGroup("set", "I/O", "Digital Inputs", "Set Button", 40);
-  ioManager.addDigitalInputToLive("set", 40, "Live I/O", "Hardware Inputs", "Buttons", "Set Button", false);
+  ioManager.addDigitalInput("set", "Set Button", 19, true, true, false, true);
+  ioManager.addDigitalInputToSettingsGroup("set", "I/O", "Digital Inputs", "Set Button", 19);
+  ioManager.addDigitalInputToLive("set", 19, "Live I/O", "Hardware Inputs", "Buttons", "Set Button", false);
 
-  ioManager.addDigitalOutput("led1", "LED 1", 25, false, true);
+  ioManager.addDigitalOutput("led1", "LED 1 Red", 25, false, true);
   ioManager.addDigitalOutputToSettingsGroup("led1", "I/O", "Digital Outputs", "LED 1", 50);
-  ioManager.addDigitalOutput("led2", "LED 2", 26, false, true);
+  ioManager.addDigitalOutput("led2", "LED 2 Yellow", 26, false, true);
   ioManager.addDigitalOutputToSettingsGroup("led2", "I/O", "Digital Outputs", "LED 2", 60);
 }
 
@@ -392,6 +467,7 @@ void configureBacnetObjects() {
   registerSetButton();
   registerLed1();
   registerLed2();
+  bacnetServer.setClock(&bacnetClock);
   bacnetServer.setActivityListener(observeBacnetActivity);
 }
 
@@ -517,9 +593,18 @@ void setupRuntimeUi() {
     .unit("s ago")
     .precision(0)
     .order(60);
-  activityLive.value("cov", []() { return "Server-side COV not supported"; })
-    .label("COV")
+  activityLive.value("covCount", []() { return static_cast<uint32_t>(covLive.count); })
+    .label("Active COV subscriptions")
     .order(70);
+  activityLive.value("covPeer", []() { return covLive.peer; }).label("COV client").order(80);
+  activityLive.value("covProcess", []() { return covLive.processId; }).label("COV process ID").order(90);
+  activityLive.value("covObject", []() { return covLive.object; }).label("COV object").order(100);
+  activityLive.value("covProperty", []() { return covLive.property; }).label("COV property").order(110);
+  activityLive.value("covMode", []() { return covLive.mode; }).label("COV mode").order(120);
+  activityLive.value("covState", []() { return covLive.state; }).label("COV state").order(130);
+  activityLive.value("covLifetime", []() { return covLive.lifetimeSeconds; }).label("COV lifetime").unit("s").order(140);
+  activityLive.value("covLastSent", []() { return activityAgeSeconds(covLive.lastSentMs); }).label("COV last sent").unit("s ago").precision(0).order(150);
+  activityLive.value("covLastAck", []() { return activityAgeSeconds(covLive.lastAckMs); }).label("COV last ACK").unit("s ago").precision(0).order(160);
 
   auto pointLive = ConfigManager.liveGroup("bacnetActivity")
                      .page("BACnet", 20)
@@ -538,7 +623,7 @@ void startBacnetWhenConnected() {
   if (bacnetBound || !bacnetConfigured) {
     return;
   }
-  const BacnetServerDevice device{deviceInstance, kVendorId, "ESP32 I/O BACnet Server", "Unregistered BACnet Test Server", "ESP32 I/O Server", kVersion, nullptr};
+  const BacnetServerDevice device{deviceInstance, vendorId, "ESP32 I/O BACnet Server", "Unregistered BACnet Test Server", "ESP32 I/O Server", kVersion, nullptr};
   bacnetBound = bacnetServer.begin(device, udpPort);
   Serial.println(bacnetBound ? "[I] BACnet server online" : "[E] BACnet UDP bind failed");
 }
@@ -570,10 +655,15 @@ void setup() {
   ioManager.set("led2", false);
   deviceInstance = static_cast<uint32_t>(settings.deviceInstance->get());
   udpPort = static_cast<uint16_t>(settings.udpPort->get());
-  if (deviceInstance > 0x003FFFFFU || udpPort == 0) {
+  const int configuredVendorId = settings.vendorId->get();
+  if (deviceInstance > 0x003FFFFFU || udpPort == 0 || configuredVendorId < 0 ||
+      configuredVendorId > UINT16_MAX) {
     Serial.println("[E] Invalid BACnet startup settings; using defaults");
     deviceInstance = kDeviceInstanceDefault;
     udpPort = BacnetServer::kDefaultPort;
+    vendorId = kDevelopmentVendorId;
+  } else {
+    vendorId = static_cast<uint16_t>(configuredVendorId);
   }
   configureDs18b20();
   configureBacnetObjects();
@@ -593,6 +683,7 @@ void loop() {
   if (bacnetBound) {
     static_cast<void>(bacnetServer.poll());
   }
+  refreshCovLiveState();
 }
 
 void onWiFiConnected() {

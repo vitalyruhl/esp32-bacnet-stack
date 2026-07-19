@@ -36,6 +36,10 @@ add_executable(server_object_api_tests server_object_api_tests.cpp)
 target_compile_features(server_object_api_tests PRIVATE cxx_std_17)
 target_link_libraries(server_object_api_tests PRIVATE bacnet_portable bacnet_server)
 
+add_executable(server_cov_tests server_cov_tests.cpp)
+target_compile_features(server_cov_tests PRIVATE cxx_std_17)
+target_link_libraries(server_cov_tests PRIVATE bacnet_portable bacnet_server)
+
 add_executable(io_example_input_tests io_example_input_tests.cpp)
 target_compile_features(io_example_input_tests PRIVATE cxx_std_17)
 target_include_directories(io_example_input_tests PRIVATE
@@ -45,6 +49,7 @@ if(BUILD_TESTING)
   add_test(NAME portable_smoke COMMAND portable_smoke)
   add_test(NAME server_analog_value_tests COMMAND server_analog_value_tests)
   add_test(NAME server_object_api_tests COMMAND server_object_api_tests)
+  add_test(NAME server_cov_tests COMMAND server_cov_tests)
   add_test(NAME io_example_input_tests COMMAND io_example_input_tests)
 endif()
 

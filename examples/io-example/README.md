@@ -56,9 +56,13 @@ deadband, reliability, and intrinsic-reporting features.
 | Binary Output | 1 | LED 2 | IOManager digital output | — |
 
 AI and BI Present_Value is read-only. BO Present_Value remains commandable:
-writes use BACnet priorities 1 through 16, `NULL` relinquishes an individual
-slot, and the IOManager output follows the effective value. Priority_Array is
-read-only.
+writes without a requested priority use the server default (16 unless changed),
+`NULL` relinquishes the selected 1..16 slot, and an explicit priority always
+wins. A configured priority of `0` updates Relinquish_Default without
+overriding an active slot. `BacnetBinaryOutput::setWritePriority()` changes the
+default for that commandable object; `BacnetServer::setDefaultWritePriority()`
+changes the server fallback. The IOManager output follows only an effective
+value change. Priority_Array is read-only.
 
 ## IOManager bindings and Live I/O
 
@@ -89,13 +93,25 @@ I/O manager or pin database.
 
 The ConfigManager Live UI adds a separate BACnet card with commandable LED
 state and effective priority, and a BACnet activity card with last peer,
-service, object, property, age, and bounded object read/write counters. Those
-diagnostics are RAM-only and are not BACnet properties or persistent settings.
+service, object, property, age, bounded object read/write counters, and the
+first active COV subscription (client endpoint, process ID, object/property,
+notification mode, lifetime, state, last send, and last acknowledgement).
+Those diagnostics are RAM-only and are not BACnet properties or persistent
+settings.
 
 BACnet/IP is UDP-based: the UI reports `Recent BACnet activity` or `No recent
 BACnet activity`, never a false connected/disconnected client state. The server
-does not currently implement incoming SubscribeCOV subscriptions, so the UI
-explicitly reports `Server-side COV not supported`.
+accepts a fixed, allocation-free table of eight incoming SubscribeCOV and
+SubscribeCOVProperty subscriptions. The supported monitored properties are
+Present_Value, Status_Flags, Reliability when exposed by the object, and
+Out_Of_Service. Subscriptions notify initially and on change, expire or cancel
+through their requested lifetime, and support confirmed notifications with a
+non-blocking acknowledgement wait.
+
+The example keeps Vendor ID `0` as an explicit development configuration. Set
+`BACnet Vendor ID (restart required)` to the legitimately assigned Vendor ID of
+the responsible product provider before interoperating as a product. The same
+configured value is used by both I-Am and Device Vendor_Identifier.
 
 ## Build and HIL
 

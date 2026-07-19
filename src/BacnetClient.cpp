@@ -122,8 +122,18 @@ bool BacnetClient::pollCovNotification(BacnetCovNotification& notification) {
   uint8_t packet[kMaxDiscoveryPacketSize] = {};
   BacnetIpEndpoint source;
   const size_t bytesRead = transport_->receive(packet, sizeof(packet), source);
-  return bytesRead != 0 && BacnetProtocol::parseCovNotification(
-                             packet, bytesRead, notification);
+  if (bytesRead == 0 || !BacnetProtocol::parseCovNotification(packet, bytesRead, notification)) {
+    return false;
+  }
+  if (notification.confirmed) {
+    uint8_t acknowledgement[16] = {};
+    const size_t acknowledgementSize = BacnetProtocol::buildSimpleAckResponse(
+      acknowledgement, sizeof(acknowledgement), notification.invokeId, 0x01U);
+    if (acknowledgementSize == 0 || !transport_->send(source, acknowledgement, acknowledgementSize)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 bool BacnetClient::pollIAm(BacnetIAmDevice& device) {

@@ -617,6 +617,15 @@ void BacnetBinaryOutput::setRelinquishDefault(bool value) {
   priority.relinquishDefault = value;
 }
 
+bool BacnetBinaryOutput::setWritePriority(uint8_t value) {
+  if (value > BacnetCommandPriority<bool>::kSlotCount) {
+    return false;
+  }
+  writePriority = value;
+  hasWritePriority = true;
+  return true;
+}
+
 void BacnetBinaryOutput::attachOutput(BacnetServerBinaryOutputApply outputApply,
                                       void* context) {
   apply = outputApply;
@@ -678,6 +687,11 @@ bool BacnetServer::begin(const BacnetServerDevice& configuredDevice,
 
   device_ = configuredDevice;
   port_ = localPort;
+  for (size_t index = 0; index < kMaxCovSubscriptions; ++index) {
+    covSubscriptions_[index] = BacnetServerCovSubscription{};
+    covSnapshotValid_[index] = false;
+    covConfirmedRetryCounts_[index] = 0;
+  }
   running_ = true;
   return true;
 }
@@ -693,6 +707,11 @@ void BacnetServer::end() {
     transport_->end();
   }
   running_ = false;
+  for (size_t index = 0; index < kMaxCovSubscriptions; ++index) {
+    covSubscriptions_[index] = BacnetServerCovSubscription{};
+    covSnapshotValid_[index] = false;
+    covConfirmedRetryCounts_[index] = 0;
+  }
 }
 
 bool BacnetServer::setAnalogValues(BacnetServerAnalogValue* analogValues,
@@ -953,6 +972,58 @@ uint16_t BacnetServer::port() const {
   return port_;
 }
 
+bool BacnetServer::setDefaultWritePriority(uint8_t priority) {
+  if (priority > BacnetCommandPriority<bool>::kSlotCount) {
+    return false;
+  }
+  defaultWritePriority_ = priority;
+  return true;
+}
+
+uint8_t BacnetServer::defaultWritePriority() const {
+  return defaultWritePriority_;
+}
+
+void BacnetServer::setClock(const BacnetMonotonicClock* clock) {
+  clock_ = clock;
+}
+
+size_t BacnetServer::covSubscriptionCount() const {
+  size_t count = 0;
+  for (const BacnetServerCovSubscription& subscription : covSubscriptions_) {
+    if (subscription.state != BacnetServerCovSubscriptionState::Inactive) {
+      ++count;
+    }
+  }
+  return count;
+}
+
+bool BacnetServer::covSubscriptionAt(size_t index,
+                                     BacnetServerCovSubscription& subscription) const {
+  size_t current = 0;
+  for (const BacnetServerCovSubscription& candidate : covSubscriptions_) {
+    if (candidate.state == BacnetServerCovSubscriptionState::Inactive) {
+      continue;
+    }
+    if (current++ == index) {
+      subscription = candidate;
+      return true;
+    }
+  }
+  return false;
+}
+
+uint32_t BacnetServer::nowMs() const {
+  return clock_ == nullptr ? 0U : clock_->nowMs();
+}
+
+bool BacnetServer::endpointEquals(const BacnetIpEndpoint& left,
+                                  const BacnetIpEndpoint& right) const {
+  return left.port == right.port &&
+         left.address[0] == right.address[0] && left.address[1] == right.address[1] &&
+         left.address[2] == right.address[2] && left.address[3] == right.address[3];
+}
+
 void BacnetServer::setActivityListener(BacnetServerActivityListener listener,
                                        void* context) {
   activityListener_ = listener;
@@ -968,10 +1039,33 @@ BacnetServerPollResult BacnetServer::poll() {
   BacnetIpEndpoint source;
   const size_t bytesRead = transport_->receive(packet, sizeof(packet), source);
   if (bytesRead == 0) {
-    return BacnetServerPollResult::NoDatagram;
+    return processCovSubscriptions();
   }
   if (bytesRead > sizeof(packet)) {
     return BacnetServerPollResult::Malformed;
+  }
+
+  for (BacnetServerCovSubscription& subscription : covSubscriptions_) {
+    if (subscription.state != BacnetServerCovSubscriptionState::AwaitingConfirmedAck ||
+        !endpointEquals(subscription.peer, source)) {
+      continue;
+    }
+    const BacnetSubscribeCovResponseKind response =
+      BacnetProtocol::classifyConfirmedCovNotificationResponse(
+        packet, bytesRead, subscription.pendingInvokeId);
+    if (response == BacnetSubscribeCovResponseKind::Ack) {
+      subscription.state = BacnetServerCovSubscriptionState::Active;
+      subscription.lastAckMs = nowMs();
+      covConfirmedRetryCounts_[static_cast<size_t>(&subscription - covSubscriptions_)] = 0;
+      return BacnetServerPollResult::Ignored;
+    }
+    if (response == BacnetSubscribeCovResponseKind::Error ||
+        response == BacnetSubscribeCovResponseKind::Reject ||
+        response == BacnetSubscribeCovResponseKind::Abort) {
+      subscription.state = BacnetServerCovSubscriptionState::Active;
+      covConfirmedRetryCounts_[static_cast<size_t>(&subscription - covSubscriptions_)] = 0;
+      return BacnetServerPollResult::Ignored;
+    }
   }
 
   BacnetWhoIsRequest whoIs;
@@ -1030,6 +1124,17 @@ BacnetServerPollResult BacnetServer::poll() {
                                                   });
     }
     return handleWriteProperty(source, writeProperty);
+  }
+
+  BacnetSubscribeCovRequestHeader subscribeCov;
+  const auto subscribeStatus = BacnetProtocol::parseSubscribeCovRequest(
+    packet, bytesRead, subscribeCov);
+  if (subscribeStatus == BacnetSubscribeCovRequestParseStatus::Malformed) {
+    return BacnetServerPollResult::Malformed;
+  }
+  if (subscribeStatus == BacnetSubscribeCovRequestParseStatus::SubscribeCov ||
+      subscribeStatus == BacnetSubscribeCovRequestParseStatus::SubscribeCovProperty) {
+    return handleSubscribeCov(source, subscribeCov);
   }
 
   return sendReject(source, confirmedRequest.invokeId)
@@ -1185,21 +1290,39 @@ BacnetServerPollResult BacnetServer::handleWriteProperty(
     errorClass = 2;
     errorCode = 42;
   } else if (request.request.property == BacnetPropertyId::PresentValue) {
-    const uint8_t priority = request.hasPriority ? request.priority : 16U;
+    const uint8_t priority = request.hasPriority
+                               ? request.priority
+                               : (output->hasWritePriority ? output->writePriority
+                                                            : defaultWritePriority_);
     const bool relinquish = request.value.type == BacnetValueType::Null;
     const bool validValue = relinquish ||
                             (request.value.type == BacnetValueType::Enumerated && request.value.unsignedValue <= 1U);
-    if (priority == 0 || priority > BacnetCommandPriority<bool>::kSlotCount) {
+    if (priority > BacnetCommandPriority<bool>::kSlotCount) {
       errorClass = 2;
       errorCode = 37; // value-out-of-range
     } else if (!validValue) {
       errorClass = 2;
       errorCode = 9; // invalid-data-type
-    } else if (!output->priority.write(priority, relinquish, request.value.unsignedValue == 1U)) {
+    } else if (priority == 0 && relinquish) {
       errorClass = 2;
-      errorCode = 37;
-    } else if (output->apply != nullptr) {
-      output->apply(output->applyContext, output->priority.effectiveValue(), output->outOfService);
+      errorCode = 9; // invalid-data-type
+    } else {
+      const bool previousEffectiveValue = output->priority.effectiveValue();
+      bool writeSucceeded = true;
+      if (priority == 0) {
+        output->priority.relinquishDefault = request.value.unsignedValue == 1U;
+      } else {
+        writeSucceeded = output->priority.write(priority,
+                                                 relinquish,
+                                                 request.value.unsignedValue == 1U);
+      }
+      if (!writeSucceeded) {
+        errorClass = 2;
+        errorCode = 37;
+      } else if (output->apply != nullptr &&
+                 previousEffectiveValue != output->priority.effectiveValue()) {
+        output->apply(output->applyContext, output->priority.effectiveValue(), output->outOfService);
+      }
     }
   } else if (request.request.property == BacnetPropertyId::OutOfService) {
     if (request.hasPriority || request.value.type != BacnetValueType::Boolean) {
@@ -1224,6 +1347,232 @@ BacnetServerPollResult BacnetServer::handleWriteProperty(
     return BacnetServerPollResult::SendFailed;
   return errorCode == 0 ? BacnetServerPollResult::WritePropertyAckSent
                         : BacnetServerPollResult::WritePropertyErrorSent;
+}
+
+bool BacnetServer::readCovValue(BacnetObjectId object,
+                                BacnetPropertyId property,
+                                uint32_t arrayIndex,
+                                BacnetValue& value) const {
+  if (arrayIndex != kBacnetNoArrayIndex) {
+    return false;
+  }
+  if (object.type == static_cast<uint16_t>(BacnetObjectType::AnalogValue)) {
+    const BacnetServerAnalogValue* input = findAnalogValue(object.instance);
+    return input != nullptr && readAnalogValueProperty(*input, property, value);
+  }
+  if (object.type == static_cast<uint16_t>(BacnetObjectType::AnalogInput)) {
+    const BacnetServerAnalogInput* input = findAnalogInput(object.instance);
+    return input != nullptr && readAnalogInputProperty(*input, property, value);
+  }
+  if (object.type == static_cast<uint16_t>(BacnetObjectType::BinaryInput)) {
+    const BacnetServerBinaryInput* input = findBinaryInput(object.instance);
+    return input != nullptr && readBinaryInputProperty(*input, property, value);
+  }
+  if (object.type == static_cast<uint16_t>(BacnetObjectType::BinaryOutput)) {
+    BacnetServerBinaryOutput* output = findBinaryOutput(object.instance);
+    return output != nullptr && readBinaryOutputProperty(*output, property, value);
+  }
+  return false;
+}
+
+bool BacnetServer::covValueChanged(const BacnetServerCovSubscription& subscription,
+                                   const BacnetValue& value) const {
+  const size_t index = static_cast<size_t>(&subscription - covSubscriptions_);
+  if (index >= kMaxCovSubscriptions || !covSnapshotValid_[index] ||
+      covSnapshotTypes_[index] != value.type) {
+    return true;
+  }
+  switch (value.type) {
+    case BacnetValueType::Boolean:
+      return covSnapshotBoolean_[index] != value.booleanValue;
+    case BacnetValueType::Real:
+      return covSnapshotReal_[index] != value.realValue;
+    case BacnetValueType::BitString:
+      return covSnapshotBitString_[index] != value.bitStringValue ||
+             covSnapshotBitCount_[index] != value.bitStringBitCount;
+    case BacnetValueType::Unsigned:
+    case BacnetValueType::Enumerated:
+      return covSnapshotUnsigned_[index] != value.unsignedValue;
+    default:
+      return true;
+  }
+}
+
+void BacnetServer::storeCovValue(BacnetServerCovSubscription& subscription,
+                                 const BacnetValue& value) {
+  const size_t index = static_cast<size_t>(&subscription - covSubscriptions_);
+  if (index >= kMaxCovSubscriptions) {
+    return;
+  }
+  covSnapshotTypes_[index] = value.type;
+  covSnapshotBoolean_[index] = value.booleanValue;
+  covSnapshotUnsigned_[index] = value.unsignedValue;
+  covSnapshotReal_[index] = value.realValue;
+  covSnapshotBitString_[index] = value.bitStringValue;
+  covSnapshotBitCount_[index] = value.bitStringBitCount;
+  covSnapshotValid_[index] = true;
+}
+
+bool BacnetServer::sendCovNotification(BacnetServerCovSubscription& subscription,
+                                       const BacnetValue& value,
+                                       uint32_t now) {
+  BacnetCovPropertyValue propertyValue;
+  propertyValue.property = subscription.property;
+  propertyValue.arrayIndex = subscription.arrayIndex;
+  propertyValue.value = value;
+  uint8_t notification[kMaxDatagramSize] = {};
+  const uint32_t timeRemaining = subscription.lifetimeSeconds == 0U ||
+                                   clock_ == nullptr
+                                   ? 0U
+                                   : (subscription.expiresAtMs - now + 999U) / 1000U;
+  const uint8_t invokeId = subscription.confirmed ? nextCovInvokeId_++ : 0U;
+  if (nextCovInvokeId_ == 0U) {
+    nextCovInvokeId_ = 1U;
+  }
+  const size_t size = BacnetProtocol::buildCovNotification(
+    notification, sizeof(notification), subscription.processId,
+    BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::Device), device_.deviceInstance},
+    subscription.object, timeRemaining, &propertyValue, 1U,
+    subscription.confirmed, invokeId);
+  if (size == 0U || !transport_->send(subscription.peer, notification, size)) {
+    return false;
+  }
+  subscription.lastSentMs = now;
+  subscription.pendingInvokeId = invokeId;
+  subscription.state = subscription.confirmed
+                         ? BacnetServerCovSubscriptionState::AwaitingConfirmedAck
+                         : BacnetServerCovSubscriptionState::Active;
+  storeCovValue(subscription, value);
+  return true;
+}
+
+BacnetServerPollResult BacnetServer::processCovSubscriptions() {
+  const uint32_t now = nowMs();
+  for (size_t index = 0; index < kMaxCovSubscriptions; ++index) {
+    BacnetServerCovSubscription& subscription = covSubscriptions_[index];
+    if (subscription.state == BacnetServerCovSubscriptionState::Inactive) {
+      continue;
+    }
+    if (subscription.lifetimeSeconds != 0U && clock_ != nullptr &&
+        static_cast<int32_t>(now - subscription.expiresAtMs) >= 0) {
+      subscription = BacnetServerCovSubscription{};
+      covSnapshotValid_[index] = false;
+      covConfirmedRetryCounts_[index] = 0;
+      continue;
+    }
+    if (subscription.state == BacnetServerCovSubscriptionState::AwaitingConfirmedAck) {
+      if (clock_ != nullptr && now - subscription.lastSentMs >= device_.apduTimeout) {
+        if (covConfirmedRetryCounts_[index] >= device_.numberOfApduRetries) {
+          subscription.state = BacnetServerCovSubscriptionState::Active;
+          covConfirmedRetryCounts_[index] = 0;
+          continue;
+        }
+        BacnetValue retryValue;
+        retryValue.type = covSnapshotTypes_[index];
+        retryValue.booleanValue = covSnapshotBoolean_[index];
+        retryValue.unsignedValue = covSnapshotUnsigned_[index];
+        retryValue.realValue = covSnapshotReal_[index];
+        retryValue.bitStringValue = covSnapshotBitString_[index];
+        retryValue.bitStringBitCount = covSnapshotBitCount_[index];
+        ++covConfirmedRetryCounts_[index];
+        return sendCovNotification(subscription, retryValue, now)
+                 ? BacnetServerPollResult::CovNotificationSent
+                 : BacnetServerPollResult::SendFailed;
+      }
+      continue;
+    }
+    BacnetValue value;
+    if (!readCovValue(subscription.object, subscription.property,
+                      subscription.arrayIndex, value)) {
+      continue;
+    }
+    if (!covValueChanged(subscription, value)) {
+      continue;
+    }
+    covConfirmedRetryCounts_[index] = 0;
+    return sendCovNotification(subscription, value, now)
+             ? BacnetServerPollResult::CovNotificationSent
+             : BacnetServerPollResult::SendFailed;
+  }
+  return BacnetServerPollResult::NoDatagram;
+}
+
+BacnetServerPollResult BacnetServer::handleSubscribeCov(
+  const BacnetIpEndpoint& source,
+  const BacnetSubscribeCovRequestHeader& request) {
+  const uint8_t serviceChoice = request.isPropertySubscription ? 0x1CU : 0x05U;
+  const BacnetPropertyId property = request.isPropertySubscription
+                                      ? request.property
+                                      : BacnetPropertyId::PresentValue;
+  BacnetValue currentValue;
+  if (!readCovValue(request.object, property, request.arrayIndex, currentValue)) {
+    uint8_t response[kMaxDatagramSize] = {};
+    const size_t size = BacnetProtocol::buildServiceErrorResponse(
+      response, sizeof(response), request.invokeId, serviceChoice, 2U, 32U);
+    return size != 0U && transport_->send(source, response, size)
+             ? BacnetServerPollResult::SubscribeCovErrorSent
+             : BacnetServerPollResult::SendFailed;
+  }
+
+  BacnetServerCovSubscription* matched = nullptr;
+  BacnetServerCovSubscription* freeSlot = nullptr;
+  for (BacnetServerCovSubscription& subscription : covSubscriptions_) {
+    if (subscription.state == BacnetServerCovSubscriptionState::Inactive) {
+      if (freeSlot == nullptr) {
+        freeSlot = &subscription;
+      }
+      continue;
+    }
+    if (endpointEquals(subscription.peer, source) &&
+        subscription.processId == request.processId &&
+        subscription.object.type == request.object.type &&
+        subscription.object.instance == request.object.instance &&
+        subscription.isPropertySubscription == request.isPropertySubscription &&
+        subscription.property == property && subscription.arrayIndex == request.arrayIndex) {
+      matched = &subscription;
+      break;
+    }
+  }
+
+  if (request.lifetimeSeconds == 0U) {
+    if (matched != nullptr) {
+      const size_t index = static_cast<size_t>(matched - covSubscriptions_);
+      *matched = BacnetServerCovSubscription{};
+      covSnapshotValid_[index] = false;
+      covConfirmedRetryCounts_[index] = 0;
+    }
+  } else {
+    BacnetServerCovSubscription* target = matched != nullptr ? matched : freeSlot;
+    if (target == nullptr) {
+      uint8_t response[kMaxDatagramSize] = {};
+      const size_t size = BacnetProtocol::buildServiceErrorResponse(
+        response, sizeof(response), request.invokeId, serviceChoice, 2U, 18U);
+      return size != 0U && transport_->send(source, response, size)
+               ? BacnetServerPollResult::SubscribeCovErrorSent
+               : BacnetServerPollResult::SendFailed;
+    }
+    const size_t index = static_cast<size_t>(target - covSubscriptions_);
+    *target = BacnetServerCovSubscription{};
+    target->state = BacnetServerCovSubscriptionState::Active;
+    target->peer = source;
+    target->processId = request.processId;
+    target->object = request.object;
+    target->property = property;
+    target->arrayIndex = request.arrayIndex;
+    target->isPropertySubscription = request.isPropertySubscription;
+    target->confirmed = request.issueConfirmedNotifications;
+    target->lifetimeSeconds = request.lifetimeSeconds;
+    target->expiresAtMs = clock_ == nullptr ? 0U : nowMs() + request.lifetimeSeconds * 1000U;
+    covSnapshotValid_[index] = false;
+    covConfirmedRetryCounts_[index] = 0;
+  }
+
+  uint8_t response[kMaxDatagramSize] = {};
+  const size_t size = BacnetProtocol::buildSimpleAckResponse(
+    response, sizeof(response), request.invokeId, serviceChoice);
+  return size != 0U && transport_->send(source, response, size)
+           ? BacnetServerPollResult::SubscribeCovAckSent
+           : BacnetServerPollResult::SendFailed;
 }
 
 bool BacnetServer::readDeviceProperty(BacnetPropertyId property,
@@ -1303,7 +1652,7 @@ bool BacnetServer::readDeviceProperty(BacnetPropertyId property,
       return true;
     case BacnetPropertyId::ProtocolServicesSupported:
       value.type = BacnetValueType::BitString;
-      value.bitStringValue = 1UL << 12U;
+      value.bitStringValue = (1UL << 5U) | (1UL << 12U);
       if (binaryOutputCount() != 0)
         value.bitStringValue |= 1UL << 15U;
       value.bitStringBitCount = binaryOutputCount() == 0 ? 13 : 16;

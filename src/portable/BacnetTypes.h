@@ -267,6 +267,36 @@ struct BacnetCovNotification {
   BacnetPropertyId property = BacnetPropertyId::PresentValue;
   uint32_t arrayIndex = kBacnetNoArrayIndex;
   BacnetValue value;
+  bool confirmed = false;
+  uint8_t invokeId = 0;
+};
+
+enum class BacnetSubscribeCovRequestParseStatus : uint8_t {
+  Unrelated,
+  SubscribeCov,
+  SubscribeCovProperty,
+  Malformed,
+};
+
+// Parsed server-side subscription request. SubscribeCOVProperty keeps the
+// property reference explicit so a subscription is never widened silently.
+struct BacnetSubscribeCovRequestHeader {
+  uint8_t invokeId = 0;
+  uint32_t processId = 0;
+  BacnetObjectId object;
+  bool isPropertySubscription = false;
+  BacnetPropertyId property = BacnetPropertyId::PresentValue;
+  uint32_t arrayIndex = kBacnetNoArrayIndex;
+  bool issueConfirmedNotifications = false;
+  uint32_t lifetimeSeconds = 0;
+  bool hasCovIncrement = false;
+  float covIncrement = 0.0F;
+};
+
+struct BacnetCovPropertyValue {
+  BacnetPropertyId property = BacnetPropertyId::PresentValue;
+  uint32_t arrayIndex = kBacnetNoArrayIndex;
+  BacnetValue value;
 };
 
 enum class BacnetSubscribeCovResponseKind : uint8_t {

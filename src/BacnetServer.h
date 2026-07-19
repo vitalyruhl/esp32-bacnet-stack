@@ -95,6 +95,10 @@ struct BacnetServerBinaryOutput {
   uint32_t reliability = 0;
   BacnetServerBinaryOutputApply apply = nullptr;
   void* applyContext = nullptr;
+  // When false, writes without an explicit BACnet priority use the server
+  // default. A configured value of zero writes Relinquish_Default directly.
+  uint8_t writePriority = 16;
+  bool hasWritePriority = false;
 };
 
 // Result returned by the object-centric configuration API. The API never
@@ -277,6 +281,9 @@ public:
   BacnetBinaryOutput();
   BacnetObjectConfigurationStatus configure(uint32_t instance, const char* objectName);
   void setRelinquishDefault(bool value);
+  // Returns false for priorities outside BACnet's 0..16 range. Zero selects
+  // direct Relinquish_Default writes; only commandable objects expose this.
+  bool setWritePriority(uint8_t value);
   void attachOutput(BacnetServerBinaryOutputApply apply, void* context);
   BacnetObjectConfigurationStatus addProperty(BacnetPropertyId property, const char* value);
   BacnetObjectConfigurationError configurationError() const;
@@ -302,7 +309,34 @@ enum class BacnetServerPollResult : uint8_t {
   ReadPropertyErrorSent,
   WritePropertyAckSent,
   WritePropertyErrorSent,
+  SubscribeCovAckSent,
+  SubscribeCovErrorSent,
+  CovNotificationSent,
   SendFailed,
+};
+
+enum class BacnetServerCovSubscriptionState : uint8_t {
+  Inactive,
+  Active,
+  AwaitingConfirmedAck,
+};
+
+// Read-only subscription diagnostics. The server keeps the backing table
+// fixed-size and caller-independent; this view never exposes packet storage.
+struct BacnetServerCovSubscription {
+  BacnetServerCovSubscriptionState state = BacnetServerCovSubscriptionState::Inactive;
+  BacnetIpEndpoint peer;
+  uint32_t processId = 0;
+  BacnetObjectId object;
+  BacnetPropertyId property = BacnetPropertyId::PresentValue;
+  uint32_t arrayIndex = kBacnetNoArrayIndex;
+  bool isPropertySubscription = false;
+  bool confirmed = false;
+  uint32_t lifetimeSeconds = 0;
+  uint32_t expiresAtMs = 0;
+  uint32_t lastSentMs = 0;
+  uint32_t lastAckMs = 0;
+  uint8_t pendingInvokeId = 0;
 };
 
 enum class BacnetServerActivityService : uint8_t {
@@ -330,6 +364,7 @@ public:
   static constexpr uint16_t kDefaultPort = 47808;
   static constexpr uint8_t kRejectReasonUnrecognizedService = 9;
   static constexpr size_t kMaxDatagramSize = 1476;
+  static constexpr size_t kMaxCovSubscriptions = 8;
 
   BacnetServer() = default;
   explicit BacnetServer(BacnetDatagramTransport& transport);
@@ -381,6 +416,13 @@ public:
   const BacnetServerDevice& device() const;
   uint32_t deviceInstance() const;
   uint16_t port() const;
+  // Applies to commandable objects only when a WriteProperty request carries
+  // no explicit priority. Zero writes the object's Relinquish_Default.
+  bool setDefaultWritePriority(uint8_t priority);
+  uint8_t defaultWritePriority() const;
+  void setClock(const BacnetMonotonicClock* clock);
+  size_t covSubscriptionCount() const;
+  bool covSubscriptionAt(size_t index, BacnetServerCovSubscription& subscription) const;
   // Observes accepted ReadProperty and WriteProperty requests. The listener is
   // invoked synchronously during poll(), so it must be short and non-blocking.
   void setActivityListener(BacnetServerActivityListener listener, void* context = nullptr);
@@ -395,6 +437,24 @@ private:
   BacnetServerPollResult handleWriteProperty(
     const BacnetIpEndpoint& source,
     const BacnetWritePropertyRequestHeader& request);
+  BacnetServerPollResult handleSubscribeCov(
+    const BacnetIpEndpoint& source,
+    const BacnetSubscribeCovRequestHeader& request);
+  BacnetServerPollResult processCovSubscriptions();
+  bool readCovValue(BacnetObjectId object,
+                    BacnetPropertyId property,
+                    uint32_t arrayIndex,
+                    BacnetValue& value) const;
+  bool covValueChanged(const BacnetServerCovSubscription& subscription,
+                       const BacnetValue& value) const;
+  void storeCovValue(BacnetServerCovSubscription& subscription,
+                     const BacnetValue& value);
+  bool sendCovNotification(BacnetServerCovSubscription& subscription,
+                           const BacnetValue& value,
+                           uint32_t nowMs);
+  bool endpointEquals(const BacnetIpEndpoint& left,
+                      const BacnetIpEndpoint& right) const;
+  uint32_t nowMs() const;
   bool readDeviceProperty(BacnetPropertyId property, BacnetValue& value) const;
   bool readAnalogValueProperty(const BacnetServerAnalogValue& analogValue,
                                BacnetPropertyId property,
@@ -459,4 +519,16 @@ private:
   size_t objectCentricBinaryOutputCount_ = 0;
   BacnetServerActivityListener activityListener_ = nullptr;
   void* activityListenerContext_ = nullptr;
+  uint8_t defaultWritePriority_ = 16;
+  const BacnetMonotonicClock* clock_ = nullptr; // Non-owning.
+  BacnetServerCovSubscription covSubscriptions_[kMaxCovSubscriptions] = {};
+  BacnetValueType covSnapshotTypes_[kMaxCovSubscriptions] = {};
+  bool covSnapshotBoolean_[kMaxCovSubscriptions] = {};
+  uint32_t covSnapshotUnsigned_[kMaxCovSubscriptions] = {};
+  float covSnapshotReal_[kMaxCovSubscriptions] = {};
+  uint32_t covSnapshotBitString_[kMaxCovSubscriptions] = {};
+  uint8_t covSnapshotBitCount_[kMaxCovSubscriptions] = {};
+  bool covSnapshotValid_[kMaxCovSubscriptions] = {};
+  uint8_t covConfirmedRetryCounts_[kMaxCovSubscriptions] = {};
+  uint8_t nextCovInvokeId_ = 1;
 };
