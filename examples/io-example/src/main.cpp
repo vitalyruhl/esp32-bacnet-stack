@@ -581,7 +581,7 @@ void setup() {
   setupNetworkDefaults();
   ConfigManager.startWebServer();
   // Keep live I/O feedback responsive; ConfigManager defaults to a slower push interval.
-  ConfigManager.setWebSocketInterval(500);
+  ConfigManager.setWebSocketInterval(550);
 }
 
 void loop() {
