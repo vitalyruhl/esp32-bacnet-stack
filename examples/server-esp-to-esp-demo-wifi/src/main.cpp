@@ -29,6 +29,7 @@ uint32_t networkDropCount = 0;
 uint32_t peerLossCount = 0;
 uint32_t reconnectCount = 0;
 uint32_t lastResetReason = 0;
+float loopTimeMs = 0.0F;
 uint32_t lastChangeMs = 0;
 uint32_t changeCount = 0;
 bool connectedOnce = false;
@@ -97,35 +98,14 @@ void updateRuntimeDiagnostics() {
 }
 
 void setupLiveDiagnosticsUi() {
-  auto status = ConfigManager.liveGroup("esp2espServer")
-                  .page("ESP-to-ESP", 5)
-                  .card("Server Status");
-  status.value("ip", []() { return WiFi.localIP().toString(); }).label("WiFi IP").order(10);
-  status.boolValue("bacnet", []() { return bacnetBound; }).label("BACnet online").order(20);
-  status.value("uptime", []() { return millis() / 1000U; }).label("Uptime").unit("s").order(30);
-  status.value("boot", []() { return bootCount; }).label("Boots/restarts").order(40);
-  status.value("netdrop", []() { return networkDropCount; }).label("Network outages").order(50);
-  status.value("peerloss", []() { return peerLossCount; }).label("COV peer losses").order(60);
-  status.value("reconn", []() { return reconnectCount; }).label("Reconnects").order(70);
-  status.value("reset", []() { return lastResetReason; }).label("Last reset reason").order(80);
-
-  auto process = ConfigManager.liveGroup("esp2espServer")
-                   .page("ESP-to-ESP", 5)
-                   .card("Local BACnet Process Objects");
-  process.value("ai0", []() { return lightValue; }).label("AI0 Light Sensor").unit("%").precision(1).order(10);
-  process.value("ai0flags", []() { return lightStatusFlags.value; }).label("AI0 Status_Flags").order(11);
-  process.value("ai1", []() { return temperatureValue; }).label("AI1 Temperature").unit("°C").precision(2).order(20);
-  process.value("ai1flags", []() { return temperatureStatusFlags.value; }).label("AI1 Status_Flags").order(21);
-  process.boolValue("bi0", []() { return resetButtonValue; }).label("BI0 Reset Button").order(30);
-  process.value("bi0flags", []() { return resetButtonStatusFlags.value; }).label("BI0 Status_Flags").order(31);
-  process.boolValue("bi1", []() { return midButtonValue; }).label("BI1 Mid Button").order(40);
-  process.value("bi1flags", []() { return midButtonStatusFlags.value; }).label("BI1 Status_Flags").order(41);
-  process.boolValue("bi2", []() { return setButtonValue; }).label("BI2 Set Button").order(50);
-  process.value("bi2flags", []() { return setButtonStatusFlags.value; }).label("BI2 Status_Flags").order(51);
-  process.boolValue("bo0", []() { return led1.priority.effectiveValue(); }).label("BO0 LED 1").order(60);
-  process.boolValue("bo1", []() { return led2.priority.effectiveValue(); }).label("BO1 LED 2").order(70);
-  process.value("changeAge", []() { return changeAgeSeconds(); }).label("Last local change").unit("s ago").order(80);
-  process.value("changeCount", []() { return changeCount; }).label("Local changes").order(90);
+  auto diagnostics = ConfigManager.liveGroup("esp2espServer")
+                       .page("ESP-to-ESP", 5)
+                       .card("Diagnostics");
+  diagnostics.value("loopTime", []() { return loopTimeMs; })
+    .label("Loop time")
+    .unit("ms")
+    .precision(3)
+    .order(10);
 }
 
 } // namespace
@@ -139,8 +119,10 @@ void setup() {
 }
 
 void loop() {
+  const uint32_t startedAtUs = micros();
   espToEspBaseLoop();
   updateRuntimeDiagnostics();
+  loopTimeMs = static_cast<float>(micros() - startedAtUs) / 1000.0F;
 }
 
 void onWiFiConnected() {

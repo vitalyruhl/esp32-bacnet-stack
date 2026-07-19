@@ -15,6 +15,7 @@ namespace {
 constexpr char kNvsNamespace[] = "esp2esp_cli";
 constexpr uint32_t kDiagnosticsSchema = 1;
 constexpr size_t kPreviewCount = kBacnetMaxFoundObjectsToDisplay;
+constexpr size_t kRemoteObjectCount = 7;
 
 Preferences diagnosticsPreferences;
 uint32_t bootCount = 0;
@@ -22,6 +23,7 @@ uint32_t networkDropCount = 0;
 uint32_t peerLossCount = 0;
 uint32_t reconnectCount = 0;
 uint32_t lastResetReason = 0;
+float loopTimeMs = 0.0F;
 bool ethernetConnectedOnce = false;
 bool ethernetOutageActive = false;
 bool peerOutageActive = false;
@@ -49,13 +51,14 @@ void initializeDiagnostics() {
   persistCounters();
 }
 
-size_t activeSubscriptionCount() {
+size_t activeCovSubscriptionCount() {
   size_t count = 0;
   const BacnetValueObjectPreview* groups[] = {
     analogValues, binaryValues, multiStateValues};
   for (const BacnetValueObjectPreview* group : groups) {
     for (size_t index = 0; index < kPreviewCount; ++index) {
-      if (group[index].subscription && group[index].subscription->active()) {
+      if (group[index].subscription &&
+          group[index].subscription->covStatus() == BacnetCovSubscriptionStatus::Active) {
         ++count;
       }
     }
@@ -63,12 +66,69 @@ size_t activeSubscriptionCount() {
   return count;
 }
 
+const char* covStateText(const BacnetValueObjectPreview& preview) {
+  if (!preview.subscription) {
+    return "not subscribed";
+  }
+  switch (preview.subscription->covStatus()) {
+    case BacnetCovSubscriptionStatus::Active:
+      return preview.usesPropertyCov ? "active property" : "active object";
+    case BacnetCovSubscriptionStatus::Pending:
+      return "pending";
+    case BacnetCovSubscriptionStatus::Error:
+      return "fallback polling (error)";
+    case BacnetCovSubscriptionStatus::Reject:
+      return "fallback polling (reject)";
+    case BacnetCovSubscriptionStatus::Abort:
+      return "fallback polling (abort)";
+    case BacnetCovSubscriptionStatus::Timeout:
+      return "fallback polling (timeout)";
+    case BacnetCovSubscriptionStatus::SendFailed:
+      return "fallback polling (send failed)";
+  }
+  return "unknown";
+}
+
+void appendStatusFlags(char* buffer, size_t capacity,
+                       const BacnetValueObjectPreview& preview) {
+  if (preview.statusFlagsStatus != BacnetPropertyReadStatus::Ack ||
+      preview.statusFlags.type != BacnetValueType::BitString) {
+    std::snprintf(buffer, capacity, "unavailable");
+    return;
+  }
+  BacnetStatusFlags flags;
+  if (!bacnetDecodeStatusFlags(preview.statusFlags, flags)) {
+    std::snprintf(buffer, capacity, "%s", preview.statusFlags.displayText());
+    return;
+  }
+  std::snprintf(buffer,
+                capacity,
+                "alarm=%u fault=%u overridden=%u oos=%u",
+                flags.inAlarm ? 1U : 0U,
+                flags.fault ? 1U : 0U,
+                flags.overridden ? 1U : 0U,
+                flags.outOfService ? 1U : 0U);
+}
+
 const BacnetValueObjectPreview* previewAt(size_t index) {
-  const BacnetValueObjectPreview* groups[] = {
-    analogValues, binaryValues, multiStateValues};
-  const size_t groupIndex = index / kPreviewCount;
-  const size_t memberIndex = index % kPreviewCount;
-  return groupIndex < 3 ? &groups[groupIndex][memberIndex] : nullptr;
+  switch (index) {
+    case 0:
+      return &analogValues[0];
+    case 1:
+      return &analogValues[1];
+    case 2:
+      return &binaryValues[0];
+    case 3:
+      return &binaryValues[1];
+    case 4:
+      return &binaryValues[2];
+    case 5:
+      return &binaryValues[3];
+    case 6:
+      return &binaryValues[4];
+    default:
+      return nullptr;
+  }
 }
 
 void appendPreviewSummary(char* buffer, size_t capacity, size_t index) {
@@ -83,29 +143,26 @@ void appendPreviewSummary(char* buffer, size_t capacity, size_t index) {
   }
   const char* value = valueObjectPresentValueText(*preview);
   const char* label = preview->scanned != nullptr ? bacnetScannedLabelOrNull(*preview->scanned) : nullptr;
+  char statusFlags[72] = {};
+  appendStatusFlags(statusFlags, sizeof(statusFlags), *preview);
+  const uint32_t updateAgeSeconds = preview->lastCovUpdateMs == 0
+                                      ? 0
+                                      : (millis() - preview->lastCovUpdateMs) / 1000U;
   std::snprintf(buffer,
                 capacity,
-                "%s %u:%lu PV=%s Status_Flags=%s COV=%s",
+                "%s %u:%lu PV=%s Status_Flags=%s COV=%s updates=%lu age=%lus",
                 label != nullptr && label[0] != '\0' ? label : "Remote object",
                 static_cast<unsigned int>(preview->object.type),
                 static_cast<unsigned long>(preview->object.instance),
                 value != nullptr ? value : bacnetReadStatusText(preview->presentValueStatus),
-                "not provided by property COV",
-                preview->subscription && preview->subscription->active() ? "active" : "unsupported");
+                statusFlags,
+                covStateText(*preview),
+                static_cast<unsigned long>(preview->covUpdateCount),
+                static_cast<unsigned long>(updateAgeSeconds));
 }
 
 void fillClientLiveRuntime(JsonObject& data) {
-  data["network"] = bacnet_example::EthernetNetwork::hasIp() ? "Ethernet connected" : "Ethernet unavailable";
-  data["server"] = activeBacnetSession ? "BACnet server selected" : "BACnet server unavailable";
-  data["objects"] = static_cast<uint32_t>(bacnetScanStoredObjects);
-  data["subscriptions"] = static_cast<uint32_t>(activeSubscriptionCount());
-  data["uptime"] = millis() / 1000U;
-  data["boot"] = bootCount;
-  data["netdrop"] = networkDropCount;
-  data["peerloss"] = peerLossCount;
-  data["reconnect"] = reconnectCount;
-  data["reset"] = lastResetReason;
-  for (size_t index = 0; index < kPreviewCount * 3U; ++index) {
+  for (size_t index = 0; index < kRemoteObjectCount; ++index) {
     char key[16] = {};
     char value[192] = {};
     std::snprintf(key, sizeof(key), "remote%u", static_cast<unsigned int>(index));
@@ -129,20 +186,15 @@ void addClientLiveText(const char* key, const char* label, int order) {
 
 void setupClientLiveUi() {
   ConfigManager.getRuntime().addRuntimeProvider("esp2espClient", fillClientLiveRuntime, 5);
-  auto status = ConfigManager.liveGroup("esp2espClient")
-                  .page("ESP-to-ESP", 5)
-                  .card("Client Status");
-  status.value("network", []() { return bacnet_example::EthernetNetwork::hasIp() ? "Ethernet connected" : "Ethernet unavailable"; }).label("Ethernet").order(10);
-  status.value("server", []() { return activeBacnetSession ? "Selected" : "Unavailable"; }).label("BACnet server").order(20);
-  status.value("objects", []() { return static_cast<uint32_t>(bacnetScanStoredObjects); }).label("Found process objects").order(30);
-  status.value("subscriptions", []() { return static_cast<uint32_t>(activeSubscriptionCount()); }).label("Active subscriptions").order(40);
-  status.value("uptime", []() { return millis() / 1000U; }).label("Uptime").unit("s").order(50);
-  status.value("boot", []() { return bootCount; }).label("Boots/restarts").order(60);
-  status.value("netdrop", []() { return networkDropCount; }).label("Network outages").order(70);
-  status.value("peerloss", []() { return peerLossCount; }).label("Peer/session losses").order(80);
-  status.value("reconnect", []() { return reconnectCount; }).label("Reconnects/resubscriptions").order(90);
-  status.value("reset", []() { return lastResetReason; }).label("Last reset reason").order(100);
-  for (size_t index = 0; index < kPreviewCount * 3U; ++index) {
+  auto diagnostics = ConfigManager.liveGroup("esp2espClient")
+                       .page("ESP-to-ESP", 5)
+                       .card("Diagnostics");
+  diagnostics.value("loopTime", []() { return loopTimeMs; })
+    .label("Loop time")
+    .unit("ms")
+    .precision(3)
+    .order(10);
+  for (size_t index = 0; index < kRemoteObjectCount; ++index) {
     char key[16] = {};
     char label[24] = {};
     std::snprintf(key, sizeof(key), "remote%u", static_cast<unsigned int>(index));
@@ -191,6 +243,8 @@ void setup() {
 }
 
 void loop() {
+  const uint32_t startedAtUs = micros();
   espToEspBaseLoop();
   updateClientDiagnostics();
+  loopTimeMs = static_cast<float>(micros() - startedAtUs) / 1000.0F;
 }

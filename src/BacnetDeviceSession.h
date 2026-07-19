@@ -275,6 +275,9 @@ struct BacnetSubscribeOptions {
   uint32_t covLifetimeSeconds = 60;
   uint32_t covRenewBeforeSeconds = 5;
   bool preferCov = false;
+  bool usePropertyCov = false;
+  bool hasCovIncrement = false;
+  float covIncrement = 0.0F;
   bool issueConfirmedNotifications = false;
   bool immediateFirstRead = true;
   bool notifyOnStatusChange = true;
@@ -323,6 +326,10 @@ struct BacnetSubscriptionNotification {
   bool statusChanged = false;
   BacnetSubscriptionNotificationReason reason =
     BacnetSubscriptionNotificationReason::None;
+  // Valid only for the duration of the callback. Object-level COV can carry
+  // Present_Value together with Status_Flags and other changed properties.
+  const BacnetCovPropertyValue* covProperties = nullptr;
+  size_t covPropertyCount = 0;
   void* userData = nullptr;
 };
 
@@ -469,6 +476,8 @@ private:
   bool covFallback_ = false;
   BacnetCovSubscriptionStatus covStatus_ = BacnetCovSubscriptionStatus::Pending;
   uint8_t covRejectReason_ = 0xFF;
+  uint32_t covProcessId_ = 0;
+  bool covProcessIdAssigned_ = false;
   uint32_t covRenewAtMs_ = 0;
 };
 
@@ -681,7 +690,11 @@ private:
                               uint32_t nowMs,
                               BacnetPropertyReadStatus propertyStatus,
                               uint32_t errorClass = 0,
-                              uint32_t errorCode = 0);
+                              uint32_t errorCode = 0,
+                              const BacnetCovNotification* covNotification = nullptr);
+  bool takeCovNotification(const BacnetPropertySubscription& subscription,
+                           BacnetCovNotification& notification);
+  void queueCovNotification(const BacnetCovNotification& notification);
   void releaseSubscription(BacnetPropertySubscription& subscription);
   uint8_t allocateInvokeId();
 
@@ -690,6 +703,9 @@ private:
   BacnetIpEndpoint endpoint_;
   uint8_t nextInvokeId_ = 1;
   BacnetPropertySubscription* inFlightSubscription_ = nullptr;
+  static constexpr size_t kMaxPendingCovNotifications = 2;
+  BacnetCovNotification pendingCovNotifications_[kMaxPendingCovNotifications] = {};
+  size_t pendingCovNotificationCount_ = 0;
   BacnetObjectListScanJob* inFlightObjectListScan_ = nullptr;
   BacnetPropertyReadJob* inFlightPropertyRead_ = nullptr;
   size_t roundRobinSubscriptionIndex_ = 0;

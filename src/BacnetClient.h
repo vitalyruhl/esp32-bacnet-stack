@@ -112,9 +112,17 @@ public:
 
 private:
   static constexpr size_t kMaxDiscoveryPacketSize = 512;
+  static constexpr size_t kMaxQueuedCovNotifications = 2;
+
+  bool queueCovNotification(const uint8_t* packet,
+                            size_t length,
+                            const BacnetIpEndpoint& source);
+  bool takeQueuedCovNotification(BacnetCovNotification& notification);
 
   BacnetDatagramTransport* transport_ = nullptr;
   BacnetLogger logger_;
   bool running_ = false;
   uint16_t localPort_ = kDefaultPort;
+  BacnetCovNotification queuedCovNotifications_[kMaxQueuedCovNotifications] = {};
+  size_t queuedCovNotificationCount_ = 0;
 };
