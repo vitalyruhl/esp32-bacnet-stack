@@ -1077,6 +1077,20 @@ void BacnetServer::setActivityListener(BacnetServerActivityListener listener,
   activityListenerContext_ = context;
 }
 
+void BacnetServer::setCovDiagnosticListener(BacnetServerCovDiagnosticListener listener,
+                                             void* context) {
+  covDiagnosticListener_ = listener;
+  covDiagnosticListenerContext_ = context;
+}
+
+void BacnetServer::emitCovDiagnostic(
+  BacnetServerCovDiagnosticEvent event,
+  const BacnetServerCovSubscription& subscription) const {
+  if (covDiagnosticListener_ != nullptr) {
+    covDiagnosticListener_(covDiagnosticListenerContext_, BacnetServerCovDiagnostic{event, subscription});
+  }
+}
+
 BacnetServerPollResult BacnetServer::poll() {
   if (!running_ || transport_ == nullptr) {
     return BacnetServerPollResult::NotRunning;
@@ -1531,6 +1545,7 @@ bool BacnetServer::sendCovNotification(BacnetServerCovSubscription& subscription
   const size_t size = BacnetProtocol::buildCovNotification(
     notification, sizeof(notification), subscription.processId, BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::Device), device_.deviceInstance}, subscription.object, timeRemaining, values, valueCount, subscription.confirmed, invokeId);
   if (size == 0U || !transport_->send(subscription.peer, notification, size)) {
+    emitCovDiagnostic(BacnetServerCovDiagnosticEvent::NotificationSendFailed, subscription);
     return false;
   }
   subscription.lastSentMs = now;
@@ -1539,6 +1554,7 @@ bool BacnetServer::sendCovNotification(BacnetServerCovSubscription& subscription
                          ? BacnetServerCovSubscriptionState::AwaitingConfirmedAck
                          : BacnetServerCovSubscriptionState::Active;
   storeCovValues(subscription, values, valueCount);
+  emitCovDiagnostic(BacnetServerCovDiagnosticEvent::NotificationSent, subscription);
   return true;
 }
 
@@ -1599,6 +1615,7 @@ BacnetServerPollResult BacnetServer::processCovSubscriptions() {
       continue;
     }
     covConfirmedRetryCounts_[index] = 0;
+    emitCovDiagnostic(BacnetServerCovDiagnosticEvent::ChangeDetected, subscription);
     return sendCovNotification(subscription, values, valueCount, now)
              ? BacnetServerPollResult::CovNotificationSent
              : BacnetServerPollResult::SendFailed;
@@ -1699,6 +1716,7 @@ BacnetServerPollResult BacnetServer::handleSubscribeCov(
       covSnapshotValid_[index][propertyIndex] = false;
     }
     covConfirmedRetryCounts_[index] = 0;
+    emitCovDiagnostic(BacnetServerCovDiagnosticEvent::SubscriptionActivated, *target);
   }
 
   uint8_t response[kMaxDatagramSize] = {};

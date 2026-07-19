@@ -349,6 +349,24 @@ struct BacnetServerCovSubscription {
   uint8_t pendingInvokeId = 0;
 };
 
+// Optional, synchronous COV-path observation for local diagnostics. The
+// listener borrows the subscription view and must not retain it or block.
+enum class BacnetServerCovDiagnosticEvent : uint8_t {
+  SubscriptionActivated,
+  ChangeDetected,
+  NotificationSent,
+  NotificationSendFailed,
+};
+
+struct BacnetServerCovDiagnostic {
+  BacnetServerCovDiagnosticEvent event = BacnetServerCovDiagnosticEvent::SubscriptionActivated;
+  BacnetServerCovSubscription subscription;
+};
+
+using BacnetServerCovDiagnosticListener = void (*)(
+  void* context,
+  const BacnetServerCovDiagnostic& diagnostic);
+
 enum class BacnetServerActivityService : uint8_t {
   ReadProperty,
   WriteProperty,
@@ -437,6 +455,10 @@ public:
   // Observes accepted ReadProperty and WriteProperty requests. The listener is
   // invoked synchronously during poll(), so it must be short and non-blocking.
   void setActivityListener(BacnetServerActivityListener listener, void* context = nullptr);
+  // Observes COV subscription activation, detected changes, and notification
+  // send outcomes. It is intended for concise local diagnostics only.
+  void setCovDiagnosticListener(BacnetServerCovDiagnosticListener listener,
+                                void* context = nullptr);
   BacnetServerPollResult poll();
 
 private:
@@ -470,6 +492,8 @@ private:
                            const BacnetCovPropertyValue* values,
                            size_t valueCount,
                            uint32_t nowMs);
+  void emitCovDiagnostic(BacnetServerCovDiagnosticEvent event,
+                         const BacnetServerCovSubscription& subscription) const;
   static bool endpointEquals(const BacnetIpEndpoint& left,
                              const BacnetIpEndpoint& right);
   uint32_t nowMs() const;
@@ -537,6 +561,8 @@ private:
   size_t objectCentricBinaryOutputCount_ = 0;
   BacnetServerActivityListener activityListener_ = nullptr;
   void* activityListenerContext_ = nullptr;
+  BacnetServerCovDiagnosticListener covDiagnosticListener_ = nullptr;
+  void* covDiagnosticListenerContext_ = nullptr;
   uint8_t localWritePriority_ = 16;
   const BacnetMonotonicClock* clock_ = nullptr; // Non-owning.
   BacnetServerCovSubscription covSubscriptions_[kMaxCovSubscriptions] = {};

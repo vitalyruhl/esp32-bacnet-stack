@@ -292,6 +292,7 @@ constexpr uint8_t kPriorityWritePriority = 8;
 constexpr uint32_t kCovResponseTimeoutMs = 5000;
 constexpr uint32_t kCovManualChangeTimeoutMs = 20000;
 constexpr uint32_t kCovCancellationQuietMs = 3000;
+constexpr uint32_t kCovAcceptanceRerunIntervalMs = 120000;
 constexpr uint32_t kMaxObjectListEntries = 600;
 constexpr size_t kMaxScanResults = 40;
 struct S02TargetSpec {
@@ -371,6 +372,7 @@ BacnetClient client(bacnetTransport, &bacnetClock);
 BacnetScannedObject scanResults[kMaxScanResults];
 BacnetObjectListScanJob scanJob;
 bool completed = false;
+uint32_t completedAtMs = 0;
 bool runtimeReady = false;
 IPAddress targetAddress;
 
@@ -859,6 +861,34 @@ ScenarioOutcome runSubscribeCovScenario() {
 
   const BacnetIpEndpoint target =
     bacnetIpEndpointFromArduino(targetAddress, BACNET_TARGET_PORT);
+  const auto logEthernetLink = []() {
+#if EXAMPLE_USE_ETHERNET
+    Serial.printf("[COV-DIAG %lu] Ethernet link=%s ip=%s\n",
+                  static_cast<unsigned long>(millis()),
+                  ETH.linkUp() ? "up" : "down",
+                  ETH.localIP().toString().c_str());
+#endif
+  };
+  const auto logNotification = [](const BacnetCovNotification& notification) {
+    Serial.printf("[COV-DIAG %lu] received COV object=%u:%lu confirmed=%s properties=%u",
+                  static_cast<unsigned long>(millis()),
+                  static_cast<unsigned int>(notification.object.type),
+                  static_cast<unsigned long>(notification.object.instance),
+                  notification.confirmed ? "yes" : "no",
+                  static_cast<unsigned int>(notification.propertyCount));
+    for (size_t index = 0; index < notification.propertyCount; ++index) {
+      const BacnetCovPropertyValue& property = notification.properties[index];
+      Serial.print(" property=");
+      Serial.print(static_cast<unsigned int>(property.property));
+      if (property.value.type == BacnetValueType::Enumerated ||
+          property.value.type == BacnetValueType::Unsigned) {
+        Serial.print(" value=");
+        Serial.print(property.value.unsignedValue);
+      }
+    }
+    Serial.println();
+  };
+  logEthernetLink();
   const auto logSubscription = [](const char* step,
                                   uint32_t processId,
                                   BacnetObjectId object,
@@ -917,16 +947,19 @@ ScenarioOutcome runSubscribeCovScenario() {
     }
     return false;
   };
-  const auto waitForNotification = [](uint32_t timeoutMs,
-                                      BacnetCovNotification& notification) {
+  const auto waitForNotification = [&](uint32_t timeoutMs,
+                                       BacnetCovNotification& notification) {
     const uint32_t deadline = millis() + timeoutMs;
     while (static_cast<int32_t>(millis() - deadline) < 0) {
       if (client.pollCovNotification(notification)) {
+        logEthernetLink();
+        logNotification(notification);
         return true;
       }
       client.idle();
       delay(kPollDelayMs);
     }
+    logEthernetLink();
     Serial.println("[HIL] COV notification timeout");
     return false;
   };
@@ -1544,11 +1577,16 @@ void setup() {
   delay(1000);
   const ScenarioOutcome outcome = runAcceptanceRunner();
   completed = true;
+  completedAtMs = millis();
   printResult(scenarioOutcomeText(outcome), "HIL acceptance final result");
 }
 
 void loop() {
-  if (completed) {
-    delay(1000);
+  if (completed && millis() - completedAtMs >= kCovAcceptanceRerunIntervalMs) {
+    Serial.println("[HIL] restarting COV acceptance runner after interval");
+    const ScenarioOutcome outcome = runAcceptanceRunner();
+    completedAtMs = millis();
+    printResult(scenarioOutcomeText(outcome), "HIL acceptance final result");
   }
+  delay(10);
 }

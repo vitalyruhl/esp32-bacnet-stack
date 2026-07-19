@@ -27,6 +27,7 @@ constexpr char kVersion[] = "0.36.0";
 constexpr uint16_t kDevelopmentVendorId = 0;
 constexpr uint32_t kDeviceInstanceDefault = 1682127;
 constexpr int kDs18b20DefaultGpio = 18;
+constexpr int kSetButtonDefaultGpio = 19;
 constexpr uint32_t kInputPollMs = 250;
 constexpr uint32_t kDsReadIntervalMs = 1000;
 constexpr uint32_t kRecentActivityMs = 60000;
@@ -160,6 +161,9 @@ uint16_t udpPort = BacnetServer::kDefaultPort;
 uint16_t vendorId = kDevelopmentVendorId;
 uint32_t lastInputPollMs = 0;
 uint32_t lastDsReadMs = 0;
+bool setInputDiagnosticInitialized = false;
+bool lastSetGpioActive = false;
+bool lastSetIoState = false;
 
 template <typename TObject>
 void logObjectError(const TObject& object, BacnetObjectConfigurationStatus registrationStatus) {
@@ -225,6 +229,69 @@ const char* covStateText(BacnetServerCovSubscriptionState state) {
 }
 
 const char* objectText(BacnetObjectId object);
+
+const char* covDiagnosticEventText(BacnetServerCovDiagnosticEvent event) {
+  switch (event) {
+    case BacnetServerCovDiagnosticEvent::SubscriptionActivated:
+      return "subscription active";
+    case BacnetServerCovDiagnosticEvent::ChangeDetected:
+      return "change detected";
+    case BacnetServerCovDiagnosticEvent::NotificationSent:
+      return "notification sent";
+    case BacnetServerCovDiagnosticEvent::NotificationSendFailed:
+      return "notification send failed";
+  }
+  return "unknown";
+}
+
+void printCovSubscriptionDiagnostic(const BacnetServerCovSubscription& subscription,
+                                    const char* prefix) {
+  Serial.printf("[COV-DIAG %lu] %s object=%u:%lu process=%lu peer=%u.%u.%u.%u:%u confirmed=%s state=%s\n",
+                static_cast<unsigned long>(millis()),
+                prefix,
+                static_cast<unsigned int>(subscription.object.type),
+                static_cast<unsigned long>(subscription.object.instance),
+                static_cast<unsigned long>(subscription.processId),
+                subscription.peer.address[0],
+                subscription.peer.address[1],
+                subscription.peer.address[2],
+                subscription.peer.address[3],
+                subscription.peer.port,
+                subscription.confirmed ? "yes" : "no",
+                covStateText(subscription.state));
+}
+
+void observeCovDiagnostic(void*, const BacnetServerCovDiagnostic& diagnostic) {
+  printCovSubscriptionDiagnostic(diagnostic.subscription, covDiagnosticEventText(diagnostic.event));
+}
+
+void observeSetInputDiagnostic(uint32_t now) {
+  const bool gpioActive = digitalRead(kSetButtonDefaultGpio) == LOW;
+  const bool ioState = ioManager.getInputState("set");
+  if (setInputDiagnosticInitialized && gpioActive == lastSetGpioActive && ioState == lastSetIoState) {
+    return;
+  }
+  Serial.printf("[COV-DIAG %lu] SET GPIO%d raw-active=%s io-logical=%s\n",
+                static_cast<unsigned long>(now),
+                kSetButtonDefaultGpio,
+                gpioActive ? "true" : "false",
+                ioState ? "true" : "false");
+  setInputDiagnosticInitialized = true;
+  lastSetGpioActive = gpioActive;
+  lastSetIoState = ioState;
+}
+
+void logSetButtonCovSubscriptions() {
+  for (size_t index = 0; index < bacnetServer.covSubscriptionCount(); ++index) {
+    BacnetServerCovSubscription subscription;
+    if (!bacnetServer.covSubscriptionAt(index, subscription) ||
+        subscription.object.type != static_cast<uint16_t>(BacnetObjectType::BinaryInput) ||
+        subscription.object.instance != 2U) {
+      continue;
+    }
+    printCovSubscriptionDiagnostic(subscription, "BI2 Present_Value changed; active subscription");
+  }
+}
 
 void refreshCovLiveState() {
   covLive.count = bacnetServer.covSubscriptionCount();
@@ -472,6 +539,7 @@ void configureBacnetObjects() {
   registerLed2();
   bacnetServer.setClock(&bacnetClock);
   bacnetServer.setActivityListener(observeBacnetActivity);
+  bacnetServer.setCovDiagnosticListener(observeCovDiagnostic);
 }
 
 void pollInputs(uint32_t now) {
@@ -504,7 +572,15 @@ void pollInputs(uint32_t now) {
                midButtonEventState,
                midButtonReliability);
   const bool setConfigured = ioManager.isConfigured("set");
+  const bool previousSetButtonValue = setButtonValue;
   setButtonValue = ioManager.getInputState("set");
+  if (setButtonValue != previousSetButtonValue) {
+    Serial.printf("[COV-DIAG %lu] BI2 Present_Value %s -> %s\n",
+                  static_cast<unsigned long>(now),
+                  previousSetButtonValue ? "active" : "inactive",
+                  setButtonValue ? "active" : "inactive");
+    logSetButtonCovSubscriptions();
+  }
   setButton.outOfService = !setConfigured;
   updateHealth(io_example::inputHealth(setConfigured, setConfigured),
                setButtonStatusFlags,
@@ -681,6 +757,7 @@ void loop() {
   const uint32_t now = millis();
   ConfigManager.getWiFiManager().update();
   ioManager.update();
+  observeSetInputDiagnostic(now);
   ConfigManager.handleClient();
   pollInputs(now);
   if (bacnetBound) {
