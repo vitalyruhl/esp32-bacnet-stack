@@ -1,7 +1,7 @@
 # ESP32 I/O Example Development-Station Connection Reference
 
 This is the authoritative physical connection reference for
-`examples/io-example` on the ESP32-WROOM-32 / ESP32-D0WD-V3 development board.
+`examples/server-io-example` on the ESP32-WROOM-32 / ESP32-D0WD-V3 development board.
 It documents the real station. The current slice initializes the read-only
 inputs and the two LED Binary Outputs; relays remain reserved.
 

@@ -128,8 +128,8 @@ configured value is used by both I-Am and Device Vendor_Identifier.
 ## Build and HIL
 
 ```sh
-pio run -d examples/io-example -e wifi-com4
-pio run -d examples/io-example -e wifi-com4 -t upload
+pio run -d examples/server-io-example -e wifi-com4
+pio run -d examples/server-io-example -e wifi-com4 -t upload
 pio device monitor -p COM4 -b 115200
 ```
 

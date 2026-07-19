@@ -10,11 +10,11 @@ This changelog is a curated overview. The canonical library version is in
 - Added portable, caller-owned read-only Analog Input and Binary Input server
   object profiles with shared ReadProperty, Object_List, Property_List, and
   optional metadata/state-provider support.
-- Added `examples/io-example`, a ConfigManager-backed ESP32 WiFi input station
+- Added `examples/server-io-example`, a ConfigManager-backed ESP32 WiFi input station
   with LDR, DS18B20, and three debounced buttons. The physically installed
   SSD1306 is intentionally not initialized by the firmware.
 - Added reusable command-priority Binary Output support and BO0/BO1 LED
-  bindings for `examples/io-example`.
+  bindings for `examples/server-io-example`.
 
 ### Notes
 

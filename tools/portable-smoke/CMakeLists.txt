@@ -43,7 +43,7 @@ target_link_libraries(server_cov_tests PRIVATE bacnet_portable bacnet_server)
 add_executable(io_example_input_tests io_example_input_tests.cpp)
 target_compile_features(io_example_input_tests PRIVATE cxx_std_17)
 target_include_directories(io_example_input_tests PRIVATE
-  ${CMAKE_CURRENT_LIST_DIR}/../../examples/io-example/src)
+  ${CMAKE_CURRENT_LIST_DIR}/../../examples/server-io-example/src)
 
 if(BUILD_TESTING)
   add_test(NAME portable_smoke COMMAND portable_smoke)
