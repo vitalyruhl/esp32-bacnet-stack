@@ -24,6 +24,16 @@ struct BacnetCommandPriority {
     return relinquishDefault;
   }
 
+  // Returns 1..16 for the currently effective command, or 0 when the
+  // Relinquish_Default is effective.
+  uint8_t effectivePriority() const {
+    for (size_t index = 0; index < kSlotCount; ++index) {
+      if (occupied[index])
+        return static_cast<uint8_t>(index + 1U);
+    }
+    return 0;
+  }
+
   bool write(uint8_t priority, bool relinquish, T value = T{}) {
     if (priority == 0 || priority > kSlotCount)
       return false;

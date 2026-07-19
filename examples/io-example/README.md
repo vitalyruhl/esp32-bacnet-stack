@@ -1,68 +1,101 @@
 # BACnet I/O Example
 
-This ESP32 WiFi example binds the development station's physical inputs to the
-portable BACnet server without introducing Arduino dependencies into the core.
-It is read-only for sensors and buttons, and provides exactly two commandable
-Binary Outputs for the development-station LEDs. Relays, PWM, network-loss
-failsafes, limit alarms, and Intrinsic Reporting remain outside this slice.
+This ESP32 WiFi example is a readable reference for binding application values
+to portable BACnet server objects. Native GPIO and ADC work remains in
+ConfigManager IOManager; the reusable BACnet core has no ConfigManager, GPIO,
+Arduino, or ESP32 dependency.
+
+## Object-centric BACnet configuration
+
+Each object has a small named registration function in `src/main.cpp`. The
+normal path binds an application value and adds only optional properties:
+
+```cpp
+lightSensor.configure(0, "Light Sensor");
+lightSensor.bindPresentValue(&lightValue);
+lightSensor.setUnits(BacnetEngineeringUnits::Percent);
+lightSensor.addProperty(BacnetPropertyId::Description, "LDR light level");
+lightSensor.addProperty(BacnetPropertyId::MinPresentValue, 0.0F);
+lightSensor.addProperty(BacnetPropertyId::MaxPresentValue, 100.0F);
+lightSensor.addProperty(BacnetPropertyId::Resolution, 0.1F);
+bacnetServer.addObject(lightSensor);
+```
+
+`BacnetAnalogInput`, `BacnetBinaryInput`, and `BacnetBinaryOutput` are
+allocation-free facades over the existing caller-owned `BacnetServer*`
+structures. The established low-level array API remains compatible for
+advanced, generated, and loop-based definitions. `addProperty()` returns an
+explicit status when a type is wrong, a property is unsupported, a property is
+duplicated, or capacity is exhausted. Normal example code does not need to
+check every return value: the object retains its first configuration error and
+`addObject()` rejects that object without registering it. The object error
+contains its name, Object Identifier, property, and reason, so the example
+logs it once at registration without duplicate user-authored error text.
+
+The server already provides each object's identity, type, Present_Value,
+Status_Flags, Event_State, Out_Of_Service, Property_List, analog Units, and
+the commandable BO Priority_Array and Relinquish_Default. Optional properties
+in this example add descriptions, engineering bounds, resolution, and input
+health metadata.
+
+`Min_Pres_Value` and `Max_Pres_Value` are lower and upper technical operating
+limits. `Resolution` is the smallest meaningful displayed change. They are not
+warning or error limits; future alarming must use the distinct BACnet limit,
+deadband, reliability, and intrinsic-reporting features.
 
 ## BACnet profile
 
-| Object | Instance | Name | Source | Units |
+| Object | Instance | Name | Bound application value | Units |
 | --- | ---: | --- | --- | --- |
-| Analog Input | 0 | Light Sensor | LDR voltage divider | Percent |
-| Analog Input | 1 | Temperature | DS18B20 | Degrees Celsius |
-| Binary Input | 0 | Reset Button | GPIO14, low-active | — |
-| Binary Input | 1 | Mid Button | GPIO33, low-active | — |
-| Binary Input | 2 | Set Button | GPIO4, low-active | — |
-| Binary Output | 0 | LED 1 | GPIO25, active-high by default | — |
-| Binary Output | 1 | LED 2 | GPIO26, active-high by default | — |
+| Analog Input | 0 | Light Sensor | IOManager scaled LDR value | Percent |
+| Analog Input | 1 | Temperature | DS18B20 temperature | Degrees Celsius |
+| Binary Input | 0 | Reset Button | IOManager digital input | — |
+| Binary Input | 1 | Mid Button | IOManager digital input | — |
+| Binary Input | 2 | Set Button | IOManager digital input | — |
+| Binary Output | 0 | LED 1 | IOManager digital output | — |
+| Binary Output | 1 | LED 2 | IOManager digital output | — |
 
-The two AIs expose Object Identifier, Object Name, Object Type, Present Value,
-Status Flags, Event State, Out Of Service, Reliability, Units, Description,
-Min/Max Present Value, Resolution, and Property List. The BIs expose the same
-read-only object/state properties except Units and engineering bounds.
-Each BO exposes Object Identifier, Object Name, Object Type, Present Value,
-Description, Status Flags, Event State, Out Of Service, Reliability, Polarity,
-Priority Array, Relinquish Default, and Property List. Present Value writes
-accept BACnet `ACTIVE`/`INACTIVE` or `NULL`; `NULL` relinquishes precisely the
-selected priority. An omitted priority means 16. Priority Array itself is
+AI and BI Present_Value is read-only. BO Present_Value remains commandable:
+writes use BACnet priorities 1 through 16, `NULL` relinquishes an individual
+slot, and the IOManager output follows the effective value. Priority_Array is
 read-only.
 
-The LDR uses ADC1 GPIO36 and scales clamped ADC calibration endpoints to the
-configured technical range (default `0.0..100.0 %`, resolution `0.1`). Equal
-calibration values, non-finite technical limits, invalid GPIOs, duplicate pins,
-and reserved-pin conflicts mark only the affected input faulty or out of
-service; they do not stop the BACnet server. DS18B20 absence, invalid readings,
-or a disconnected bus expose `Reliability=no-sensor`, fault Status_Flags, and
-fault Event_State. A failed DS18B20 never replaces the retained last valid
-temperature with a fabricated value.
+## IOManager bindings and Live I/O
 
-All buttons use `INPUT_PULLUP`; pressed is BACnet `ACTIVE`. Debouncing uses
-`millis()` and never calls `delay()`.
+The example uses ConfigManager 4.4.1 `cm::IOManager` from `src/io/IOManager.h`.
+The LDR binding is registered as:
 
-## Configuration
+```cpp
+ioManager.addAnalogInput("ldr_s", "LDR light level", 36, true,
+                         0, 4095, 0.0F, 100.0F, "%", 1);
+```
 
-ConfigManager persists the BACnet Device/port, LDR enable/GPIO/raw endpoints,
-LDR inversion/technical range, DS18B20 enable/GPIO, and for each button:
-enable/GPIO/inversion/debounce time. Each LED also has enable/GPIO,
-active-low inversion, and Relinquish Default settings. GPIO and binding changes
-are restart settings. Invalid or duplicate LED bindings are Out Of Service and
-never drive a GPIO. An Out Of Service BO preserves its logical priority state,
-but its physical binding is held inactive. The OLED remains physically connected
-on I2C (`SDA=GPIO21`, `SCL=GPIO22`, address `0x3C`) but is deliberately not
-initialized by this firmware. The BME280 is also physically present on this I2C
-bus but is not a measurement source in this example.
+The parameters are ID, UI name, ADC pin, persistent-settings flag, raw minimum,
+raw maximum, engineering minimum, engineering maximum, unit, and display
+precision. IOManager updates the ADC and engineering values non-blockingly;
+`getAnalogRawValue("ldr_s")` and `getAnalogValue("ldr_s")` provide the two
+representations. Its Live UI displays the LDR's scaled and raw values and the
+three digital button states. No second raw range, GPIO validity table, or ADC
+scaling formula exists in this example.
 
-## Wiring and safety
+IOManager also owns the native GPIO/polarity settings for the buttons and LEDs.
+The DS18B20 is an external sensor rather than an IOManager-native channel, so
+it keeps a small example-only ConfigManager binding.
 
-The authoritative Wokwi development-station diagram and connection reference
-remain in [`dev-info/Wokwi`](../../dev-info/Wokwi) and
-[`dev-info/IO-example-esp32-connection.md`](../../dev-info/IO-example-esp32-connection.md).
-It includes the two commandable LEDs and the reserved, currently un-driven
-relays; Relay 1 is on GPIO19. GPIO12 remains an unused strapping pin. GPIO4 is the confirmed `SET`
-button input and remains a strapping pin. Avoid forcing it to an unsafe level
-during reset or boot.
+Current IOManager 4.4.1 does not provide persisted enable settings for digital
+outputs or cross-channel duplicate-pin detection after arbitrary web UI edits.
+Those are documented follow-up gaps; this example does not recreate a parallel
+I/O manager or pin database.
+
+The ConfigManager Live UI adds a separate BACnet card with commandable LED
+state and effective priority, and a BACnet activity card with last peer,
+service, object, property, age, and bounded object read/write counters. Those
+diagnostics are RAM-only and are not BACnet properties or persistent settings.
+
+BACnet/IP is UDP-based: the UI reports `Recent BACnet activity` or `No recent
+BACnet activity`, never a false connected/disconnected client state. The server
+does not currently implement incoming SubscribeCOV subscriptions, so the UI
+explicitly reports `Server-side COV not supported`.
 
 ## Build and HIL
 
@@ -72,6 +105,8 @@ pio run -d examples/io-example -e wifi-com4 -t upload
 pio device monitor -p COM4 -b 115200
 ```
 
-Read-only input HIL was accepted: the WAGO BACnet Configurator recognized the ESP32,
-AI0/AI1 returned plausible LDR/DS18B20 values and all three BIs operated.
-LED-output HIL, including safe startup behavior, remains pending for this slice.
+The requested user regression is intentionally short: open ConfigManager Live
+I/O, verify light and temperature, press one button, switch one LED through
+BACnet Present_Value, and read an object from the WAGO client to confirm last
+peer/request activity. Do not claim a complete HIL result until those physical
+observations have been made.

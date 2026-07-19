@@ -97,6 +97,200 @@ struct BacnetServerBinaryOutput {
   void* applyContext = nullptr;
 };
 
+// Result returned by the object-centric configuration API. The API never
+// allocates; callers keep configured objects and bound values alive while the
+// server is using them.
+enum class BacnetObjectConfigurationStatus : uint8_t {
+  Ok,
+  InvalidArgument,
+  PropertyTypeMismatch,
+  PropertyNotSupported,
+  DuplicateProperty,
+  PropertyCapacityExceeded,
+  ServerCapacityExceeded,
+  RegistrationModeConflict,
+};
+
+// Allocation-free context for the first invalid high-level object operation.
+// The object owns the referenced name; no error text is copied or allocated.
+struct BacnetObjectConfigurationError {
+  BacnetObjectConfigurationStatus status = BacnetObjectConfigurationStatus::Ok;
+  BacnetObjectId object;
+  BacnetPropertyId property = BacnetPropertyId::ObjectIdentifier;
+  const char* objectName = nullptr;
+};
+
+const char* bacnetObjectConfigurationStatusText(BacnetObjectConfigurationStatus status);
+const char* bacnetPropertyIdText(BacnetPropertyId property);
+
+// Explicit wrappers keep enumerated and bit-string optional properties
+// unambiguous at the call site.
+struct BacnetEnumeratedValue {
+  uint32_t value = 0;
+};
+
+struct BacnetServerStatusFlags {
+  uint32_t value = 0;
+  uint8_t bitCount = 4;
+};
+
+enum class BacnetObjectPropertyValueType : uint8_t {
+  CharacterString,
+  Real,
+  RealReference,
+  Boolean,
+  BooleanReference,
+  Enumerated,
+  EnumeratedReference,
+  BitString,
+  BitStringReference,
+};
+
+struct BacnetObjectPropertySlot {
+  BacnetPropertyId property = BacnetPropertyId::ObjectName;
+  BacnetObjectPropertyValueType type = BacnetObjectPropertyValueType::CharacterString;
+  union Value {
+    const char* text;
+    float realValue;
+    const float* realReference;
+    bool booleanValue;
+    const bool* booleanReference;
+    BacnetEnumeratedValue enumeratedValue;
+    const BacnetEnumeratedValue* enumeratedReference;
+    BacnetServerStatusFlags bitStringValue;
+    const BacnetServerStatusFlags* bitStringReference;
+
+    constexpr Value() : text(nullptr) {}
+  } value;
+};
+
+class BacnetObjectPropertySource {
+public:
+  virtual ~BacnetObjectPropertySource() = default;
+  virtual BacnetObjectId objectId() const = 0;
+  virtual size_t optionalPropertyCount() const = 0;
+  virtual bool optionalPropertyAt(size_t index, BacnetPropertyId& property) const = 0;
+  virtual bool readOptionalProperty(BacnetPropertyId property,
+                                    BacnetValue& value) const = 0;
+};
+
+class BacnetObjectWithProperties : public BacnetObjectPropertySource {
+public:
+  BacnetObjectConfigurationStatus configurationStatus() const;
+  bool isConfigurationValid() const;
+
+protected:
+  void initializeProperties(BacnetObjectPropertySlot* slots, size_t capacity);
+  BacnetObjectConfigurationStatus addPropertyValue(
+    BacnetPropertyId property,
+    BacnetObjectPropertyValueType type,
+    BacnetObjectPropertySlot::Value value);
+  BacnetObjectConfigurationStatus recordConfigurationStatus(
+    BacnetObjectConfigurationStatus status,
+    BacnetPropertyId property);
+  BacnetObjectConfigurationError configurationErrorFor(BacnetObjectId object,
+                                                       const char* objectName) const;
+  bool readStoredProperty(BacnetPropertyId property, BacnetValue& value) const;
+  bool storedPropertyAt(size_t index, BacnetPropertyId& property) const;
+  size_t storedPropertyCount() const;
+
+  virtual bool supportsProperty(BacnetPropertyId property,
+                                BacnetObjectPropertyValueType type) const = 0;
+
+private:
+  BacnetObjectPropertySlot* propertySlots_ = nullptr;
+  size_t propertyCapacity_ = 0;
+  size_t propertyCount_ = 0;
+  BacnetObjectConfigurationStatus configurationStatus_ = BacnetObjectConfigurationStatus::Ok;
+  BacnetPropertyId configurationErrorProperty_ = BacnetPropertyId::ObjectIdentifier;
+};
+
+// The object-centric classes are thin, allocation-free facades over the
+// established caller-owned server structures. The low-level array API remains
+// available for advanced and generated use cases.
+class BacnetAnalogInput final : public BacnetServerAnalogInput,
+                                public BacnetObjectWithProperties {
+public:
+  static constexpr size_t kMaxOptionalProperties = 7;
+
+  BacnetAnalogInput();
+  BacnetObjectConfigurationStatus configure(uint32_t instance, const char* objectName);
+  BacnetObjectConfigurationStatus bindPresentValue(const float* value);
+  void setUnits(uint32_t engineeringUnits);
+  BacnetObjectConfigurationStatus addProperty(BacnetPropertyId property, const char* value);
+  BacnetObjectConfigurationStatus addProperty(BacnetPropertyId property, float value);
+  BacnetObjectConfigurationStatus addProperty(BacnetPropertyId property, const float* value);
+  BacnetObjectConfigurationStatus addProperty(BacnetPropertyId property,
+                                              BacnetEnumeratedValue value);
+  BacnetObjectConfigurationStatus addProperty(BacnetPropertyId property,
+                                              const BacnetEnumeratedValue* value);
+  BacnetObjectConfigurationStatus addProperty(BacnetPropertyId property,
+                                              BacnetServerStatusFlags value);
+  BacnetObjectConfigurationStatus addProperty(BacnetPropertyId property,
+                                              const BacnetServerStatusFlags* value);
+  BacnetObjectConfigurationError configurationError() const;
+  BacnetObjectId objectId() const override;
+  size_t optionalPropertyCount() const override;
+  bool optionalPropertyAt(size_t index, BacnetPropertyId& property) const override;
+  bool readOptionalProperty(BacnetPropertyId property, BacnetValue& value) const override;
+
+private:
+  bool supportsProperty(BacnetPropertyId property,
+                        BacnetObjectPropertyValueType type) const override;
+  BacnetObjectPropertySlot properties_[kMaxOptionalProperties] = {};
+};
+
+class BacnetBinaryInput final : public BacnetServerBinaryInput,
+                                public BacnetObjectWithProperties {
+public:
+  static constexpr size_t kMaxOptionalProperties = 4;
+
+  BacnetBinaryInput();
+  BacnetObjectConfigurationStatus configure(uint32_t instance, const char* objectName);
+  BacnetObjectConfigurationStatus bindPresentValue(const bool* value);
+  BacnetObjectConfigurationStatus addProperty(BacnetPropertyId property, const char* value);
+  BacnetObjectConfigurationStatus addProperty(BacnetPropertyId property,
+                                              BacnetEnumeratedValue value);
+  BacnetObjectConfigurationStatus addProperty(BacnetPropertyId property,
+                                              const BacnetEnumeratedValue* value);
+  BacnetObjectConfigurationStatus addProperty(BacnetPropertyId property,
+                                              BacnetServerStatusFlags value);
+  BacnetObjectConfigurationStatus addProperty(BacnetPropertyId property,
+                                              const BacnetServerStatusFlags* value);
+  BacnetObjectConfigurationError configurationError() const;
+  BacnetObjectId objectId() const override;
+  size_t optionalPropertyCount() const override;
+  bool optionalPropertyAt(size_t index, BacnetPropertyId& property) const override;
+  bool readOptionalProperty(BacnetPropertyId property, BacnetValue& value) const override;
+
+private:
+  bool supportsProperty(BacnetPropertyId property,
+                        BacnetObjectPropertyValueType type) const override;
+  BacnetObjectPropertySlot properties_[kMaxOptionalProperties] = {};
+};
+
+class BacnetBinaryOutput final : public BacnetServerBinaryOutput,
+                                 public BacnetObjectWithProperties {
+public:
+  static constexpr size_t kMaxOptionalProperties = 1;
+
+  BacnetBinaryOutput();
+  BacnetObjectConfigurationStatus configure(uint32_t instance, const char* objectName);
+  void setRelinquishDefault(bool value);
+  void attachOutput(BacnetServerBinaryOutputApply apply, void* context);
+  BacnetObjectConfigurationStatus addProperty(BacnetPropertyId property, const char* value);
+  BacnetObjectConfigurationError configurationError() const;
+  BacnetObjectId objectId() const override;
+  size_t optionalPropertyCount() const override;
+  bool optionalPropertyAt(size_t index, BacnetPropertyId& property) const override;
+  bool readOptionalProperty(BacnetPropertyId property, BacnetValue& value) const override;
+
+private:
+  bool supportsProperty(BacnetPropertyId property,
+                        BacnetObjectPropertyValueType type) const override;
+  BacnetObjectPropertySlot properties_[kMaxOptionalProperties] = {};
+};
+
 enum class BacnetServerPollResult : uint8_t {
   NotRunning,
   NoDatagram,
@@ -110,6 +304,26 @@ enum class BacnetServerPollResult : uint8_t {
   WritePropertyErrorSent,
   SendFailed,
 };
+
+enum class BacnetServerActivityService : uint8_t {
+  ReadProperty,
+  WriteProperty,
+};
+
+// Optional request-observation hook for platform adapters and local diagnostics.
+// It exposes portable BACnet endpoint and request metadata only; it never owns
+// data, logs, allocates, or changes BACnet behavior.
+struct BacnetServerActivity {
+  BacnetIpEndpoint peer;
+  BacnetServerActivityService service = BacnetServerActivityService::ReadProperty;
+  BacnetObjectId object;
+  BacnetPropertyId property = BacnetPropertyId::ObjectName;
+  bool hasPriority = false;
+  uint8_t priority = 0;
+};
+
+using BacnetServerActivityListener = void (*)(void* context,
+                                              const BacnetServerActivity& activity);
 
 class BacnetServer {
 public:
@@ -149,6 +363,12 @@ public:
   bool setBinaryOutputs(BacnetServerBinaryOutput* binaryOutputs,
                         size_t count);
   size_t binaryOutputCount() const;
+  static constexpr size_t kMaxObjectCentricAnalogInputs = 8;
+  static constexpr size_t kMaxObjectCentricBinaryInputs = 8;
+  static constexpr size_t kMaxObjectCentricBinaryOutputs = 8;
+  BacnetObjectConfigurationStatus addObject(BacnetAnalogInput& object);
+  BacnetObjectConfigurationStatus addObject(BacnetBinaryInput& object);
+  BacnetObjectConfigurationStatus addObject(BacnetBinaryOutput& object);
   // Optional caller-owned ReadProperty descriptors. Registrations extend an
   // object's Property_List only when present and must remain valid while the
   // server is running. Passing nullptr with zero entries unregisters all.
@@ -161,6 +381,9 @@ public:
   const BacnetServerDevice& device() const;
   uint32_t deviceInstance() const;
   uint16_t port() const;
+  // Observes accepted ReadProperty and WriteProperty requests. The listener is
+  // invoked synchronously during poll(), so it must be short and non-blocking.
+  void setActivityListener(BacnetServerActivityListener listener, void* context = nullptr);
   BacnetServerPollResult poll();
 
 private:
@@ -189,6 +412,11 @@ private:
   const BacnetServerAnalogInput* findAnalogInput(uint32_t instance) const;
   const BacnetServerBinaryInput* findBinaryInput(uint32_t instance) const;
   BacnetServerBinaryOutput* findBinaryOutput(uint32_t instance) const;
+  const BacnetObjectPropertySource* findObjectPropertySource(
+    BacnetObjectId object) const;
+  const BacnetServerAnalogInput* analogInputAt(size_t index) const;
+  const BacnetServerBinaryInput* binaryInputAt(size_t index) const;
+  BacnetServerBinaryOutput* binaryOutputAt(size_t index) const;
   const BacnetServerPropertyRegistration* findPropertyRegistration(
     BacnetObjectId object,
     BacnetPropertyId property) const;
@@ -214,10 +442,21 @@ private:
   size_t analogValueCount_ = 0;
   BacnetServerAnalogInput* analogInputs_ = nullptr; // Caller-owned.
   size_t analogInputCount_ = 0;
+  BacnetServerAnalogInput* objectCentricAnalogInputs_[kMaxObjectCentricAnalogInputs] = {};
+  BacnetObjectPropertySource* objectCentricAnalogInputProperties_[kMaxObjectCentricAnalogInputs] = {};
+  size_t objectCentricAnalogInputCount_ = 0;
   BacnetServerBinaryInput* binaryInputs_ = nullptr; // Caller-owned.
   size_t binaryInputCount_ = 0;
+  BacnetServerBinaryInput* objectCentricBinaryInputs_[kMaxObjectCentricBinaryInputs] = {};
+  BacnetObjectPropertySource* objectCentricBinaryInputProperties_[kMaxObjectCentricBinaryInputs] = {};
+  size_t objectCentricBinaryInputCount_ = 0;
   const BacnetServerPropertyRegistration* propertyRegistrations_ = nullptr;
   size_t propertyRegistrationCount_ = 0;
   BacnetServerBinaryOutput* binaryOutputs_ = nullptr; // Caller-owned.
   size_t binaryOutputCount_ = 0;
+  BacnetServerBinaryOutput* objectCentricBinaryOutputs_[kMaxObjectCentricBinaryOutputs] = {};
+  BacnetObjectPropertySource* objectCentricBinaryOutputProperties_[kMaxObjectCentricBinaryOutputs] = {};
+  size_t objectCentricBinaryOutputCount_ = 0;
+  BacnetServerActivityListener activityListener_ = nullptr;
+  void* activityListenerContext_ = nullptr;
 };
