@@ -2,6 +2,7 @@
 
 #include "BacnetServer.h"
 
+#include <cmath>
 #include <cstring>
 
 namespace {
@@ -119,7 +120,542 @@ struct ObjectPropertyListContext {
   BacnetObjectId object;
 };
 
+// cppcheck-suppress constParameterCallback
+float readBoundFloat(void* context) {
+  const auto* value = static_cast<const float*>(context);
+  return value == nullptr ? 0.0F : *value;
+}
+
+// cppcheck-suppress constParameterCallback
+bool readBoundBool(void* context) {
+  const auto* value = static_cast<const bool*>(context);
+  return value != nullptr && *value;
+}
+
+bool validObjectConfiguration(uint32_t instance, const char* objectName) {
+  return instance <= 0x003FFFFFUL && objectName != nullptr &&
+         std::strlen(objectName) < BacnetValue::kMaxTextLength;
+}
+
+bool hasExpectedPropertyType(BacnetPropertyId property,
+                             BacnetObjectPropertyValueType type) {
+  switch (property) {
+    case BacnetPropertyId::Description:
+      return type == BacnetObjectPropertyValueType::CharacterString;
+    case BacnetPropertyId::MinPresentValue:
+    case BacnetPropertyId::MaxPresentValue:
+    case BacnetPropertyId::Resolution:
+      return type == BacnetObjectPropertyValueType::Real ||
+             type == BacnetObjectPropertyValueType::RealReference;
+    case BacnetPropertyId::OutOfService:
+      return type == BacnetObjectPropertyValueType::Boolean ||
+             type == BacnetObjectPropertyValueType::BooleanReference;
+    case BacnetPropertyId::Reliability:
+    case BacnetPropertyId::EventState:
+    case BacnetPropertyId::Units:
+      return type == BacnetObjectPropertyValueType::Enumerated ||
+             type == BacnetObjectPropertyValueType::EnumeratedReference;
+    case BacnetPropertyId::StatusFlags:
+      return type == BacnetObjectPropertyValueType::BitString ||
+             type == BacnetObjectPropertyValueType::BitStringReference;
+    default:
+      return false;
+  }
+}
+
 } // namespace
+
+const char* bacnetObjectConfigurationStatusText(BacnetObjectConfigurationStatus status) {
+  switch (status) {
+    case BacnetObjectConfigurationStatus::Ok:
+      return "ok";
+    case BacnetObjectConfigurationStatus::InvalidArgument:
+      return "invalid argument";
+    case BacnetObjectConfigurationStatus::PropertyTypeMismatch:
+      return "property type mismatch";
+    case BacnetObjectConfigurationStatus::PropertyNotSupported:
+      return "property not supported by object type";
+    case BacnetObjectConfigurationStatus::DuplicateProperty:
+      return "duplicate property";
+    case BacnetObjectConfigurationStatus::PropertyCapacityExceeded:
+      return "optional property capacity exceeded";
+    case BacnetObjectConfigurationStatus::ServerCapacityExceeded:
+      return "server object capacity exceeded";
+    case BacnetObjectConfigurationStatus::RegistrationModeConflict:
+      return "registration mode conflict";
+  }
+  return "unknown configuration error";
+}
+
+const char* bacnetPropertyIdText(BacnetPropertyId property) {
+  switch (property) {
+    case BacnetPropertyId::Description:
+      return "Description";
+    case BacnetPropertyId::EventState:
+      return "Event_State";
+    case BacnetPropertyId::MaxPresentValue:
+      return "Max_Present_Value";
+    case BacnetPropertyId::MinPresentValue:
+      return "Min_Present_Value";
+    case BacnetPropertyId::ObjectIdentifier:
+      return "Object_Identifier";
+    case BacnetPropertyId::PresentValue:
+      return "Present_Value";
+    case BacnetPropertyId::Reliability:
+      return "Reliability";
+    case BacnetPropertyId::Resolution:
+      return "Resolution";
+    case BacnetPropertyId::StatusFlags:
+      return "Status_Flags";
+    case BacnetPropertyId::Units:
+      return "Units";
+    default:
+      return "BACnet property";
+  }
+}
+
+void BacnetObjectWithProperties::initializeProperties(
+  BacnetObjectPropertySlot* slots,
+  size_t capacity) {
+  propertySlots_ = slots;
+  propertyCapacity_ = capacity;
+  propertyCount_ = 0;
+  configurationStatus_ = BacnetObjectConfigurationStatus::Ok;
+  configurationErrorProperty_ = BacnetPropertyId::ObjectIdentifier;
+}
+
+BacnetObjectConfigurationStatus BacnetObjectWithProperties::configurationStatus() const {
+  return configurationStatus_;
+}
+
+bool BacnetObjectWithProperties::isConfigurationValid() const {
+  return configurationStatus_ == BacnetObjectConfigurationStatus::Ok;
+}
+
+BacnetObjectConfigurationStatus BacnetObjectWithProperties::recordConfigurationStatus(
+  BacnetObjectConfigurationStatus status,
+  BacnetPropertyId property) {
+  if (configurationStatus_ == BacnetObjectConfigurationStatus::Ok &&
+      status != BacnetObjectConfigurationStatus::Ok) {
+    configurationStatus_ = status;
+    configurationErrorProperty_ = property;
+  }
+  return status;
+}
+
+BacnetObjectConfigurationError BacnetObjectWithProperties::configurationErrorFor(
+  BacnetObjectId object,
+  const char* objectName) const {
+  return {configurationStatus_, object, configurationErrorProperty_, objectName};
+}
+
+BacnetObjectConfigurationStatus BacnetObjectWithProperties::addPropertyValue(
+  BacnetPropertyId property,
+  BacnetObjectPropertyValueType type,
+  BacnetObjectPropertySlot::Value value) {
+  if (!hasExpectedPropertyType(property, type)) {
+    return recordConfigurationStatus(BacnetObjectConfigurationStatus::PropertyTypeMismatch,
+                                     property);
+  }
+  if (!supportsProperty(property, type)) {
+    return recordConfigurationStatus(BacnetObjectConfigurationStatus::PropertyNotSupported,
+                                     property);
+  }
+  for (size_t index = 0; index < propertyCount_; ++index) {
+    if (propertySlots_[index].property == property) {
+      return recordConfigurationStatus(BacnetObjectConfigurationStatus::DuplicateProperty,
+                                       property);
+    }
+  }
+  if (propertySlots_ == nullptr || propertyCount_ == propertyCapacity_) {
+    return recordConfigurationStatus(BacnetObjectConfigurationStatus::PropertyCapacityExceeded,
+                                     property);
+  }
+  propertySlots_[propertyCount_].property = property;
+  propertySlots_[propertyCount_].type = type;
+  propertySlots_[propertyCount_].value = value;
+  ++propertyCount_;
+  return BacnetObjectConfigurationStatus::Ok;
+}
+
+bool BacnetObjectWithProperties::readStoredProperty(BacnetPropertyId property,
+                                                    BacnetValue& value) const {
+  for (size_t index = 0; index < propertyCount_; ++index) {
+    const BacnetObjectPropertySlot& slot = propertySlots_[index];
+    if (slot.property != property) {
+      continue;
+    }
+    value = BacnetValue{};
+    switch (slot.type) {
+      case BacnetObjectPropertyValueType::CharacterString: {
+        if (slot.value.text == nullptr) {
+          return false;
+        }
+        const size_t length = std::strlen(slot.value.text);
+        if (length >= sizeof(value.text)) {
+          return false;
+        }
+        std::memcpy(value.text, slot.value.text, length + 1U);
+        value.type = BacnetValueType::CharacterString;
+        value.textLength = length;
+        return true;
+      }
+      case BacnetObjectPropertyValueType::Real:
+        value.realValue = slot.value.realValue;
+        break;
+      case BacnetObjectPropertyValueType::RealReference:
+        if (slot.value.realReference == nullptr) {
+          return false;
+        }
+        value.realValue = *slot.value.realReference;
+        break;
+      case BacnetObjectPropertyValueType::Boolean:
+        value.booleanValue = slot.value.booleanValue;
+        value.type = BacnetValueType::Boolean;
+        return true;
+      case BacnetObjectPropertyValueType::BooleanReference:
+        if (slot.value.booleanReference == nullptr) {
+          return false;
+        }
+        value.booleanValue = *slot.value.booleanReference;
+        value.type = BacnetValueType::Boolean;
+        return true;
+      case BacnetObjectPropertyValueType::Enumerated:
+        value.unsignedValue = slot.value.enumeratedValue.value;
+        value.type = BacnetValueType::Enumerated;
+        return true;
+      case BacnetObjectPropertyValueType::EnumeratedReference:
+        if (slot.value.enumeratedReference == nullptr) {
+          return false;
+        }
+        value.unsignedValue = slot.value.enumeratedReference->value;
+        value.type = BacnetValueType::Enumerated;
+        return true;
+      case BacnetObjectPropertyValueType::BitString:
+        value.bitStringValue = slot.value.bitStringValue.value;
+        value.bitStringBitCount = slot.value.bitStringValue.bitCount;
+        value.type = BacnetValueType::BitString;
+        return value.bitStringBitCount != 0;
+      case BacnetObjectPropertyValueType::BitStringReference:
+        if (slot.value.bitStringReference == nullptr) {
+          return false;
+        }
+        value.bitStringValue = slot.value.bitStringReference->value;
+        value.bitStringBitCount = slot.value.bitStringReference->bitCount;
+        value.type = BacnetValueType::BitString;
+        return value.bitStringBitCount != 0;
+    }
+    if (!std::isfinite(value.realValue)) {
+      return false;
+    }
+    value.type = BacnetValueType::Real;
+    return true;
+  }
+  return false;
+}
+
+bool BacnetObjectWithProperties::storedPropertyAt(size_t index,
+                                                  BacnetPropertyId& property) const {
+  if (index >= propertyCount_) {
+    return false;
+  }
+  property = propertySlots_[index].property;
+  return true;
+}
+
+size_t BacnetObjectWithProperties::storedPropertyCount() const {
+  return propertyCount_;
+}
+
+BacnetAnalogInput::BacnetAnalogInput() {
+  initializeProperties(properties_, kMaxOptionalProperties);
+}
+
+BacnetObjectConfigurationStatus BacnetAnalogInput::configure(uint32_t instanceValue,
+                                                             const char* name) {
+  if (!validObjectConfiguration(instanceValue, name)) {
+    return recordConfigurationStatus(BacnetObjectConfigurationStatus::InvalidArgument,
+                                     BacnetPropertyId::ObjectIdentifier);
+  }
+  instance = instanceValue;
+  objectName = name;
+  return BacnetObjectConfigurationStatus::Ok;
+}
+
+BacnetObjectConfigurationStatus BacnetAnalogInput::bindPresentValue(
+  const float* value) {
+  if (value == nullptr) {
+    return recordConfigurationStatus(BacnetObjectConfigurationStatus::InvalidArgument,
+                                     BacnetPropertyId::PresentValue);
+  }
+  presentValueProvider = readBoundFloat;
+  presentValueContext = const_cast<float*>(value);
+  return BacnetObjectConfigurationStatus::Ok;
+}
+
+void BacnetAnalogInput::setUnits(uint32_t engineeringUnits) {
+  units = engineeringUnits;
+}
+
+BacnetObjectConfigurationStatus BacnetAnalogInput::addProperty(
+  BacnetPropertyId property, const char* value) {
+  BacnetObjectPropertySlot::Value slotValue;
+  slotValue.text = value;
+  return value == nullptr ? recordConfigurationStatus(BacnetObjectConfigurationStatus::InvalidArgument,
+                                                      property)
+                          : addPropertyValue(property,
+                                             BacnetObjectPropertyValueType::CharacterString,
+                                             slotValue);
+}
+
+BacnetObjectConfigurationStatus BacnetAnalogInput::addProperty(
+  BacnetPropertyId property, float value) {
+  BacnetObjectPropertySlot::Value slotValue;
+  slotValue.realValue = value;
+  return addPropertyValue(property, BacnetObjectPropertyValueType::Real, slotValue);
+}
+
+BacnetObjectConfigurationStatus BacnetAnalogInput::addProperty(
+  BacnetPropertyId property, const float* value) {
+  BacnetObjectPropertySlot::Value slotValue;
+  slotValue.realReference = value;
+  return value == nullptr ? recordConfigurationStatus(BacnetObjectConfigurationStatus::InvalidArgument,
+                                                      property)
+                          : addPropertyValue(property,
+                                             BacnetObjectPropertyValueType::RealReference,
+                                             slotValue);
+}
+
+BacnetObjectConfigurationStatus BacnetAnalogInput::addProperty(
+  BacnetPropertyId property, BacnetEnumeratedValue value) {
+  BacnetObjectPropertySlot::Value slotValue;
+  slotValue.enumeratedValue = value;
+  return addPropertyValue(property, BacnetObjectPropertyValueType::Enumerated, slotValue);
+}
+
+BacnetObjectConfigurationStatus BacnetAnalogInput::addProperty(
+  BacnetPropertyId property, const BacnetEnumeratedValue* value) {
+  BacnetObjectPropertySlot::Value slotValue;
+  slotValue.enumeratedReference = value;
+  return value == nullptr ? recordConfigurationStatus(BacnetObjectConfigurationStatus::InvalidArgument,
+                                                      property)
+                          : addPropertyValue(property,
+                                             BacnetObjectPropertyValueType::EnumeratedReference,
+                                             slotValue);
+}
+
+BacnetObjectConfigurationStatus BacnetAnalogInput::addProperty(
+  BacnetPropertyId property, BacnetServerStatusFlags value) {
+  BacnetObjectPropertySlot::Value slotValue;
+  slotValue.bitStringValue = value;
+  return addPropertyValue(property, BacnetObjectPropertyValueType::BitString, slotValue);
+}
+
+BacnetObjectConfigurationStatus BacnetAnalogInput::addProperty(
+  BacnetPropertyId property, const BacnetServerStatusFlags* value) {
+  BacnetObjectPropertySlot::Value slotValue;
+  slotValue.bitStringReference = value;
+  return value == nullptr ? recordConfigurationStatus(BacnetObjectConfigurationStatus::InvalidArgument,
+                                                      property)
+                          : addPropertyValue(property,
+                                             BacnetObjectPropertyValueType::BitStringReference,
+                                             slotValue);
+}
+
+BacnetObjectId BacnetAnalogInput::objectId() const {
+  return {static_cast<uint16_t>(BacnetObjectType::AnalogInput), instance};
+}
+
+BacnetObjectConfigurationError BacnetAnalogInput::configurationError() const {
+  return configurationErrorFor(objectId(), objectName);
+}
+
+size_t BacnetAnalogInput::optionalPropertyCount() const {
+  return storedPropertyCount();
+}
+bool BacnetAnalogInput::optionalPropertyAt(size_t index, BacnetPropertyId& property) const {
+  return storedPropertyAt(index, property);
+}
+bool BacnetAnalogInput::readOptionalProperty(BacnetPropertyId property, BacnetValue& value) const {
+  return readStoredProperty(property, value);
+}
+bool BacnetAnalogInput::supportsProperty(BacnetPropertyId property,
+                                         BacnetObjectPropertyValueType type) const {
+  return (property == BacnetPropertyId::Description &&
+          type == BacnetObjectPropertyValueType::CharacterString) ||
+         ((property == BacnetPropertyId::MinPresentValue ||
+           property == BacnetPropertyId::MaxPresentValue ||
+           property == BacnetPropertyId::Resolution) &&
+          (type == BacnetObjectPropertyValueType::Real ||
+           type == BacnetObjectPropertyValueType::RealReference)) ||
+         ((property == BacnetPropertyId::Reliability || property == BacnetPropertyId::EventState) &&
+          (type == BacnetObjectPropertyValueType::Enumerated ||
+           type == BacnetObjectPropertyValueType::EnumeratedReference)) ||
+         (property == BacnetPropertyId::StatusFlags &&
+          (type == BacnetObjectPropertyValueType::BitString ||
+           type == BacnetObjectPropertyValueType::BitStringReference));
+}
+
+BacnetBinaryInput::BacnetBinaryInput() {
+  initializeProperties(properties_, kMaxOptionalProperties);
+}
+
+BacnetObjectConfigurationStatus BacnetBinaryInput::configure(uint32_t instanceValue,
+                                                             const char* name) {
+  if (!validObjectConfiguration(instanceValue, name)) {
+    return recordConfigurationStatus(BacnetObjectConfigurationStatus::InvalidArgument,
+                                     BacnetPropertyId::ObjectIdentifier);
+  }
+  instance = instanceValue;
+  objectName = name;
+  return BacnetObjectConfigurationStatus::Ok;
+}
+
+BacnetObjectConfigurationStatus BacnetBinaryInput::bindPresentValue(
+  const bool* value) {
+  if (value == nullptr) {
+    return recordConfigurationStatus(BacnetObjectConfigurationStatus::InvalidArgument,
+                                     BacnetPropertyId::PresentValue);
+  }
+  presentValueProvider = readBoundBool;
+  presentValueContext = const_cast<bool*>(value);
+  return BacnetObjectConfigurationStatus::Ok;
+}
+
+BacnetObjectConfigurationStatus BacnetBinaryInput::addProperty(
+  BacnetPropertyId property, const char* value) {
+  BacnetObjectPropertySlot::Value slotValue;
+  slotValue.text = value;
+  return value == nullptr ? recordConfigurationStatus(BacnetObjectConfigurationStatus::InvalidArgument,
+                                                      property)
+                          : addPropertyValue(property,
+                                             BacnetObjectPropertyValueType::CharacterString,
+                                             slotValue);
+}
+
+BacnetObjectConfigurationStatus BacnetBinaryInput::addProperty(
+  BacnetPropertyId property, BacnetEnumeratedValue value) {
+  BacnetObjectPropertySlot::Value slotValue;
+  slotValue.enumeratedValue = value;
+  return addPropertyValue(property, BacnetObjectPropertyValueType::Enumerated, slotValue);
+}
+
+BacnetObjectConfigurationStatus BacnetBinaryInput::addProperty(
+  BacnetPropertyId property, const BacnetEnumeratedValue* value) {
+  BacnetObjectPropertySlot::Value slotValue;
+  slotValue.enumeratedReference = value;
+  return value == nullptr ? recordConfigurationStatus(BacnetObjectConfigurationStatus::InvalidArgument,
+                                                      property)
+                          : addPropertyValue(property,
+                                             BacnetObjectPropertyValueType::EnumeratedReference,
+                                             slotValue);
+}
+
+BacnetObjectConfigurationStatus BacnetBinaryInput::addProperty(
+  BacnetPropertyId property, BacnetServerStatusFlags value) {
+  BacnetObjectPropertySlot::Value slotValue;
+  slotValue.bitStringValue = value;
+  return addPropertyValue(property, BacnetObjectPropertyValueType::BitString, slotValue);
+}
+
+BacnetObjectConfigurationStatus BacnetBinaryInput::addProperty(
+  BacnetPropertyId property, const BacnetServerStatusFlags* value) {
+  BacnetObjectPropertySlot::Value slotValue;
+  slotValue.bitStringReference = value;
+  return value == nullptr ? recordConfigurationStatus(BacnetObjectConfigurationStatus::InvalidArgument,
+                                                      property)
+                          : addPropertyValue(property,
+                                             BacnetObjectPropertyValueType::BitStringReference,
+                                             slotValue);
+}
+
+BacnetObjectId BacnetBinaryInput::objectId() const {
+  return {static_cast<uint16_t>(BacnetObjectType::BinaryInput), instance};
+}
+
+BacnetObjectConfigurationError BacnetBinaryInput::configurationError() const {
+  return configurationErrorFor(objectId(), objectName);
+}
+
+size_t BacnetBinaryInput::optionalPropertyCount() const {
+  return storedPropertyCount();
+}
+bool BacnetBinaryInput::optionalPropertyAt(size_t index, BacnetPropertyId& property) const {
+  return storedPropertyAt(index, property);
+}
+bool BacnetBinaryInput::readOptionalProperty(BacnetPropertyId property, BacnetValue& value) const {
+  return readStoredProperty(property, value);
+}
+bool BacnetBinaryInput::supportsProperty(BacnetPropertyId property,
+                                         BacnetObjectPropertyValueType type) const {
+  return (property == BacnetPropertyId::Description &&
+          type == BacnetObjectPropertyValueType::CharacterString) ||
+         ((property == BacnetPropertyId::Reliability || property == BacnetPropertyId::EventState) &&
+          (type == BacnetObjectPropertyValueType::Enumerated ||
+           type == BacnetObjectPropertyValueType::EnumeratedReference)) ||
+         (property == BacnetPropertyId::StatusFlags &&
+          (type == BacnetObjectPropertyValueType::BitString ||
+           type == BacnetObjectPropertyValueType::BitStringReference));
+}
+
+BacnetBinaryOutput::BacnetBinaryOutput() {
+  initializeProperties(properties_, kMaxOptionalProperties);
+}
+
+BacnetObjectConfigurationStatus BacnetBinaryOutput::configure(uint32_t instanceValue,
+                                                              const char* name) {
+  if (!validObjectConfiguration(instanceValue, name)) {
+    return recordConfigurationStatus(BacnetObjectConfigurationStatus::InvalidArgument,
+                                     BacnetPropertyId::ObjectIdentifier);
+  }
+  instance = instanceValue;
+  objectName = name;
+  return BacnetObjectConfigurationStatus::Ok;
+}
+
+void BacnetBinaryOutput::setRelinquishDefault(bool value) {
+  priority.relinquishDefault = value;
+}
+
+void BacnetBinaryOutput::attachOutput(BacnetServerBinaryOutputApply outputApply,
+                                      void* context) {
+  apply = outputApply;
+  applyContext = context;
+}
+
+BacnetObjectConfigurationStatus BacnetBinaryOutput::addProperty(
+  BacnetPropertyId property, const char* value) {
+  BacnetObjectPropertySlot::Value slotValue;
+  slotValue.text = value;
+  return value == nullptr ? recordConfigurationStatus(BacnetObjectConfigurationStatus::InvalidArgument,
+                                                      property)
+                          : addPropertyValue(property,
+                                             BacnetObjectPropertyValueType::CharacterString,
+                                             slotValue);
+}
+
+BacnetObjectId BacnetBinaryOutput::objectId() const {
+  return {static_cast<uint16_t>(BacnetObjectType::BinaryOutput), instance};
+}
+
+BacnetObjectConfigurationError BacnetBinaryOutput::configurationError() const {
+  return configurationErrorFor(objectId(), objectName);
+}
+
+size_t BacnetBinaryOutput::optionalPropertyCount() const {
+  return storedPropertyCount();
+}
+bool BacnetBinaryOutput::optionalPropertyAt(size_t index, BacnetPropertyId& property) const {
+  return storedPropertyAt(index, property);
+}
+bool BacnetBinaryOutput::readOptionalProperty(BacnetPropertyId property, BacnetValue& value) const {
+  return readStoredProperty(property, value);
+}
+bool BacnetBinaryOutput::supportsProperty(BacnetPropertyId property,
+                                          BacnetObjectPropertyValueType type) const {
+  return property == BacnetPropertyId::Description &&
+         type == BacnetObjectPropertyValueType::CharacterString;
+}
 
 BacnetServer::BacnetServer(BacnetDatagramTransport& transport)
     : transport_(&transport) {}
@@ -194,6 +730,9 @@ size_t BacnetServer::analogValueCount() const {
 
 bool BacnetServer::setAnalogInputs(BacnetServerAnalogInput* analogInputs,
                                    size_t count) {
+  if (objectCentricAnalogInputCount_ != 0) {
+    return false;
+  }
   if (count == 0) {
     analogInputs_ = nullptr;
     analogInputCount_ = 0;
@@ -218,11 +757,15 @@ bool BacnetServer::setAnalogInputs(BacnetServerAnalogInput* analogInputs,
 }
 
 size_t BacnetServer::analogInputCount() const {
-  return analogInputCount_;
+  return objectCentricAnalogInputCount_ != 0 ? objectCentricAnalogInputCount_
+                                             : analogInputCount_;
 }
 
 bool BacnetServer::setBinaryInputs(BacnetServerBinaryInput* binaryInputs,
                                    size_t count) {
+  if (objectCentricBinaryInputCount_ != 0) {
+    return false;
+  }
   if (count == 0) {
     binaryInputs_ = nullptr;
     binaryInputCount_ = 0;
@@ -247,11 +790,15 @@ bool BacnetServer::setBinaryInputs(BacnetServerBinaryInput* binaryInputs,
 }
 
 size_t BacnetServer::binaryInputCount() const {
-  return binaryInputCount_;
+  return objectCentricBinaryInputCount_ != 0 ? objectCentricBinaryInputCount_
+                                             : binaryInputCount_;
 }
 
 bool BacnetServer::setBinaryOutputs(BacnetServerBinaryOutput* binaryOutputs,
                                     size_t count) {
+  if (objectCentricBinaryOutputCount_ != 0) {
+    return false;
+  }
   if (count == 0) {
     binaryOutputs_ = nullptr;
     binaryOutputCount_ = 0;
@@ -277,7 +824,80 @@ bool BacnetServer::setBinaryOutputs(BacnetServerBinaryOutput* binaryOutputs,
 }
 
 size_t BacnetServer::binaryOutputCount() const {
-  return binaryOutputCount_;
+  return objectCentricBinaryOutputCount_ != 0 ? objectCentricBinaryOutputCount_
+                                              : binaryOutputCount_;
+}
+
+BacnetObjectConfigurationStatus BacnetServer::addObject(BacnetAnalogInput& object) {
+  if (!object.isConfigurationValid()) {
+    return object.configurationStatus();
+  }
+  if (analogInputCount_ != 0) {
+    return BacnetObjectConfigurationStatus::RegistrationModeConflict;
+  }
+  if (!validObjectConfiguration(object.instance, object.objectName)) {
+    return BacnetObjectConfigurationStatus::InvalidArgument;
+  }
+  for (size_t index = 0; index < objectCentricAnalogInputCount_; ++index) {
+    if (objectCentricAnalogInputs_[index]->instance == object.instance) {
+      return BacnetObjectConfigurationStatus::DuplicateProperty;
+    }
+  }
+  if (objectCentricAnalogInputCount_ == kMaxObjectCentricAnalogInputs) {
+    return BacnetObjectConfigurationStatus::ServerCapacityExceeded;
+  }
+  objectCentricAnalogInputs_[objectCentricAnalogInputCount_] = &object;
+  objectCentricAnalogInputProperties_[objectCentricAnalogInputCount_] = &object;
+  ++objectCentricAnalogInputCount_;
+  return BacnetObjectConfigurationStatus::Ok;
+}
+
+BacnetObjectConfigurationStatus BacnetServer::addObject(BacnetBinaryInput& object) {
+  if (!object.isConfigurationValid()) {
+    return object.configurationStatus();
+  }
+  if (binaryInputCount_ != 0) {
+    return BacnetObjectConfigurationStatus::RegistrationModeConflict;
+  }
+  if (!validObjectConfiguration(object.instance, object.objectName)) {
+    return BacnetObjectConfigurationStatus::InvalidArgument;
+  }
+  for (size_t index = 0; index < objectCentricBinaryInputCount_; ++index) {
+    if (objectCentricBinaryInputs_[index]->instance == object.instance) {
+      return BacnetObjectConfigurationStatus::DuplicateProperty;
+    }
+  }
+  if (objectCentricBinaryInputCount_ == kMaxObjectCentricBinaryInputs) {
+    return BacnetObjectConfigurationStatus::ServerCapacityExceeded;
+  }
+  objectCentricBinaryInputs_[objectCentricBinaryInputCount_] = &object;
+  objectCentricBinaryInputProperties_[objectCentricBinaryInputCount_] = &object;
+  ++objectCentricBinaryInputCount_;
+  return BacnetObjectConfigurationStatus::Ok;
+}
+
+BacnetObjectConfigurationStatus BacnetServer::addObject(BacnetBinaryOutput& object) {
+  if (!object.isConfigurationValid()) {
+    return object.configurationStatus();
+  }
+  if (binaryOutputCount_ != 0) {
+    return BacnetObjectConfigurationStatus::RegistrationModeConflict;
+  }
+  if (!validObjectConfiguration(object.instance, object.objectName) || object.polarity > 1U) {
+    return BacnetObjectConfigurationStatus::InvalidArgument;
+  }
+  for (size_t index = 0; index < objectCentricBinaryOutputCount_; ++index) {
+    if (objectCentricBinaryOutputs_[index]->instance == object.instance) {
+      return BacnetObjectConfigurationStatus::DuplicateProperty;
+    }
+  }
+  if (objectCentricBinaryOutputCount_ == kMaxObjectCentricBinaryOutputs) {
+    return BacnetObjectConfigurationStatus::ServerCapacityExceeded;
+  }
+  objectCentricBinaryOutputs_[objectCentricBinaryOutputCount_] = &object;
+  objectCentricBinaryOutputProperties_[objectCentricBinaryOutputCount_] = &object;
+  ++objectCentricBinaryOutputCount_;
+  return BacnetObjectConfigurationStatus::Ok;
 }
 
 bool BacnetServer::setPropertyRegistrations(
@@ -333,6 +953,12 @@ uint16_t BacnetServer::port() const {
   return port_;
 }
 
+void BacnetServer::setActivityListener(BacnetServerActivityListener listener,
+                                       void* context) {
+  activityListener_ = listener;
+  activityListenerContext_ = context;
+}
+
 BacnetServerPollResult BacnetServer::poll() {
   if (!running_ || transport_ == nullptr) {
     return BacnetServerPollResult::NotRunning;
@@ -374,6 +1000,16 @@ BacnetServerPollResult BacnetServer::poll() {
     return BacnetServerPollResult::Malformed;
   }
   if (readStatus == BacnetReadPropertyRequestParseStatus::ReadProperty) {
+    if (activityListener_ != nullptr) {
+      activityListener_(activityListenerContext_, BacnetServerActivity{
+                                                    source,
+                                                    BacnetServerActivityService::ReadProperty,
+                                                    readProperty.request.object,
+                                                    readProperty.request.property,
+                                                    false,
+                                                    0,
+                                                  });
+    }
     return handleReadProperty(source, readProperty);
   }
 
@@ -382,8 +1018,19 @@ BacnetServerPollResult BacnetServer::poll() {
     packet, bytesRead, writeProperty);
   if (writeStatus == BacnetWritePropertyRequestParseStatus::Malformed)
     return BacnetServerPollResult::Malformed;
-  if (writeStatus == BacnetWritePropertyRequestParseStatus::WriteProperty)
+  if (writeStatus == BacnetWritePropertyRequestParseStatus::WriteProperty) {
+    if (activityListener_ != nullptr) {
+      activityListener_(activityListenerContext_, BacnetServerActivity{
+                                                    source,
+                                                    BacnetServerActivityService::WriteProperty,
+                                                    writeProperty.request.object,
+                                                    writeProperty.request.property,
+                                                    writeProperty.hasPriority,
+                                                    writeProperty.priority,
+                                                  });
+    }
     return handleWriteProperty(source, writeProperty);
+  }
 
   return sendReject(source, confirmedRequest.invokeId)
            ? BacnetServerPollResult::RejectSent
@@ -424,7 +1071,7 @@ BacnetServerPollResult BacnetServer::handleReadProperty(
   } else if (isDevice) {
     if (request.request.property == BacnetPropertyId::ObjectList) {
       if (request.request.arrayIndex != kBacnetNoArrayIndex &&
-          request.request.arrayIndex > analogValueCount_ + analogInputCount_ + binaryInputCount_ + binaryOutputCount_ + 1U) {
+          request.request.arrayIndex > analogValueCount_ + analogInputCount() + binaryInputCount() + binaryOutputCount() + 1U) {
         errorClass = 2;
         errorCode = 42;
       }
@@ -481,7 +1128,7 @@ BacnetServerPollResult BacnetServer::handleReadProperty(
         response,
         sizeof(response),
         request,
-        analogValueCount_ + analogInputCount_ + binaryInputCount_ + binaryOutputCount_ + 1U,
+        analogValueCount_ + analogInputCount() + binaryInputCount() + binaryOutputCount() + 1U,
         objectListEntry,
         this);
     } else if (isDevice && request.request.property == BacnetPropertyId::PropertyList) {
@@ -657,23 +1304,23 @@ bool BacnetServer::readDeviceProperty(BacnetPropertyId property,
     case BacnetPropertyId::ProtocolServicesSupported:
       value.type = BacnetValueType::BitString;
       value.bitStringValue = 1UL << 12U;
-      if (binaryOutputCount_ != 0)
+      if (binaryOutputCount() != 0)
         value.bitStringValue |= 1UL << 15U;
-      value.bitStringBitCount = binaryOutputCount_ == 0 ? 13 : 16;
+      value.bitStringBitCount = binaryOutputCount() == 0 ? 13 : 16;
       return true;
     case BacnetPropertyId::ProtocolObjectTypesSupported:
       value.type = BacnetValueType::BitString;
       value.bitStringValue = 1UL << static_cast<uint16_t>(BacnetObjectType::Device);
-      if (analogInputCount_ != 0) {
+      if (analogInputCount() != 0) {
         value.bitStringValue |= 1UL << static_cast<uint16_t>(BacnetObjectType::AnalogInput);
       }
       if (analogValueCount_ != 0) {
         value.bitStringValue |= 1UL << static_cast<uint16_t>(BacnetObjectType::AnalogValue);
       }
-      if (binaryInputCount_ != 0) {
+      if (binaryInputCount() != 0) {
         value.bitStringValue |= 1UL << static_cast<uint16_t>(BacnetObjectType::BinaryInput);
       }
-      if (binaryOutputCount_ != 0) {
+      if (binaryOutputCount() != 0) {
         value.bitStringValue |= 1UL << static_cast<uint16_t>(BacnetObjectType::BinaryOutput);
       }
       value.bitStringBitCount = 9;
@@ -745,6 +1392,11 @@ bool BacnetServer::readAnalogInputProperty(
   BacnetValue& value) const {
   const BacnetObjectId object{static_cast<uint16_t>(BacnetObjectType::AnalogInput),
                               analogInput.instance};
+  if (const BacnetObjectPropertySource* source = findObjectPropertySource(object)) {
+    if (source->readOptionalProperty(property, value)) {
+      return true;
+    }
+  }
   if (const BacnetServerPropertyRegistration* registration =
         findPropertyRegistration(object, property)) {
     return registration->provider(registration->context, value);
@@ -800,6 +1452,11 @@ bool BacnetServer::readBinaryInputProperty(
   BacnetValue& value) const {
   const BacnetObjectId object{static_cast<uint16_t>(BacnetObjectType::BinaryInput),
                               binaryInput.instance};
+  if (const BacnetObjectPropertySource* source = findObjectPropertySource(object)) {
+    if (source->readOptionalProperty(property, value)) {
+      return true;
+    }
+  }
   if (const BacnetServerPropertyRegistration* registration =
         findPropertyRegistration(object, property)) {
     return registration->provider(registration->context, value);
@@ -853,6 +1510,11 @@ bool BacnetServer::readBinaryOutputProperty(
   BacnetValue& value) const {
   const BacnetObjectId object{static_cast<uint16_t>(BacnetObjectType::BinaryOutput),
                               binaryOutput.instance};
+  if (const BacnetObjectPropertySource* source = findObjectPropertySource(object)) {
+    if (source->readOptionalProperty(property, value)) {
+      return true;
+    }
+  }
   if (const BacnetServerPropertyRegistration* registration =
         findPropertyRegistration(object, property)) {
     return registration->provider(registration->context, value);
@@ -941,6 +1603,14 @@ size_t BacnetServer::objectPropertyCount(BacnetObjectId object) const {
         ++count;
     }
   }
+  if (const BacnetObjectPropertySource* source = findObjectPropertySource(object)) {
+    for (size_t index = 0; index < source->optionalPropertyCount(); ++index) {
+      BacnetPropertyId property;
+      if (source->optionalPropertyAt(index, property) && !isBaseProperty(object, property)) {
+        ++count;
+      }
+    }
+  }
   return count;
 }
 
@@ -993,6 +1663,20 @@ bool BacnetServer::objectPropertyAt(BacnetObjectId object,
     }
     --optionalIndex;
   }
+  if (const BacnetObjectPropertySource* source = findObjectPropertySource(object)) {
+    for (size_t sourceIndex = 0; sourceIndex < source->optionalPropertyCount(); ++sourceIndex) {
+      BacnetPropertyId sourceProperty;
+      if (!source->optionalPropertyAt(sourceIndex, sourceProperty) ||
+          isBaseProperty(object, sourceProperty)) {
+        continue;
+      }
+      if (optionalIndex == 0) {
+        property = sourceProperty;
+        return true;
+      }
+      --optionalIndex;
+    }
+  }
   return false;
 }
 
@@ -1028,25 +1712,69 @@ const BacnetServerAnalogValue* BacnetServer::findAnalogValue(uint32_t instance) 
 }
 
 const BacnetServerAnalogInput* BacnetServer::findAnalogInput(uint32_t instance) const {
-  for (size_t index = 0; index < analogInputCount_; ++index) {
-    if (analogInputs_[index].instance == instance)
-      return &analogInputs_[index];
+  for (size_t index = 0; index < analogInputCount(); ++index) {
+    const BacnetServerAnalogInput* input = analogInputAt(index);
+    if (input != nullptr && input->instance == instance)
+      return input;
   }
   return nullptr;
 }
 
 const BacnetServerBinaryInput* BacnetServer::findBinaryInput(uint32_t instance) const {
-  for (size_t index = 0; index < binaryInputCount_; ++index) {
-    if (binaryInputs_[index].instance == instance)
-      return &binaryInputs_[index];
+  for (size_t index = 0; index < binaryInputCount(); ++index) {
+    const BacnetServerBinaryInput* input = binaryInputAt(index);
+    if (input != nullptr && input->instance == instance)
+      return input;
   }
   return nullptr;
 }
 
 BacnetServerBinaryOutput* BacnetServer::findBinaryOutput(uint32_t instance) const {
-  for (size_t index = 0; index < binaryOutputCount_; ++index) {
-    if (binaryOutputs_[index].instance == instance)
-      return &binaryOutputs_[index];
+  for (size_t index = 0; index < binaryOutputCount(); ++index) {
+    BacnetServerBinaryOutput* output = binaryOutputAt(index);
+    if (output != nullptr && output->instance == instance)
+      return output;
+  }
+  return nullptr;
+}
+
+const BacnetServerAnalogInput* BacnetServer::analogInputAt(size_t index) const {
+  return objectCentricAnalogInputCount_ != 0
+           ? (index < objectCentricAnalogInputCount_ ? objectCentricAnalogInputs_[index] : nullptr)
+           : (index < analogInputCount_ ? &analogInputs_[index] : nullptr);
+}
+
+const BacnetServerBinaryInput* BacnetServer::binaryInputAt(size_t index) const {
+  return objectCentricBinaryInputCount_ != 0
+           ? (index < objectCentricBinaryInputCount_ ? objectCentricBinaryInputs_[index] : nullptr)
+           : (index < binaryInputCount_ ? &binaryInputs_[index] : nullptr);
+}
+
+BacnetServerBinaryOutput* BacnetServer::binaryOutputAt(size_t index) const {
+  return objectCentricBinaryOutputCount_ != 0
+           ? (index < objectCentricBinaryOutputCount_ ? objectCentricBinaryOutputs_[index] : nullptr)
+           : (index < binaryOutputCount_ ? &binaryOutputs_[index] : nullptr);
+}
+
+const BacnetObjectPropertySource* BacnetServer::findObjectPropertySource(
+  BacnetObjectId object) const {
+  const BacnetObjectPropertySource* const* sources = nullptr;
+  size_t count = 0;
+  if (object.type == static_cast<uint16_t>(BacnetObjectType::AnalogInput)) {
+    sources = objectCentricAnalogInputProperties_;
+    count = objectCentricAnalogInputCount_;
+  } else if (object.type == static_cast<uint16_t>(BacnetObjectType::BinaryInput)) {
+    sources = objectCentricBinaryInputProperties_;
+    count = objectCentricBinaryInputCount_;
+  } else if (object.type == static_cast<uint16_t>(BacnetObjectType::BinaryOutput)) {
+    sources = objectCentricBinaryOutputProperties_;
+    count = objectCentricBinaryOutputCount_;
+  }
+  for (size_t index = 0; index < count; ++index) {
+    if (sources[index] != nullptr && sources[index]->objectId().type == object.type &&
+        sources[index]->objectId().instance == object.instance) {
+      return sources[index];
+    }
   }
   return nullptr;
 }
@@ -1055,7 +1783,7 @@ bool BacnetServer::objectListEntry(const void* context,
                                    size_t index,
                                    BacnetObjectId& object) {
   const auto* server = static_cast<const BacnetServer*>(context);
-  const size_t objectCount = server == nullptr ? 0 : server->analogValueCount_ + server->analogInputCount_ + server->binaryInputCount_ + server->binaryOutputCount_ + 1U;
+  const size_t objectCount = server == nullptr ? 0 : server->analogValueCount_ + server->analogInputCount() + server->binaryInputCount() + server->binaryOutputCount() + 1U;
   if (server == nullptr || index >= objectCount) {
     return false;
   }
@@ -1071,20 +1799,32 @@ bool BacnetServer::objectListEntry(const void* context,
     return true;
   }
   index -= server->analogValueCount_;
-  if (index < server->analogInputCount_) {
+  if (index < server->analogInputCount()) {
+    const BacnetServerAnalogInput* input = server->analogInputAt(index);
+    if (input == nullptr) {
+      return false;
+    }
     object = BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::AnalogInput),
-                            server->analogInputs_[index].instance};
+                            input->instance};
     return true;
   }
-  index -= server->analogInputCount_;
-  if (index < server->binaryInputCount_) {
+  index -= server->analogInputCount();
+  if (index < server->binaryInputCount()) {
+    const BacnetServerBinaryInput* input = server->binaryInputAt(index);
+    if (input == nullptr) {
+      return false;
+    }
     object = BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::BinaryInput),
-                            server->binaryInputs_[index].instance};
+                            input->instance};
     return true;
   }
-  index -= server->binaryInputCount_;
+  index -= server->binaryInputCount();
+  const BacnetServerBinaryOutput* output = server->binaryOutputAt(index);
+  if (output == nullptr) {
+    return false;
+  }
   object = BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::BinaryOutput),
-                          server->binaryOutputs_[index].instance};
+                          output->instance};
   return true;
 }
 
