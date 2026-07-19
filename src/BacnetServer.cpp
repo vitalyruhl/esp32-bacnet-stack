@@ -2,6 +2,7 @@
 
 #include "BacnetServer.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 
@@ -614,16 +615,60 @@ BacnetObjectConfigurationStatus BacnetBinaryOutput::configure(uint32_t instanceV
 }
 
 void BacnetBinaryOutput::setRelinquishDefault(bool value) {
+  const bool previousEffectiveValue = priority.effectiveValue();
   priority.relinquishDefault = value;
+  if (apply != nullptr && previousEffectiveValue != priority.effectiveValue()) {
+    apply(applyContext, priority.effectiveValue(), outOfService);
+  }
 }
 
-bool BacnetBinaryOutput::setWritePriority(uint8_t value) {
-  if (value > BacnetCommandPriority<bool>::kSlotCount) {
+bool BacnetBinaryOutput::setLocalWritePriority(uint8_t value) {
+  if (value == 0 || value > BacnetCommandPriority<bool>::kSlotCount) {
     return false;
   }
-  writePriority = value;
-  hasWritePriority = true;
+  localWritePriority = value;
+  hasLocalWritePriority = true;
   return true;
+}
+
+void BacnetBinaryOutput::bindServerLocalWritePriority(const uint8_t* priorityValue) {
+  serverLocalWritePriority_ = priorityValue;
+}
+
+bool BacnetBinaryOutput::applyLocalWrite(bool value,
+                                         uint8_t priorityValue,
+                                         bool relinquishValue) {
+  if (priorityValue > BacnetCommandPriority<bool>::kSlotCount ||
+      (priorityValue == 0 && relinquishValue)) {
+    return false;
+  }
+  const bool previousEffectiveValue = priority.effectiveValue();
+  if (priorityValue == 0) {
+    priority.relinquishDefault = value;
+  } else if (!priority.write(priorityValue, relinquishValue, value)) {
+    return false;
+  }
+  if (apply != nullptr && previousEffectiveValue != priority.effectiveValue()) {
+    apply(applyContext, priority.effectiveValue(), outOfService);
+  }
+  return true;
+}
+
+bool BacnetBinaryOutput::writeValue(bool value) {
+  const uint8_t priorityValue = hasLocalWritePriority
+                                  ? localWritePriority
+                                  : (serverLocalWritePriority_ == nullptr
+                                       ? BacnetCommandPriority<bool>::kSlotCount
+                                       : *serverLocalWritePriority_);
+  return applyLocalWrite(value, priorityValue, false);
+}
+
+bool BacnetBinaryOutput::writeValue(bool value, uint8_t priorityValue) {
+  return applyLocalWrite(value, priorityValue, false);
+}
+
+bool BacnetBinaryOutput::relinquish(uint8_t priorityValue) {
+  return priorityValue != 0 && applyLocalWrite(false, priorityValue, true);
 }
 
 void BacnetBinaryOutput::attachOutput(BacnetServerBinaryOutputApply outputApply,
@@ -689,7 +734,9 @@ bool BacnetServer::begin(const BacnetServerDevice& configuredDevice,
   port_ = localPort;
   for (size_t index = 0; index < kMaxCovSubscriptions; ++index) {
     covSubscriptions_[index] = BacnetServerCovSubscription{};
-    covSnapshotValid_[index] = false;
+    for (size_t propertyIndex = 0; propertyIndex < kCovObjectPropertyCount; ++propertyIndex) {
+      covSnapshotValid_[index][propertyIndex] = false;
+    }
     covConfirmedRetryCounts_[index] = 0;
   }
   running_ = true;
@@ -709,7 +756,9 @@ void BacnetServer::end() {
   running_ = false;
   for (size_t index = 0; index < kMaxCovSubscriptions; ++index) {
     covSubscriptions_[index] = BacnetServerCovSubscription{};
-    covSnapshotValid_[index] = false;
+    for (size_t propertyIndex = 0; propertyIndex < kCovObjectPropertyCount; ++propertyIndex) {
+      covSnapshotValid_[index][propertyIndex] = false;
+    }
     covConfirmedRetryCounts_[index] = 0;
   }
 }
@@ -915,6 +964,7 @@ BacnetObjectConfigurationStatus BacnetServer::addObject(BacnetBinaryOutput& obje
   }
   objectCentricBinaryOutputs_[objectCentricBinaryOutputCount_] = &object;
   objectCentricBinaryOutputProperties_[objectCentricBinaryOutputCount_] = &object;
+  object.bindServerLocalWritePriority(&localWritePriority_);
   ++objectCentricBinaryOutputCount_;
   return BacnetObjectConfigurationStatus::Ok;
 }
@@ -972,16 +1022,16 @@ uint16_t BacnetServer::port() const {
   return port_;
 }
 
-bool BacnetServer::setDefaultWritePriority(uint8_t priority) {
-  if (priority > BacnetCommandPriority<bool>::kSlotCount) {
+bool BacnetServer::setLocalWritePriority(uint8_t priority) {
+  if (priority == 0 || priority > BacnetCommandPriority<bool>::kSlotCount) {
     return false;
   }
-  defaultWritePriority_ = priority;
+  localWritePriority_ = priority;
   return true;
 }
 
-uint8_t BacnetServer::defaultWritePriority() const {
-  return defaultWritePriority_;
+uint8_t BacnetServer::localWritePriority() const {
+  return localWritePriority_;
 }
 
 void BacnetServer::setClock(const BacnetMonotonicClock* clock) {
@@ -989,13 +1039,10 @@ void BacnetServer::setClock(const BacnetMonotonicClock* clock) {
 }
 
 size_t BacnetServer::covSubscriptionCount() const {
-  size_t count = 0;
-  for (const BacnetServerCovSubscription& subscription : covSubscriptions_) {
-    if (subscription.state != BacnetServerCovSubscriptionState::Inactive) {
-      ++count;
-    }
-  }
-  return count;
+  return static_cast<size_t>(std::count_if(
+    covSubscriptions_, covSubscriptions_ + kMaxCovSubscriptions, [](const BacnetServerCovSubscription& subscription) {
+      return subscription.state != BacnetServerCovSubscriptionState::Inactive;
+    }));
 }
 
 bool BacnetServer::covSubscriptionAt(size_t index,
@@ -1018,7 +1065,7 @@ uint32_t BacnetServer::nowMs() const {
 }
 
 bool BacnetServer::endpointEquals(const BacnetIpEndpoint& left,
-                                  const BacnetIpEndpoint& right) const {
+                                  const BacnetIpEndpoint& right) {
   return left.port == right.port &&
          left.address[0] == right.address[0] && left.address[1] == right.address[1] &&
          left.address[2] == right.address[2] && left.address[3] == right.address[3];
@@ -1290,32 +1337,21 @@ BacnetServerPollResult BacnetServer::handleWriteProperty(
     errorClass = 2;
     errorCode = 42;
   } else if (request.request.property == BacnetPropertyId::PresentValue) {
-    const uint8_t priority = request.hasPriority
-                               ? request.priority
-                               : (output->hasWritePriority ? output->writePriority
-                                                            : defaultWritePriority_);
+    const uint8_t priority = request.hasPriority ? request.priority : 16U;
     const bool relinquish = request.value.type == BacnetValueType::Null;
     const bool validValue = relinquish ||
                             (request.value.type == BacnetValueType::Enumerated && request.value.unsignedValue <= 1U);
-    if (priority > BacnetCommandPriority<bool>::kSlotCount) {
+    if (priority == 0 || priority > BacnetCommandPriority<bool>::kSlotCount) {
       errorClass = 2;
       errorCode = 37; // value-out-of-range
     } else if (!validValue) {
       errorClass = 2;
       errorCode = 9; // invalid-data-type
-    } else if (priority == 0 && relinquish) {
-      errorClass = 2;
-      errorCode = 9; // invalid-data-type
     } else {
       const bool previousEffectiveValue = output->priority.effectiveValue();
-      bool writeSucceeded = true;
-      if (priority == 0) {
-        output->priority.relinquishDefault = request.value.unsignedValue == 1U;
-      } else {
-        writeSucceeded = output->priority.write(priority,
-                                                 relinquish,
-                                                 request.value.unsignedValue == 1U);
-      }
+      const bool writeSucceeded = output->priority.write(priority,
+                                                         relinquish,
+                                                         request.value.unsignedValue == 1U);
       if (!writeSucceeded) {
         errorClass = 2;
         errorCode = 37;
@@ -1369,60 +1405,123 @@ bool BacnetServer::readCovValue(BacnetObjectId object,
     return input != nullptr && readBinaryInputProperty(*input, property, value);
   }
   if (object.type == static_cast<uint16_t>(BacnetObjectType::BinaryOutput)) {
-    BacnetServerBinaryOutput* output = findBinaryOutput(object.instance);
+    const BacnetServerBinaryOutput* output = findBinaryOutput(object.instance);
     return output != nullptr && readBinaryOutputProperty(*output, property, value);
   }
   return false;
 }
 
-bool BacnetServer::covValueChanged(const BacnetServerCovSubscription& subscription,
-                                   const BacnetValue& value) const {
-  const size_t index = static_cast<size_t>(&subscription - covSubscriptions_);
-  if (index >= kMaxCovSubscriptions || !covSnapshotValid_[index] ||
-      covSnapshotTypes_[index] != value.type) {
+bool BacnetServer::collectCovValues(const BacnetServerCovSubscription& subscription,
+                                    BacnetCovPropertyValue* values,
+                                    size_t capacity,
+                                    size_t& count) const {
+  count = 0;
+  if (values == nullptr || capacity == 0) {
+    return false;
+  }
+  if (subscription.isPropertySubscription) {
+    values[0].property = subscription.property;
+    values[0].arrayIndex = subscription.arrayIndex;
+    if (!readCovValue(subscription.object, subscription.property, subscription.arrayIndex, values[0].value)) {
+      return false;
+    }
+    count = 1;
     return true;
   }
-  switch (value.type) {
-    case BacnetValueType::Boolean:
-      return covSnapshotBoolean_[index] != value.booleanValue;
-    case BacnetValueType::Real:
-      return covSnapshotReal_[index] != value.realValue;
-    case BacnetValueType::BitString:
-      return covSnapshotBitString_[index] != value.bitStringValue ||
-             covSnapshotBitCount_[index] != value.bitStringBitCount;
-    case BacnetValueType::Unsigned:
-    case BacnetValueType::Enumerated:
-      return covSnapshotUnsigned_[index] != value.unsignedValue;
-    default:
-      return true;
+  static constexpr BacnetPropertyId kObjectCovProperties[] = {
+    BacnetPropertyId::PresentValue,
+    BacnetPropertyId::StatusFlags,
+  };
+  if (capacity < kCovObjectPropertyCount) {
+    return false;
   }
+  for (size_t index = 0; index < kCovObjectPropertyCount; ++index) {
+    values[index].property = kObjectCovProperties[index];
+    values[index].arrayIndex = kBacnetNoArrayIndex;
+    if (!readCovValue(subscription.object, values[index].property, values[index].arrayIndex, values[index].value)) {
+      return false;
+    }
+  }
+  count = kCovObjectPropertyCount;
+  return true;
 }
 
-void BacnetServer::storeCovValue(BacnetServerCovSubscription& subscription,
-                                 const BacnetValue& value) {
-  const size_t index = static_cast<size_t>(&subscription - covSubscriptions_);
-  if (index >= kMaxCovSubscriptions) {
+bool BacnetServer::covValuesChanged(const BacnetServerCovSubscription& subscription,
+                                    const BacnetCovPropertyValue* values,
+                                    size_t count) const {
+  const size_t subscriptionIndex = static_cast<size_t>(&subscription - covSubscriptions_);
+  if (subscriptionIndex >= kMaxCovSubscriptions || values == nullptr ||
+      count == 0 || count > kCovObjectPropertyCount) {
+    return true;
+  }
+  for (size_t index = 0; index < count; ++index) {
+    const BacnetValue& value = values[index].value;
+    if (!covSnapshotValid_[subscriptionIndex][index] ||
+        covSnapshotTypes_[subscriptionIndex][index] != value.type) {
+      return true;
+    }
+    switch (value.type) {
+      case BacnetValueType::Boolean:
+        if (covSnapshotBoolean_[subscriptionIndex][index] != value.booleanValue)
+          return true;
+        break;
+      case BacnetValueType::Real:
+        if (covSnapshotReal_[subscriptionIndex][index] != value.realValue) {
+          if (!subscription.hasCovIncrement || index != 0U) {
+            return true;
+          }
+          float difference = value.realValue - covSnapshotReal_[subscriptionIndex][index];
+          if (difference < 0.0F) {
+            difference = -difference;
+          }
+          if (difference >= subscription.covIncrement) {
+            return true;
+          }
+        }
+        break;
+      case BacnetValueType::BitString:
+        if (covSnapshotBitString_[subscriptionIndex][index] != value.bitStringValue ||
+            covSnapshotBitCount_[subscriptionIndex][index] != value.bitStringBitCount)
+          return true;
+        break;
+      case BacnetValueType::Unsigned:
+      case BacnetValueType::Enumerated:
+        if (covSnapshotUnsigned_[subscriptionIndex][index] != value.unsignedValue)
+          return true;
+        break;
+      default:
+        return true;
+    }
+  }
+  return false;
+}
+
+void BacnetServer::storeCovValues(BacnetServerCovSubscription& subscription,
+                                  const BacnetCovPropertyValue* values,
+                                  size_t count) {
+  const size_t subscriptionIndex = static_cast<size_t>(&subscription - covSubscriptions_);
+  if (subscriptionIndex >= kMaxCovSubscriptions || values == nullptr) {
     return;
   }
-  covSnapshotTypes_[index] = value.type;
-  covSnapshotBoolean_[index] = value.booleanValue;
-  covSnapshotUnsigned_[index] = value.unsignedValue;
-  covSnapshotReal_[index] = value.realValue;
-  covSnapshotBitString_[index] = value.bitStringValue;
-  covSnapshotBitCount_[index] = value.bitStringBitCount;
-  covSnapshotValid_[index] = true;
+  for (size_t index = 0; index < count && index < kCovObjectPropertyCount; ++index) {
+    const BacnetValue& value = values[index].value;
+    covSnapshotTypes_[subscriptionIndex][index] = value.type;
+    covSnapshotBoolean_[subscriptionIndex][index] = value.booleanValue;
+    covSnapshotUnsigned_[subscriptionIndex][index] = value.unsignedValue;
+    covSnapshotReal_[subscriptionIndex][index] = value.realValue;
+    covSnapshotBitString_[subscriptionIndex][index] = value.bitStringValue;
+    covSnapshotBitCount_[subscriptionIndex][index] = value.bitStringBitCount;
+    covSnapshotValid_[subscriptionIndex][index] = true;
+  }
 }
 
 bool BacnetServer::sendCovNotification(BacnetServerCovSubscription& subscription,
-                                       const BacnetValue& value,
+                                       const BacnetCovPropertyValue* values,
+                                       size_t valueCount,
                                        uint32_t now) {
-  BacnetCovPropertyValue propertyValue;
-  propertyValue.property = subscription.property;
-  propertyValue.arrayIndex = subscription.arrayIndex;
-  propertyValue.value = value;
   uint8_t notification[kMaxDatagramSize] = {};
   const uint32_t timeRemaining = subscription.lifetimeSeconds == 0U ||
-                                   clock_ == nullptr
+                                     clock_ == nullptr
                                    ? 0U
                                    : (subscription.expiresAtMs - now + 999U) / 1000U;
   const uint8_t invokeId = subscription.confirmed ? nextCovInvokeId_++ : 0U;
@@ -1430,10 +1529,7 @@ bool BacnetServer::sendCovNotification(BacnetServerCovSubscription& subscription
     nextCovInvokeId_ = 1U;
   }
   const size_t size = BacnetProtocol::buildCovNotification(
-    notification, sizeof(notification), subscription.processId,
-    BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::Device), device_.deviceInstance},
-    subscription.object, timeRemaining, &propertyValue, 1U,
-    subscription.confirmed, invokeId);
+    notification, sizeof(notification), subscription.processId, BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::Device), device_.deviceInstance}, subscription.object, timeRemaining, values, valueCount, subscription.confirmed, invokeId);
   if (size == 0U || !transport_->send(subscription.peer, notification, size)) {
     return false;
   }
@@ -1442,7 +1538,7 @@ bool BacnetServer::sendCovNotification(BacnetServerCovSubscription& subscription
   subscription.state = subscription.confirmed
                          ? BacnetServerCovSubscriptionState::AwaitingConfirmedAck
                          : BacnetServerCovSubscriptionState::Active;
-  storeCovValue(subscription, value);
+  storeCovValues(subscription, values, valueCount);
   return true;
 }
 
@@ -1456,7 +1552,9 @@ BacnetServerPollResult BacnetServer::processCovSubscriptions() {
     if (subscription.lifetimeSeconds != 0U && clock_ != nullptr &&
         static_cast<int32_t>(now - subscription.expiresAtMs) >= 0) {
       subscription = BacnetServerCovSubscription{};
-      covSnapshotValid_[index] = false;
+      for (size_t propertyIndex = 0; propertyIndex < kCovObjectPropertyCount; ++propertyIndex) {
+        covSnapshotValid_[index][propertyIndex] = false;
+      }
       covConfirmedRetryCounts_[index] = 0;
       continue;
     }
@@ -1467,30 +1565,41 @@ BacnetServerPollResult BacnetServer::processCovSubscriptions() {
           covConfirmedRetryCounts_[index] = 0;
           continue;
         }
-        BacnetValue retryValue;
-        retryValue.type = covSnapshotTypes_[index];
-        retryValue.booleanValue = covSnapshotBoolean_[index];
-        retryValue.unsignedValue = covSnapshotUnsigned_[index];
-        retryValue.realValue = covSnapshotReal_[index];
-        retryValue.bitStringValue = covSnapshotBitString_[index];
-        retryValue.bitStringBitCount = covSnapshotBitCount_[index];
+        BacnetCovPropertyValue retryValues[kCovObjectPropertyCount];
+        const size_t retryCount = subscription.isPropertySubscription ? 1U : kCovObjectPropertyCount;
+        for (size_t propertyIndex = 0; propertyIndex < retryCount; ++propertyIndex) {
+          retryValues[propertyIndex].property = subscription.isPropertySubscription
+                                                  ? subscription.property
+                                                  : (propertyIndex == 0 ? BacnetPropertyId::PresentValue
+                                                                        : BacnetPropertyId::StatusFlags);
+          retryValues[propertyIndex].arrayIndex = subscription.isPropertySubscription
+                                                    ? subscription.arrayIndex
+                                                    : kBacnetNoArrayIndex;
+          BacnetValue& retryValue = retryValues[propertyIndex].value;
+          retryValue.type = covSnapshotTypes_[index][propertyIndex];
+          retryValue.booleanValue = covSnapshotBoolean_[index][propertyIndex];
+          retryValue.unsignedValue = covSnapshotUnsigned_[index][propertyIndex];
+          retryValue.realValue = covSnapshotReal_[index][propertyIndex];
+          retryValue.bitStringValue = covSnapshotBitString_[index][propertyIndex];
+          retryValue.bitStringBitCount = covSnapshotBitCount_[index][propertyIndex];
+        }
         ++covConfirmedRetryCounts_[index];
-        return sendCovNotification(subscription, retryValue, now)
+        return sendCovNotification(subscription, retryValues, retryCount, now)
                  ? BacnetServerPollResult::CovNotificationSent
                  : BacnetServerPollResult::SendFailed;
       }
       continue;
     }
-    BacnetValue value;
-    if (!readCovValue(subscription.object, subscription.property,
-                      subscription.arrayIndex, value)) {
+    BacnetCovPropertyValue values[kCovObjectPropertyCount];
+    size_t valueCount = 0;
+    if (!collectCovValues(subscription, values, kCovObjectPropertyCount, valueCount)) {
       continue;
     }
-    if (!covValueChanged(subscription, value)) {
+    if (!covValuesChanged(subscription, values, valueCount)) {
       continue;
     }
     covConfirmedRetryCounts_[index] = 0;
-    return sendCovNotification(subscription, value, now)
+    return sendCovNotification(subscription, values, valueCount, now)
              ? BacnetServerPollResult::CovNotificationSent
              : BacnetServerPollResult::SendFailed;
   }
@@ -1509,6 +1618,25 @@ BacnetServerPollResult BacnetServer::handleSubscribeCov(
     uint8_t response[kMaxDatagramSize] = {};
     const size_t size = BacnetProtocol::buildServiceErrorResponse(
       response, sizeof(response), request.invokeId, serviceChoice, 2U, 32U);
+    return size != 0U && transport_->send(source, response, size)
+             ? BacnetServerPollResult::SubscribeCovErrorSent
+             : BacnetServerPollResult::SendFailed;
+  }
+  if (!request.isPropertySubscription &&
+      !readCovValue(request.object, BacnetPropertyId::StatusFlags, kBacnetNoArrayIndex, currentValue)) {
+    uint8_t response[kMaxDatagramSize] = {};
+    const size_t size = BacnetProtocol::buildServiceErrorResponse(
+      response, sizeof(response), request.invokeId, serviceChoice, 2U, 32U);
+    return size != 0U && transport_->send(source, response, size)
+             ? BacnetServerPollResult::SubscribeCovErrorSent
+             : BacnetServerPollResult::SendFailed;
+  }
+  if (request.hasCovIncrement &&
+      (!request.isPropertySubscription || property != BacnetPropertyId::PresentValue ||
+       currentValue.type != BacnetValueType::Real)) {
+    uint8_t response[kMaxDatagramSize] = {};
+    const size_t size = BacnetProtocol::buildServiceErrorResponse(
+      response, sizeof(response), request.invokeId, serviceChoice, 2U, 37U);
     return size != 0U && transport_->send(source, response, size)
              ? BacnetServerPollResult::SubscribeCovErrorSent
              : BacnetServerPollResult::SendFailed;
@@ -1538,7 +1666,9 @@ BacnetServerPollResult BacnetServer::handleSubscribeCov(
     if (matched != nullptr) {
       const size_t index = static_cast<size_t>(matched - covSubscriptions_);
       *matched = BacnetServerCovSubscription{};
-      covSnapshotValid_[index] = false;
+      for (size_t propertyIndex = 0; propertyIndex < kCovObjectPropertyCount; ++propertyIndex) {
+        covSnapshotValid_[index][propertyIndex] = false;
+      }
       covConfirmedRetryCounts_[index] = 0;
     }
   } else {
@@ -1560,10 +1690,14 @@ BacnetServerPollResult BacnetServer::handleSubscribeCov(
     target->property = property;
     target->arrayIndex = request.arrayIndex;
     target->isPropertySubscription = request.isPropertySubscription;
+    target->hasCovIncrement = request.hasCovIncrement;
+    target->covIncrement = request.covIncrement;
     target->confirmed = request.issueConfirmedNotifications;
     target->lifetimeSeconds = request.lifetimeSeconds;
     target->expiresAtMs = clock_ == nullptr ? 0U : nowMs() + request.lifetimeSeconds * 1000U;
-    covSnapshotValid_[index] = false;
+    for (size_t propertyIndex = 0; propertyIndex < kCovObjectPropertyCount; ++propertyIndex) {
+      covSnapshotValid_[index][propertyIndex] = false;
+    }
     covConfirmedRetryCounts_[index] = 0;
   }
 

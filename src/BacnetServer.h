@@ -95,10 +95,10 @@ struct BacnetServerBinaryOutput {
   uint32_t reliability = 0;
   BacnetServerBinaryOutputApply apply = nullptr;
   void* applyContext = nullptr;
-  // When false, writes without an explicit BACnet priority use the server
-  // default. A configured value of zero writes Relinquish_Default directly.
-  uint8_t writePriority = 16;
-  bool hasWritePriority = false;
+  // Local application writes may opt into a per-object priority. Incoming
+  // BACnet WriteProperty requests never consult these fields.
+  uint8_t localWritePriority = 16;
+  bool hasLocalWritePriority = false;
 };
 
 // Result returned by the object-centric configuration API. The API never
@@ -281,9 +281,13 @@ public:
   BacnetBinaryOutput();
   BacnetObjectConfigurationStatus configure(uint32_t instance, const char* objectName);
   void setRelinquishDefault(bool value);
-  // Returns false for priorities outside BACnet's 0..16 range. Zero selects
-  // direct Relinquish_Default writes; only commandable objects expose this.
-  bool setWritePriority(uint8_t value);
+  // Local application default only. Network WriteProperty priorities remain
+  // governed by BACnet: requested 1..16, or 16 when omitted.
+  bool setLocalWritePriority(uint8_t value);
+  bool writeValue(bool value);
+  // Priority zero updates Relinquish_Default; 1..16 update Priority_Array.
+  bool writeValue(bool value, uint8_t priority);
+  bool relinquish(uint8_t priority);
   void attachOutput(BacnetServerBinaryOutputApply apply, void* context);
   BacnetObjectConfigurationStatus addProperty(BacnetPropertyId property, const char* value);
   BacnetObjectConfigurationError configurationError() const;
@@ -293,9 +297,13 @@ public:
   bool readOptionalProperty(BacnetPropertyId property, BacnetValue& value) const override;
 
 private:
+  friend class BacnetServer;
+  void bindServerLocalWritePriority(const uint8_t* priority);
+  bool applyLocalWrite(bool value, uint8_t priority, bool relinquish);
   bool supportsProperty(BacnetPropertyId property,
                         BacnetObjectPropertyValueType type) const override;
   BacnetObjectPropertySlot properties_[kMaxOptionalProperties] = {};
+  const uint8_t* serverLocalWritePriority_ = nullptr;
 };
 
 enum class BacnetServerPollResult : uint8_t {
@@ -331,6 +339,8 @@ struct BacnetServerCovSubscription {
   BacnetPropertyId property = BacnetPropertyId::PresentValue;
   uint32_t arrayIndex = kBacnetNoArrayIndex;
   bool isPropertySubscription = false;
+  bool hasCovIncrement = false;
+  float covIncrement = 0.0F;
   bool confirmed = false;
   uint32_t lifetimeSeconds = 0;
   uint32_t expiresAtMs = 0;
@@ -365,6 +375,7 @@ public:
   static constexpr uint8_t kRejectReasonUnrecognizedService = 9;
   static constexpr size_t kMaxDatagramSize = 1476;
   static constexpr size_t kMaxCovSubscriptions = 8;
+  static constexpr size_t kCovObjectPropertyCount = 2;
 
   BacnetServer() = default;
   explicit BacnetServer(BacnetDatagramTransport& transport);
@@ -416,10 +427,10 @@ public:
   const BacnetServerDevice& device() const;
   uint32_t deviceInstance() const;
   uint16_t port() const;
-  // Applies to commandable objects only when a WriteProperty request carries
-  // no explicit priority. Zero writes the object's Relinquish_Default.
-  bool setDefaultWritePriority(uint8_t priority);
-  uint8_t defaultWritePriority() const;
+  // Applies only to local application writes issued through commandable
+  // object facades. Incoming BACnet WriteProperty requests are unaffected.
+  bool setLocalWritePriority(uint8_t priority);
+  uint8_t localWritePriority() const;
   void setClock(const BacnetMonotonicClock* clock);
   size_t covSubscriptionCount() const;
   bool covSubscriptionAt(size_t index, BacnetServerCovSubscription& subscription) const;
@@ -445,15 +456,22 @@ private:
                     BacnetPropertyId property,
                     uint32_t arrayIndex,
                     BacnetValue& value) const;
-  bool covValueChanged(const BacnetServerCovSubscription& subscription,
-                       const BacnetValue& value) const;
-  void storeCovValue(BacnetServerCovSubscription& subscription,
-                     const BacnetValue& value);
+  bool collectCovValues(const BacnetServerCovSubscription& subscription,
+                        BacnetCovPropertyValue* values,
+                        size_t capacity,
+                        size_t& count) const;
+  bool covValuesChanged(const BacnetServerCovSubscription& subscription,
+                        const BacnetCovPropertyValue* values,
+                        size_t count) const;
+  void storeCovValues(BacnetServerCovSubscription& subscription,
+                      const BacnetCovPropertyValue* values,
+                      size_t count);
   bool sendCovNotification(BacnetServerCovSubscription& subscription,
-                           const BacnetValue& value,
+                           const BacnetCovPropertyValue* values,
+                           size_t valueCount,
                            uint32_t nowMs);
-  bool endpointEquals(const BacnetIpEndpoint& left,
-                      const BacnetIpEndpoint& right) const;
+  static bool endpointEquals(const BacnetIpEndpoint& left,
+                             const BacnetIpEndpoint& right);
   uint32_t nowMs() const;
   bool readDeviceProperty(BacnetPropertyId property, BacnetValue& value) const;
   bool readAnalogValueProperty(const BacnetServerAnalogValue& analogValue,
@@ -519,16 +537,16 @@ private:
   size_t objectCentricBinaryOutputCount_ = 0;
   BacnetServerActivityListener activityListener_ = nullptr;
   void* activityListenerContext_ = nullptr;
-  uint8_t defaultWritePriority_ = 16;
+  uint8_t localWritePriority_ = 16;
   const BacnetMonotonicClock* clock_ = nullptr; // Non-owning.
   BacnetServerCovSubscription covSubscriptions_[kMaxCovSubscriptions] = {};
-  BacnetValueType covSnapshotTypes_[kMaxCovSubscriptions] = {};
-  bool covSnapshotBoolean_[kMaxCovSubscriptions] = {};
-  uint32_t covSnapshotUnsigned_[kMaxCovSubscriptions] = {};
-  float covSnapshotReal_[kMaxCovSubscriptions] = {};
-  uint32_t covSnapshotBitString_[kMaxCovSubscriptions] = {};
-  uint8_t covSnapshotBitCount_[kMaxCovSubscriptions] = {};
-  bool covSnapshotValid_[kMaxCovSubscriptions] = {};
+  BacnetValueType covSnapshotTypes_[kMaxCovSubscriptions][kCovObjectPropertyCount] = {};
+  bool covSnapshotBoolean_[kMaxCovSubscriptions][kCovObjectPropertyCount] = {};
+  uint32_t covSnapshotUnsigned_[kMaxCovSubscriptions][kCovObjectPropertyCount] = {};
+  float covSnapshotReal_[kMaxCovSubscriptions][kCovObjectPropertyCount] = {};
+  uint32_t covSnapshotBitString_[kMaxCovSubscriptions][kCovObjectPropertyCount] = {};
+  uint8_t covSnapshotBitCount_[kMaxCovSubscriptions][kCovObjectPropertyCount] = {};
+  bool covSnapshotValid_[kMaxCovSubscriptions][kCovObjectPropertyCount] = {};
   uint8_t covConfirmedRetryCounts_[kMaxCovSubscriptions] = {};
   uint8_t nextCovInvokeId_ = 1;
 };

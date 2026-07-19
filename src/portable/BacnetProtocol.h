@@ -21,7 +21,7 @@ public:
   static constexpr size_t kRejectResponseSize = 9;
   static constexpr size_t kMaxReadPropertyRequestSize = 25;
   static constexpr size_t kMaxWritePropertyRequestSize = 544;
-  static constexpr size_t kMaxSubscribeCovRequestSize = 32;
+  static constexpr size_t kMaxSubscribeCovRequestSize = 40;
   static constexpr size_t kMaxCovNotificationSize = 1476;
 
   static size_t buildWhoIsRequest(uint8_t* buffer, size_t bufferSize);
@@ -123,13 +123,15 @@ public:
   static size_t encodeApplicationValue(uint8_t* buffer, size_t bufferSize, const BacnetValue& value);
   static size_t buildSubscribeCovRequest(uint8_t* buffer, size_t bufferSize, uint32_t processId, BacnetObjectId object, uint32_t lifetimeSeconds, bool issueConfirmedNotifications = false);
   static size_t buildSubscribeCovPropertyRequest(uint8_t* buffer,
-                                                  size_t bufferSize,
-                                                  uint32_t processId,
-                                                  BacnetObjectId object,
-                                                  BacnetPropertyId property,
-                                                  uint32_t lifetimeSeconds,
-                                                  bool issueConfirmedNotifications = false,
-                                                  uint32_t arrayIndex = kBacnetNoArrayIndex);
+                                                 size_t bufferSize,
+                                                 uint32_t processId,
+                                                 BacnetObjectId object,
+                                                 BacnetPropertyId property,
+                                                 uint32_t lifetimeSeconds,
+                                                 bool issueConfirmedNotifications = false,
+                                                 uint32_t arrayIndex = kBacnetNoArrayIndex,
+                                                 bool hasCovIncrement = false,
+                                                 float covIncrement = 0.0F);
   static size_t buildCovNotification(uint8_t* buffer,
                                      size_t bufferSize,
                                      uint32_t processId,
@@ -145,7 +147,11 @@ public:
                           uint8_t expectedInvokeId,
                           uint8_t expectedServiceChoice);
   static BacnetSubscribeCovResponseKind classifySubscribeCovResponse(
-    const uint8_t* buffer, size_t length, uint8_t expectedInvokeId, uint8_t* rejectReason = nullptr);
+    const uint8_t* buffer,
+    size_t length,
+    uint8_t expectedInvokeId,
+    uint8_t* rejectReason = nullptr,
+    uint8_t expectedServiceChoice = 0x05U);
   static BacnetSubscribeCovResponseKind classifyConfirmedCovNotificationResponse(
     const uint8_t* buffer, size_t length, uint8_t expectedInvokeId, uint8_t* rejectReason = nullptr);
   static const char* rejectReasonText(uint8_t rejectReason);

@@ -7,16 +7,9 @@
     {
       "type": "wokwi-text",
       "id": "title",
-      "top": -67.2,
-      "left": -192,
-      "attrs": { "text": "ESP32 BACnet Read-Only I/O Dev Station" }
-    },
-    {
-      "type": "wokwi-photoresistor-sensor",
-      "id": "ldr",
-      "top": -380.8,
-      "left": -364,
-      "attrs": { "lux": "500" }
+      "top": -28.8,
+      "left": -19.2,
+      "attrs": { "text": "ESP32 I/O Dev Station" }
     },
     {
       "type": "wokwi-potentiometer",
@@ -28,8 +21,8 @@
     {
       "type": "wokwi-text",
       "id": "ldrLabel",
-      "top": -316.8,
-      "left": -460.8,
+      "top": -460.8,
+      "left": -326.4,
       "attrs": { "text": "LDR + Bias Pot: wiper -> VP/GPIO36; VN/GPIO39 -> GND" }
     },
     {
@@ -42,16 +35,16 @@
     {
       "type": "wokwi-resistor",
       "id": "dsPullup",
-      "top": -24,
-      "left": 210.65,
-      "rotate": 90,
+      "top": -83,
+      "left": 335.15,
+      "rotate": 270,
       "attrs": { "value": "4700" }
     },
     {
       "type": "wokwi-text",
       "id": "dsLabel",
-      "top": -172.8,
-      "left": 192,
+      "top": -144,
+      "left": 48,
       "attrs": { "text": "DS18B20: GPIO18, 4.7k pull-up to 3.3V" }
     },
     {
@@ -78,8 +71,8 @@
     {
       "type": "wokwi-text",
       "id": "buttonsLabel",
-      "top": 451.2,
-      "left": -364.8,
+      "top": 220.8,
+      "left": -624,
       "attrs": { "text": "Low-active buttons: RST GPIO14 / MID GPIO33 / SET GPIO4 (strap)" }
     },
     {
@@ -100,7 +93,7 @@
       "type": "wokwi-text",
       "id": "i2cLabel",
       "top": 355.2,
-      "left": 336,
+      "left": 163.2,
       "attrs": { "text": "Shared I2C: SDA GPIO21, SCL GPIO22; BME280 shown, not read" }
     },
     {
@@ -144,33 +137,47 @@
       "attrs": {
         "text": "Commandable: LED1 BO0 GPIO25; LED2 BO1 GPIO26. Reserved, not driven: Relay1 GPIO19; Relay2 GPIO27; Relay3 GPIO23"
       }
+    },
+    { "type": "wokwi-gnd", "id": "gnd1", "top": 192, "left": 277.8, "attrs": {} },
+    { "type": "wokwi-gnd", "id": "gnd2", "top": -220.8, "left": 172.2, "attrs": {} },
+    { "type": "wokwi-vcc", "id": "vcc1", "top": -335.24, "left": 153.6, "attrs": {} },
+    { "type": "wokwi-vcc", "id": "vcc2", "top": -325.64, "left": 480, "attrs": {} },
+    { "type": "wokwi-vcc", "id": "vcc3", "top": -325.64, "left": 729.6, "attrs": {} },
+    { "type": "wokwi-gnd", "id": "gnd3", "top": -249.6, "left": 450.6, "attrs": {} },
+    { "type": "wokwi-gnd", "id": "gnd4", "top": -240, "left": 690.6, "attrs": {} },
+    { "type": "wokwi-gnd", "id": "gnd5", "top": 19.2, "left": -231, "attrs": {} },
+    { "type": "wokwi-gnd", "id": "gnd6", "top": 76.8, "left": -336.6, "attrs": {} },
+    { "type": "wokwi-gnd", "id": "gnd7", "top": 480, "left": -144.6, "attrs": {} },
+    { "type": "wokwi-vcc", "id": "vcc5", "top": -431.24, "left": -163.2, "attrs": {} },
+    { "type": "wokwi-vcc", "id": "vcc4", "top": 240.76, "left": 67.2, "attrs": {} },
+    { "type": "wokwi-vcc", "id": "vcc6", "top": -162.44, "left": 355.2, "attrs": {} },
+    { "type": "wokwi-gnd", "id": "gnd8", "top": -105.6, "left": 201, "attrs": {} },
+    { "type": "wokwi-vcc", "id": "vcc7", "top": 125.56, "left": 355.2, "attrs": {} },
+    {
+      "type": "wokwi-resistor",
+      "id": "r1",
+      "top": -350.4,
+      "left": -182.95,
+      "rotate": 90,
+      "attrs": { "value": "9000" }
+    },
+    {
+      "type": "wokwi-text",
+      "id": "text1",
+      "top": -355.2,
+      "left": -220.8,
+      "attrs": { "text": "9k LDR" }
     }
   ],
   "connections": [
-    [
-      "esp:3V3",
-      "ldr:VCC",
-      "magenta",
-      [ "h86.1", "v153.6", "v105.6", "h-710.4", "v-865.1", "h326.4" ]
-    ],
-    [ "ldr:GND", "esp:GND.1", "black", [ "h96", "v-48.4", "h197.3" ] ],
-    [ "ldr:AO", "biasPot:VCC", "green", [ "v85.7", "h153.6", "v-28.8", "h68" ] ],
-    [ "biasPot:SIG", "esp:VP", "yellow", [ "v134.4", "h-58", "v241.4" ] ],
-    [ "biasPot:GND", "esp:GND.1", "black", [ "v163.2", "h163.2", "v326.5" ] ],
-    [ "esp:3V3", "ds18b20:VCC", "magenta", [] ],
-    [ "ds18b20:GND", "esp:GND.1", "black", [ "v28.8", "v220.9" ] ],
+    [ "biasPot:SIG", "esp:VP", "yellow", [ "v134.4", "h-154", "v192", "h124.8", "v48.3" ] ],
     [ "ds18b20:DQ", "esp:D18", "yellow", [ "v28.8", "h-76.8", "v153.6" ] ],
     [ "dsPullup:1", "ds18b20:DQ", "yellow", [] ],
-    [ "dsPullup:2", "esp:3V3", "magenta", [ "h9.6", "v18", "h9.6", "v153.6" ] ],
     [ "rstButton:1.r", "esp:D14", "green", [ "h77", "v-192.1" ] ],
-    [ "rstButton:2.r", "esp:GND.1", "black", [ "h336.2", "v-181" ] ],
     [ "midButton:1.r", "esp:D33", "green", [ "h48.2", "v-172.8" ] ],
-    [ "midButton:2.r", "esp:GND.1", "black", [ "h336.2", "v-123.4" ] ],
-    [ "setButton:1.r", "esp:D4", "green", [ "h302.4", "v-249.1" ] ],
-    [ "setButton:2.r", "esp:GND.1", "black", [ "h331.2", "v-238" ] ],
+    [ "setButton:1.r", "esp:D19", "green", [ "h302.4", "v-249.1" ] ],
     [ "esp:D22", "oled:SCL", "gray", [] ],
     [ "esp:D21", "oled:SDA", "#8f4814", [] ],
-    [ "esp:3V3", "oled:VCC", "magenta", [ "h182.1", "v28.8", "h95.85" ] ],
     [ "esp:GND.1", "oled:GND", "black", [] ],
     [ "esp:D22", "bme280:SCL", "purple", [] ],
     [ "esp:D21", "bme280:SDA", "blue", [] ],
@@ -178,19 +185,31 @@
     [ "esp:GND.1", "bme280:GND", "black", [] ],
     [ "esp:D25", "led1Resistor:1", "orange", [ "h-53", "v-67.75" ] ],
     [ "led1Resistor:2", "led1:A", "orange", [] ],
-    [ "led1:C", "esp:GND.1", "black", [ "v230.4", "h288", "v-76.7" ] ],
     [ "esp:D26", "led2Resistor:1", "orange", [ "h-43.4", "v8.4", "h-28.8", "v-57.6" ] ],
     [ "led2Resistor:2", "led2:A", "orange", [ "h-105.9", "v-48.2" ] ],
-    [ "led2:C", "esp:GND.1", "black", [ "v40.8", "h124.4", "v132", "h288.8", "v-76.7" ] ],
-    [ "esp:VIN", "relay1:VCC", "red", [ "h-19.2", "v57.6", "h662.4", "v-508.8" ] ],
-    [ "esp:GND.1", "relay1:GND", "black", [ "h614.1", "v-431.7" ] ],
-    [ "esp:D19", "relay1:IN", "orange", [ "h672", "v-403.7" ] ],
-    [ "esp:VIN", "relay2:VCC", "red", [ "h-19.2", "v57.6", "h153.6", "v-508.8" ] ],
-    [ "esp:GND.1", "relay2:GND", "black", [ "h66.9", "v-431.7" ] ],
+    [ "esp:D12", "relay1:IN", "orange", [ "h-86.4", "v248.9", "h806.4", "v-652.6" ] ],
     [ "esp:D27", "relay2:IN", "purple", [ "h-384", "v-345.9", "h528", "v-38.2" ] ],
-    [ "esp:VIN", "relay3:VCC", "red", [ "h-19.2", "v57.6", "h499.2", "v-508.8" ] ],
-    [ "esp:GND.1", "relay3:GND", "black", [ "h364.5", "v-431.7" ] ],
-    [ "esp:D23", "relay3:IN", "orange", [ "h335.7", "v-297.3" ] ]
+    [ "esp:D23", "relay3:IN", "orange", [ "h393.3", "v-297.3" ] ],
+    [ "gnd1:GND", "esp:GND.1", "black", [ "v0" ] ],
+    [ "relay2:GND", "gnd2:GND", "black", [ "h0" ] ],
+    [ "vcc1:VCC", "relay2:VCC", "red", [ "v0" ] ],
+    [ "vcc2:VCC", "relay3:VCC", "red", [ "v0" ] ],
+    [ "vcc3:VCC", "relay1:VCC", "red", [ "v0" ] ],
+    [ "relay3:GND", "gnd3:GND", "black", [ "h0" ] ],
+    [ "relay1:GND", "gnd4:GND", "black", [ "h0" ] ],
+    [ "gnd5:GND", "led1:C", "black", [ "v0" ] ],
+    [ "gnd6:GND", "led2:C", "black", [ "v0" ] ],
+    [ "gnd7:GND", "setButton:2.r", "black", [ "v0" ] ],
+    [ "gnd7:GND", "rstButton:2.r", "black", [ "v0" ] ],
+    [ "gnd7:GND", "midButton:2.r", "black", [ "v0" ] ],
+    [ "vcc1:VCC", "biasPot:VCC", "red", [ "v28.8", "h-133.6" ] ],
+    [ "vcc4:VCC", "esp:3V3", "red", [ "h48", "v-86.4" ] ],
+    [ "vcc6:VCC", "dsPullup:2", "red", [ "v9.6", "v18" ] ],
+    [ "gnd8:GND", "ds18b20:GND", "black", [ "h28.8", "v28.8" ] ],
+    [ "ds18b20:VCC", "vcc6:VCC", "red", [ "v9.6", "h28.8", "v-48", "h48" ] ],
+    [ "oled:VCC", "vcc7:VCC", "red", [ "v0" ] ],
+    [ "r1:1", "vcc5:VCC", "green", [ "h0" ] ],
+    [ "r1:2", "biasPot:GND", "green", [ "v27.6", "h163.2" ] ]
   ],
   "dependencies": {}
 }

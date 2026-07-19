@@ -5,8 +5,25 @@
 
 #include <cstring>
 #include <type_traits>
+#include <utility>
 
 namespace {
+
+template <typename Object, typename = void>
+struct HasLocalWritePriority : std::false_type {};
+
+template <typename Object>
+struct HasLocalWritePriority<
+  Object,
+  std::void_t<decltype(std::declval<Object&>().setLocalWritePriority(uint8_t{}))>>
+  : std::true_type {};
+
+static_assert(!HasLocalWritePriority<BacnetAnalogInput>::value,
+              "input objects must not expose local command priorities");
+static_assert(!HasLocalWritePriority<BacnetBinaryInput>::value,
+              "input objects must not expose local command priorities");
+static_assert(HasLocalWritePriority<BacnetBinaryOutput>::value,
+              "commandable outputs must expose local command priorities");
 
 class TestTransport final : public BacnetDatagramTransport {
 public:
@@ -1120,17 +1137,46 @@ bool testCommandableBinaryOutputs() {
 }
 
 bool testWritePriorityDefaultsAndEffectiveOutput() {
+  BacnetBinaryOutput fallbackOutput;
+  if (fallbackOutput.configure(0, "Fallback Output") != BacnetObjectConfigurationStatus::Ok ||
+      !fallbackOutput.writeValue(true) || !fallbackOutput.priority.occupied[15]) {
+    return false;
+  }
+
+  TestTransport localTransport;
+  BacnetServer localServer(localTransport);
+  BacnetBinaryOutput localOutput;
+  BacnetBinaryOutput objectOutput;
+  OutputApplyState applied;
+  localOutput.configure(1, "Local Output");
+  objectOutput.configure(2, "Object Output");
+  objectOutput.attachOutput(applyOutput, &applied);
+  if (!localServer.setLocalWritePriority(15) || localServer.setLocalWritePriority(0) ||
+      localServer.setLocalWritePriority(17) ||
+      !objectOutput.setLocalWritePriority(9) || objectOutput.setLocalWritePriority(0) ||
+      objectOutput.setLocalWritePriority(17) ||
+      localServer.addObject(localOutput) != BacnetObjectConfigurationStatus::Ok ||
+      localServer.addObject(objectOutput) != BacnetObjectConfigurationStatus::Ok) {
+    return false;
+  }
+  if (!localOutput.writeValue(true) || !localOutput.priority.occupied[14] ||
+      !objectOutput.writeValue(true) || !objectOutput.priority.occupied[8] ||
+      !objectOutput.writeValue(false, 1) || !objectOutput.priority.occupied[0] ||
+      applied.calls != 2 || applied.presentValue ||
+      !objectOutput.writeValue(true, 0) || objectOutput.priority.relinquishDefault != true ||
+      applied.calls != 2 || !objectOutput.relinquish(1) || applied.calls != 3 ||
+      !applied.presentValue || objectOutput.relinquish(0)) {
+    return false;
+  }
+
   TestTransport transport;
   BacnetServer server(transport);
-  OutputApplyState applied;
-  BacnetServerBinaryOutput outputs[] = {{0, "LED"}};
+  BacnetServerBinaryOutput outputs[] = {{0, "Network Output"}};
   outputs[0].priority.relinquishDefault = false;
-  outputs[0].apply = applyOutput;
-  outputs[0].applyContext = &applied;
   BacnetServerDevice device;
   device.deviceInstance = 7891;
   if (!server.setBinaryOutputs(outputs, 1) || !server.begin(device) ||
-      !server.setDefaultWritePriority(15) || server.setDefaultWritePriority(17)) {
+      !server.setLocalWritePriority(15)) {
     return false;
   }
   const BacnetIpEndpoint source(192, 0, 2, 45, 47809);
@@ -1147,46 +1193,23 @@ bool testWritePriorityDefaultsAndEffectiveOutput() {
   BacnetWritePropertyOptions priority8;
   priority8.hasPriority = true;
   priority8.priority = 8;
-  BacnetWritePropertyOptions direct;
-  direct.hasPriority = true;
-  direct.priority = 0;
 
   if (!writeOutput(transport, server, source, object, BacnetPropertyId::PresentValue,
-                   active, noPriority, 1) || !outputs[0].priority.occupied[14] ||
-      applied.calls != 1 || !applied.presentValue ||
+                   active, noPriority, 1) || !outputs[0].priority.occupied[15] ||
       !writeOutput(transport, server, source, object, BacnetPropertyId::PresentValue,
                    inactive, priority8, 2) || !outputs[0].priority.occupied[7] ||
-      applied.calls != 2 || applied.presentValue ||
-      !writeOutput(transport, server, source, object, BacnetPropertyId::PresentValue,
-                   active, direct, 3) || outputs[0].priority.relinquishDefault != true ||
-      applied.calls != 2 ||
       !writeOutput(transport, server, source, object, BacnetPropertyId::PresentValue,
                    nullValue, priority8, 4) || outputs[0].priority.occupied[7] ||
-      applied.calls != 3 || !applied.presentValue ||
       !writeOutput(transport, server, source, object, BacnetPropertyId::PresentValue,
                    nullValue, noPriority, 5) || outputs[0].priority.occupied[14] ||
-      applied.calls != 3) {
+      outputs[0].priority.occupied[15]) {
     return false;
   }
-
-  BacnetBinaryOutput objectOutput;
-  if (objectOutput.configure(1, "Object LED") != BacnetObjectConfigurationStatus::Ok ||
-      !objectOutput.setWritePriority(9) || objectOutput.setWritePriority(17)) {
-    return false;
-  }
-  TestTransport objectTransport;
-  BacnetServer objectServer(objectTransport);
-  if (objectServer.addObject(objectOutput) != BacnetObjectConfigurationStatus::Ok ||
-      !objectServer.begin(device)) {
-    return false;
-  }
-  const BacnetObjectId objectOutputId{static_cast<uint16_t>(BacnetObjectType::BinaryOutput), 1};
-  return writeOutput(objectTransport, objectServer, source, objectOutputId,
-                     BacnetPropertyId::PresentValue, active, noPriority, 6) &&
-         objectOutput.priority.occupied[8] && !objectOutput.priority.occupied[14] &&
-         writeOutput(objectTransport, objectServer, source, objectOutputId,
-                     BacnetPropertyId::PresentValue, inactive, priority8, 7) &&
-         objectOutput.priority.occupied[7];
+  BacnetWritePropertyOptions invalidZero;
+  invalidZero.hasPriority = true;
+  invalidZero.priority = 0;
+  return !writeOutput(transport, server, source, object, BacnetPropertyId::PresentValue,
+                      active, invalidZero, 6);
 }
 
 } // namespace

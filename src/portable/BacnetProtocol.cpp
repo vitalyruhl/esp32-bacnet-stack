@@ -87,6 +87,30 @@ bool readContextValue(const uint8_t* buffer, size_t length, size_t& offset, uint
   return true;
 }
 
+bool readContextReal(const uint8_t* buffer,
+                     size_t length,
+                     size_t& offset,
+                     uint8_t expectedTag,
+                     float& value) {
+  if (offset >= length) {
+    return false;
+  }
+
+  const uint8_t tag = buffer[offset++];
+  if ((tag >> 4U) != expectedTag || (tag & 0x08U) == 0U ||
+      (tag & 0x07U) != 4U || offset + 4U > length) {
+    return false;
+  }
+  uint32_t raw = 0;
+  for (size_t index = 0; index < 4U; ++index) {
+    raw = (raw << 8U) | buffer[offset++];
+  }
+  static_assert(sizeof(raw) == sizeof(value),
+                "BACnet real parsing expects 32-bit float");
+  std::memcpy(&value, &raw, sizeof(value));
+  return true;
+}
+
 bool readApplicationTagHeader(const uint8_t* buffer, size_t length, size_t& offset, uint8_t expectedTag, size_t& valueLength) {
   if (offset >= length) {
     return false;
@@ -1116,9 +1140,14 @@ BacnetSubscribeCovRequestParseStatus BacnetProtocol::parseSubscribeCovRequest(
       return BacnetSubscribeCovRequestParseStatus::Malformed;
     }
   }
-  // COV_Increment is intentionally not accepted until a real-valued object
-  // can apply it correctly; silently treating it as a plain subscription is
-  // not interoperable.
+  if (request.isPropertySubscription && offset < length &&
+      (buffer[offset] >> 4U) == 5U && (buffer[offset] & 0x08U) != 0U) {
+    if (!readContextReal(buffer, length, offset, 5U, request.covIncrement) ||
+        request.covIncrement < 0.0F) {
+      return BacnetSubscribeCovRequestParseStatus::Malformed;
+    }
+    request.hasCovIncrement = true;
+  }
   if (offset != length) {
     return BacnetSubscribeCovRequestParseStatus::Malformed;
   }
@@ -1756,6 +1785,19 @@ size_t BacnetProtocol::buildSubscribeCovRequest(uint8_t* buffer,
   return offset;
 }
 
+size_t writeContextReal(uint8_t* buffer, size_t offset, uint8_t tagNumber, float value) {
+  uint32_t raw = 0;
+  static_assert(sizeof(raw) == sizeof(value),
+                "BACnet real encoding expects 32-bit float");
+  std::memcpy(&raw, &value, sizeof(raw));
+  buffer[offset++] = static_cast<uint8_t>((tagNumber << 4U) | 0x0CU);
+  buffer[offset++] = static_cast<uint8_t>(raw >> 24U);
+  buffer[offset++] = static_cast<uint8_t>(raw >> 16U);
+  buffer[offset++] = static_cast<uint8_t>(raw >> 8U);
+  buffer[offset++] = static_cast<uint8_t>(raw);
+  return offset;
+}
+
 size_t BacnetProtocol::buildSubscribeCovPropertyRequest(
   uint8_t* buffer,
   size_t bufferSize,
@@ -1764,11 +1806,14 @@ size_t BacnetProtocol::buildSubscribeCovPropertyRequest(
   BacnetPropertyId property,
   uint32_t lifetimeSeconds,
   bool issueConfirmedNotifications,
-  uint32_t arrayIndex) {
+  uint32_t arrayIndex,
+  bool hasCovIncrement,
+  float covIncrement) {
   const size_t required = 10U + contextUnsignedSize(processId) + 5U + 2U +
                           contextUnsignedSize(static_cast<uint32_t>(property)) + 1U +
                           2U + contextUnsignedSize(lifetimeSeconds) +
-                          (arrayIndex == kBacnetNoArrayIndex ? 0U : contextUnsignedSize(arrayIndex));
+                          (arrayIndex == kBacnetNoArrayIndex ? 0U : contextUnsignedSize(arrayIndex)) +
+                          (hasCovIncrement ? 5U : 0U);
   if (buffer == nullptr || bufferSize < required || object.instance > kObjectInstanceMask) {
     return 0;
   }
@@ -1793,6 +1838,9 @@ size_t BacnetProtocol::buildSubscribeCovPropertyRequest(
   buffer[offset++] = 0x2F;
   offset = writeContextBoolean(buffer, offset, 3, issueConfirmedNotifications);
   offset = writeContextUnsigned(buffer, offset, 4, lifetimeSeconds);
+  if (hasCovIncrement) {
+    offset = writeContextReal(buffer, offset, 5, covIncrement);
+  }
   buffer[2] = static_cast<uint8_t>(offset >> 8);
   buffer[3] = static_cast<uint8_t>(offset);
   return offset;
@@ -1843,8 +1891,7 @@ size_t BacnetProtocol::buildCovNotification(
       return 0;
     }
     const BacnetCovPropertyValue& propertyValue = values[index];
-    offset = writeContextUnsigned(buffer, offset, 0,
-                                  static_cast<uint32_t>(propertyValue.property));
+    offset = writeContextUnsigned(buffer, offset, 0, static_cast<uint32_t>(propertyValue.property));
     if (propertyValue.arrayIndex != kBacnetNoArrayIndex) {
       if (bufferSize - offset < 6U) {
         return 0;
@@ -1949,7 +1996,11 @@ bool BacnetProtocol::isSimpleAck(const uint8_t* buffer,
 }
 
 BacnetSubscribeCovResponseKind BacnetProtocol::classifySubscribeCovResponse(
-  const uint8_t* buffer, size_t length, uint8_t expectedInvokeId, uint8_t* rejectReason) {
+  const uint8_t* buffer,
+  size_t length,
+  uint8_t expectedInvokeId,
+  uint8_t* rejectReason,
+  uint8_t expectedServiceChoice) {
   if (rejectReason != nullptr)
     *rejectReason = 0xFF;
   if (buffer == nullptr || length < 8 || buffer[0] != kBvlcTypeBacnetIp ||
@@ -1959,9 +2010,9 @@ BacnetSubscribeCovResponseKind BacnetProtocol::classifySubscribeCovResponse(
   if (!readNpduHeader(buffer, length, offset) || offset + 2 > length || buffer[offset + 1] != expectedInvokeId)
     return BacnetSubscribeCovResponseKind::None;
   const uint8_t apduType = buffer[offset] & 0xF0;
-  if (apduType == 0x20 && offset + 3 <= length && buffer[offset + 2] == kServiceSubscribeCov)
+  if (apduType == 0x20 && offset + 3 <= length && buffer[offset + 2] == expectedServiceChoice)
     return BacnetSubscribeCovResponseKind::Ack;
-  if (apduType == kApduError && offset + 3 <= length && buffer[offset + 2] == kServiceSubscribeCov)
+  if (apduType == kApduError && offset + 3 <= length && buffer[offset + 2] == expectedServiceChoice)
     return BacnetSubscribeCovResponseKind::Error;
   if (apduType == kApduReject) {
     if (rejectReason != nullptr && offset + 3 <= length)
@@ -2107,6 +2158,13 @@ bool BacnetProtocol::parseCovNotification(const uint8_t* buffer,
       if (!readContextValue(buffer, length, offset, 3, priority)) {
         return false;
       }
+    }
+    if (notification.propertyCount < BacnetCovNotification::kMaxProperties) {
+      BacnetCovPropertyValue& propertyValue =
+        notification.properties[notification.propertyCount++];
+      propertyValue.property = propertyId;
+      propertyValue.arrayIndex = arrayIndex;
+      propertyValue.value = value;
     }
     if (!hasValue || propertyId == BacnetPropertyId::PresentValue) {
       notification.property = propertyId;

@@ -244,17 +244,20 @@ void refreshCovLiveState() {
   if (!bacnetServer.covSubscriptionAt(0, subscription)) {
     return;
   }
-  std::snprintf(covLive.peer, sizeof(covLive.peer), "%u.%u.%u.%u:%u",
-                subscription.peer.address[0], subscription.peer.address[1],
-                subscription.peer.address[2], subscription.peer.address[3],
-                subscription.peer.port);
+  std::snprintf(covLive.peer, sizeof(covLive.peer), "%u.%u.%u.%u:%u", subscription.peer.address[0], subscription.peer.address[1], subscription.peer.address[2], subscription.peer.address[3], subscription.peer.port);
   std::snprintf(covLive.object, sizeof(covLive.object), "%s", objectText(subscription.object));
-  std::snprintf(covLive.property, sizeof(covLive.property), "%s", propertyText(subscription.property));
-  std::snprintf(covLive.mode, sizeof(covLive.mode), "%s",
-                subscription.confirmed ? "Confirmed" : "Unconfirmed");
+  std::snprintf(covLive.property, sizeof(covLive.property), "%s", subscription.isPropertySubscription ? propertyText(subscription.property) : "Object (PV + Status_Flags)");
+  std::snprintf(covLive.mode, sizeof(covLive.mode), "%s %s", subscription.confirmed ? "Confirmed" : "Unconfirmed", subscription.isPropertySubscription ? "property" : "object");
   std::snprintf(covLive.state, sizeof(covLive.state), "%s", covStateText(subscription.state));
   covLive.processId = subscription.processId;
-  covLive.lifetimeSeconds = subscription.lifetimeSeconds;
+  const int32_t remainingLifetimeMs =
+    static_cast<int32_t>(subscription.expiresAtMs - millis());
+  covLive.lifetimeSeconds = subscription.lifetimeSeconds == 0U ||
+                                subscription.expiresAtMs == 0U
+                              ? 0U
+                              : (remainingLifetimeMs <= 0 ? 0U
+                                                          : static_cast<uint32_t>(
+                                                              (remainingLifetimeMs + 999) / 1000));
   covLive.lastSentMs = subscription.lastSentMs;
   covLive.lastAckMs = subscription.lastAckMs;
 }

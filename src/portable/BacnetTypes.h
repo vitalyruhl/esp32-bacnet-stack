@@ -261,12 +261,24 @@ enum class BacnetWritePropertyResponseKind : uint8_t {
   Abort,
 };
 
-struct BacnetCovNotification {
-  uint32_t processId = 0;
-  BacnetObjectId object;
+struct BacnetCovPropertyValue {
   BacnetPropertyId property = BacnetPropertyId::PresentValue;
   uint32_t arrayIndex = kBacnetNoArrayIndex;
   BacnetValue value;
+};
+
+struct BacnetCovNotification {
+  static constexpr size_t kMaxProperties = 4;
+
+  uint32_t processId = 0;
+  BacnetObjectId object;
+  // Legacy primary value. Present_Value is preferred when supplied with
+  // other properties; use properties/propertyCount to inspect all values.
+  BacnetPropertyId property = BacnetPropertyId::PresentValue;
+  uint32_t arrayIndex = kBacnetNoArrayIndex;
+  BacnetValue value;
+  BacnetCovPropertyValue properties[kMaxProperties] = {};
+  size_t propertyCount = 0;
   bool confirmed = false;
   uint8_t invokeId = 0;
 };
@@ -291,12 +303,6 @@ struct BacnetSubscribeCovRequestHeader {
   uint32_t lifetimeSeconds = 0;
   bool hasCovIncrement = false;
   float covIncrement = 0.0F;
-};
-
-struct BacnetCovPropertyValue {
-  BacnetPropertyId property = BacnetPropertyId::PresentValue;
-  uint32_t arrayIndex = kBacnetNoArrayIndex;
-  BacnetValue value;
 };
 
 enum class BacnetSubscribeCovResponseKind : uint8_t {

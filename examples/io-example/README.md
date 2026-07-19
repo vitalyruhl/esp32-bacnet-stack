@@ -55,14 +55,18 @@ deadband, reliability, and intrinsic-reporting features.
 | Binary Output | 0 | LED 1 | IOManager digital output | — |
 | Binary Output | 1 | LED 2 | IOManager digital output | — |
 
-AI and BI Present_Value is read-only. BO Present_Value remains commandable:
-writes without a requested priority use the server default (16 unless changed),
-`NULL` relinquishes the selected 1..16 slot, and an explicit priority always
-wins. A configured priority of `0` updates Relinquish_Default without
-overriding an active slot. `BacnetBinaryOutput::setWritePriority()` changes the
-default for that commandable object; `BacnetServer::setDefaultWritePriority()`
-changes the server fallback. The IOManager output follows only an effective
-value change. Priority_Array is read-only.
+AI and BI Present_Value is read-only. BO Present_Value remains commandable.
+Incoming BACnet WriteProperty requests use their requested priority exactly,
+or priority 16 when omitted; `NULL` relinquishes that same slot. Local ESP
+application writes are separate: `BacnetServer::setLocalWritePriority()` sets
+their server fallback, `BacnetBinaryOutput::setLocalWritePriority()` overrides
+it for one output, and `writeValue(value, priority)` overrides both for one
+call. Local priority `0` updates Relinquish_Default, while `relinquish(1..16)`
+explicitly releases a slot. Present_Value and the IOManager output always use
+the effective Priority_Array result; a lower, hidden slot never produces a
+false Present_Value change. Priority 1 is not an access lock: a permitted
+BACnet client can still write or relinquish that same slot. Priority_Array is
+read-only.
 
 ## IOManager bindings and Live I/O
 
@@ -95,18 +99,26 @@ The ConfigManager Live UI adds a separate BACnet card with commandable LED
 state and effective priority, and a BACnet activity card with last peer,
 service, object, property, age, bounded object read/write counters, and the
 first active COV subscription (client endpoint, process ID, object/property,
-notification mode, lifetime, state, last send, and last acknowledgement).
+notification mode, remaining lifetime, state, last send, and last
+acknowledgement).
 Those diagnostics are RAM-only and are not BACnet properties or persistent
 settings.
 
 BACnet/IP is UDP-based: the UI reports `Recent BACnet activity` or `No recent
 BACnet activity`, never a false connected/disconnected client state. The server
 accepts a fixed, allocation-free table of eight incoming SubscribeCOV and
-SubscribeCOVProperty subscriptions. The supported monitored properties are
-Present_Value, Status_Flags, Reliability when exposed by the object, and
-Out_Of_Service. Subscriptions notify initially and on change, expire or cancel
-through their requested lifetime, and support confirmed notifications with a
-non-blocking acknowledgement wait.
+SubscribeCOVProperty subscriptions. Object-level subscriptions are one table
+entry and always notify Present_Value and Status_Flags together; property
+subscriptions remain restricted to their requested property. Subscriptions
+notify initially and on change, expire or cancel through their requested
+lifetime, and support confirmed notifications with a non-blocking
+acknowledgement wait. A real-valued Present_Value property subscription can
+also supply COV_Increment; sub-threshold changes do not notify.
+
+The current WBC observation is intentionally not treated as COV acceptance:
+its active COV subscription count is 0, its latest service is ReadProperty,
+and it polls at roughly two seconds. That client-side polling delay does not
+measure the server COV path.
 
 The example keeps Vendor ID `0` as an explicit development configuration. Set
 `BACnet Vendor ID (restart required)` to the legitimately assigned Vendor ID of

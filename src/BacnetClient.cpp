@@ -103,6 +103,26 @@ bool BacnetClient::sendSubscribeCov(const BacnetIpEndpoint& destination,
   return transport_->send(destination, request, requestSize);
 }
 
+bool BacnetClient::sendSubscribeCovProperty(const BacnetIpEndpoint& destination,
+                                            uint32_t processId,
+                                            BacnetObjectId object,
+                                            BacnetPropertyId property,
+                                            uint32_t lifetimeSeconds,
+                                            uint8_t invokeId,
+                                            bool issueConfirmedNotifications,
+                                            uint32_t arrayIndex,
+                                            bool hasCovIncrement,
+                                            float covIncrement) {
+  uint8_t request[kMaxSubscribeCovRequestSize] = {};
+  const size_t requestSize = BacnetProtocol::buildSubscribeCovPropertyRequest(
+    request, sizeof(request), processId, object, property, lifetimeSeconds, issueConfirmedNotifications, arrayIndex, hasCovIncrement, covIncrement);
+  if (!running_ || requestSize == 0) {
+    return false;
+  }
+  request[8] = invokeId;
+  return transport_->send(destination, request, requestSize);
+}
+
 BacnetSubscribeCovResponseKind BacnetClient::pollSubscribeCov(
   uint8_t expectedInvokeId, uint8_t* rejectReason) {
   if (!running_)
@@ -114,6 +134,21 @@ BacnetSubscribeCovResponseKind BacnetClient::pollSubscribeCov(
     return BacnetSubscribeCovResponseKind::None;
   return BacnetProtocol::classifySubscribeCovResponse(
     packet, bytesRead, expectedInvokeId, rejectReason);
+}
+
+BacnetSubscribeCovResponseKind BacnetClient::pollSubscribeCovProperty(
+  uint8_t expectedInvokeId, uint8_t* rejectReason) {
+  if (!running_) {
+    return BacnetSubscribeCovResponseKind::None;
+  }
+  uint8_t packet[kMaxDiscoveryPacketSize] = {};
+  BacnetIpEndpoint source;
+  const size_t bytesRead = transport_->receive(packet, sizeof(packet), source);
+  if (bytesRead == 0) {
+    return BacnetSubscribeCovResponseKind::None;
+  }
+  return BacnetProtocol::classifySubscribeCovResponse(
+    packet, bytesRead, expectedInvokeId, rejectReason, 0x1CU);
 }
 
 bool BacnetClient::pollCovNotification(BacnetCovNotification& notification) {
