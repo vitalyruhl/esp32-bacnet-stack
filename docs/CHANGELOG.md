@@ -3,7 +3,7 @@
 This changelog is a curated overview. The canonical library version is in
 `library.json`.
 
-## 0.36.0 - Unreleased
+## 0.36.0 - 2026-07-22
 
 ### Added
 
