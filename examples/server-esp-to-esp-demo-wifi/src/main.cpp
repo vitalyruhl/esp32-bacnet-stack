@@ -17,6 +17,10 @@
 #include <Preferences.h>
 #include <esp_system.h>
 
+#ifndef BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
+#define BACNET_DEMO_ENABLE_COV_DIAGNOSTICS 1
+#endif
+
 namespace {
 
 constexpr char kLiveDemoAppName[] = "ESP-to-ESP BACnet Server";
@@ -41,6 +45,23 @@ bool previousMid = false;
 bool previousSet = false;
 bool previousLed1 = false;
 bool previousLed2 = false;
+uint32_t lastCovSendFailureLogMs = 0;
+
+void observeLiveCovDiagnostic(void*, const BacnetServerCovDiagnostic& diagnostic) {
+#if BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
+  if (diagnostic.event == BacnetServerCovDiagnosticEvent::NotificationSendFailed) {
+    const uint32_t now = millis();
+    if (lastCovSendFailureLogMs != 0U && now - lastCovSendFailureLogMs < 3000U) {
+      return;
+    }
+    lastCovSendFailureLogMs = now;
+  }
+  printCovSubscriptionDiagnostic(diagnostic.subscription,
+                                 covDiagnosticEventText(diagnostic.event));
+#else
+  (void)diagnostic;
+#endif
+}
 
 void persistCounters() {
   diagnosticsPreferences.putUInt("boot", bootCount);
@@ -113,6 +134,7 @@ void setupLiveDiagnosticsUi() {
 void setup() {
   initializeDiagnostics();
   espToEspBaseSetup();
+  bacnetServer.setCovDiagnosticListener(observeLiveCovDiagnostic);
   ConfigManager.setAppName(kLiveDemoAppName);
   ConfigManager.setAppTitle(kLiveDemoAppName);
   setupLiveDiagnosticsUi();

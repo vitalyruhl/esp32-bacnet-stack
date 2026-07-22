@@ -24,6 +24,7 @@ uint32_t peerLossCount = 0;
 uint32_t reconnectCount = 0;
 uint32_t lastResetReason = 0;
 float loopTimeMs = 0.0F;
+uint32_t lastMainLoopAtMs = 0;
 bool ethernetConnectedOnce = false;
 bool ethernetOutageActive = false;
 bool peerOutageActive = false;
@@ -266,6 +267,35 @@ void fillClientLiveRuntime(JsonObject& data) {
   data["serverResetButtonMode"] = remoteReceiveMode(resetButton);
   data["serverMidButtonMode"] = remoteReceiveMode(midButton);
   data["serverSetButtonMode"] = remoteReceiveMode(setButton);
+
+  data["bootCount"] = bootCount;
+  data["resetReason"] = lastResetReason;
+  data["uptimeSeconds"] = millis() / 1000U;
+  data["freeHeap"] = ESP.getFreeHeap();
+  data["minFreeHeap"] = ESP.getMinFreeHeap();
+  data["mainLoopAgeMs"] = lastMainLoopAtMs == 0U
+                            ? 0U
+                            : millis() - lastMainLoopAtMs;
+  if (activeBacnetSession == nullptr) {
+    data["bacnetPollAgeMs"] = nullptr;
+    data["covSessionState"] = "no session";
+    data["covSubscribeAttempts"] = 0U;
+    data["covSendFailures"] = 0U;
+    data["covTimeouts"] = 0U;
+  } else {
+    const uint32_t lastPollMs = activeBacnetSession->lastCovPollMs();
+    data["bacnetPollAgeMs"] = lastPollMs == 0U ? 0U : millis() - lastPollMs;
+    char covState[32] = {};
+    std::snprintf(covState,
+                  sizeof(covState),
+                  "active %u/%u",
+                  static_cast<unsigned int>(activeCovSubscriptionCount()),
+                  static_cast<unsigned int>(kRemoteObjectCount));
+    data["covSessionState"] = covState;
+    data["covSubscribeAttempts"] = activeBacnetSession->covSubscribeAttemptCount();
+    data["covSendFailures"] = activeBacnetSession->covSendFailureCount();
+    data["covTimeouts"] = activeBacnetSession->covTimeoutCount();
+  }
 }
 
 void addClientLiveText(const char* key, const char* label, int order) {
@@ -323,6 +353,17 @@ void setupClientLiveUi() {
   addRemoteHardwareInput("serverMidButtonMode", "Mid Button receive mode", 31, false);
   addRemoteHardwareInput("serverSetButton", "Set Button (BI2)", 40, true);
   addRemoteHardwareInput("serverSetButtonMode", "Set Button receive mode", 41, false);
+  addClientLiveText("bootCount", "Boot count (NVS)", 10);
+  addClientLiveText("resetReason", "Current reset reason", 11);
+  addClientLiveText("uptimeSeconds", "Uptime", 12);
+  addClientLiveText("freeHeap", "Free heap", 13);
+  addClientLiveText("minFreeHeap", "Minimum free heap", 14);
+  addClientLiveText("mainLoopAgeMs", "Main loop age", 15);
+  addClientLiveText("bacnetPollAgeMs", "BACnet poll age", 16);
+  addClientLiveText("covSessionState", "COV state", 17);
+  addClientLiveText("covSubscribeAttempts", "COV subscribe/renew attempts", 18);
+  addClientLiveText("covSendFailures", "COV local send failures", 19);
+  addClientLiveText("covTimeouts", "COV timeouts", 20);
 }
 
 void updateClientDiagnostics() {
@@ -369,4 +410,5 @@ void loop() {
   espToEspBaseLoop();
   updateClientDiagnostics();
   loopTimeMs = static_cast<float>(micros() - startedAtUs) / 1000.0F;
+  lastMainLoopAtMs = millis();
 }

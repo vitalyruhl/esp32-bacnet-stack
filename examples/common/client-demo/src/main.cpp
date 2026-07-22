@@ -28,6 +28,10 @@
 #include "BacnetDemoBinaryValueStatus.h"
 #include "BacnetDemoFormat.h"
 #include "BacnetDemoLogging.h"
+
+#ifndef BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
+#define BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS 1
+#endif
 #include "BacnetDemoPropertyBrowser.h"
 #include "BacnetDemoWatchedAnalogValue.h"
 
@@ -2106,6 +2110,7 @@ void loop() {
   scanSelectedBacnetDevice();
 
   static unsigned long lastLoopLog = 0;
+#if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
   if (millis() - lastLoopLog > 60000) {
     lastLoopLog = millis();
 #if BACNET_DEMO_USE_ETHERNET
@@ -2122,4 +2127,5 @@ void loop() {
     Serial.print(" maxAlloc=");
     Serial.println(ESP.getMaxAllocHeap());
   }
+#endif
 }
