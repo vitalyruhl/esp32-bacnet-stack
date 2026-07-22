@@ -350,10 +350,12 @@ static bool parseBacnetAddress(const char* label,
     return true;
   }
 
+#if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
   Serial.print("[E] Invalid BACnet ");
   Serial.print(label);
   Serial.print(" IP: ");
   Serial.println(addressText != nullptr ? addressText : "<null>");
+#endif
   demoLogging.log(BacnetDemoLogging::Level::Error, "invalid BACnet %s IP: %s", label, addressText != nullptr ? addressText : "<null>");
   return false;
 }
@@ -1425,7 +1427,9 @@ static void sendWhoIs() {
   }
 
   if (!bacnetClient.sendWhoIs(bacnetIpEndpointFromArduino(whoIsDestination))) {
+#if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
     Serial.println("[W] BACnet Who-Is send failed");
+#endif
     demoLogging.log(BacnetDemoLogging::Level::Warn, "Who-Is send failed");
     return;
   }
@@ -1727,12 +1731,14 @@ static void selectBacnetDevice(uint32_t deviceInstance,
   bacnetDeviceSelected = true;
   bacnetScanStatus = "Scan queued for selected device";
 
+#if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
   Serial.print("[I] BACnet selected device ");
   Serial.print(deviceInstance);
   Serial.print(" at ");
   Serial.print(address);
   Serial.print(":");
   Serial.println(port);
+#endif
   demoLogging.log(BacnetDemoLogging::Level::Info, "selected device %lu at %s:%u", static_cast<unsigned long>(deviceInstance), address.toString().c_str(), static_cast<unsigned>(port));
 
   bacnetScanRequested = true;
@@ -1751,12 +1757,14 @@ static void selectBacnetDevice(const BacnetIAmDevice& device) {
   bacnetDeviceSelected = true;
   bacnetScanStatus = "Scan queued for selected device";
 
+#if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
   Serial.print("[I] BACnet selected device ");
   Serial.print(device.deviceInstance);
   Serial.print(" at ");
   Serial.print(bacnetIpAddressFromEndpoint(device.endpoint));
   Serial.print(":");
   Serial.println(activeBacnetSession->port());
+#endif
   const IPAddress address = bacnetIpAddressFromEndpoint(device.endpoint);
   demoLogging.log(BacnetDemoLogging::Level::Info, "selected device %lu at %s:%u", static_cast<unsigned long>(device.deviceInstance), address.toString().c_str(), static_cast<unsigned>(device.endpoint.port));
 
@@ -1798,21 +1806,27 @@ static void startBacnetClient() {
   if (!bacnetAddressConfigValid) {
     if (!bacnetAddressConfigErrorLogged) {
       bacnetAddressConfigErrorLogged = true;
+#if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
       Serial.println("[E] BACnet disabled: invalid BACnet IP config");
+#endif
       demoLogging.log(BacnetDemoLogging::Level::Error, "disabled: invalid BACnet IP config");
     }
     return;
   }
 
   if (!bacnetClient.begin()) {
+#if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
     Serial.println("[E] BACnet UDP listener failed to start");
+#endif
     demoLogging.log(BacnetDemoLogging::Level::Error, "client UDP listener failed");
     return;
   }
 
   bacnetStarted = true;
+#if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
   Serial.print("[I] BACnet client started on UDP port ");
   Serial.println(bacnetClient.localPort());
+#endif
 
   sendWhoIs();
   selectBacnetDevice(BACNET_TARGET_DEVICE_INSTANCE,
@@ -1925,7 +1939,9 @@ static void startEthernetServices() {
                  ntpSettings.server1.get().c_str(),
                  ntpSettings.server2.get().c_str());
     ethernetServicesStarted = true;
+#if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
     Serial.println("[I] ConfigManager services started on Ethernet");
+#endif
   }
   startBacnetClient();
 }
@@ -1933,14 +1949,18 @@ static void startEthernetServices() {
 static void updateEthernetNetwork() {
   const bool connected = bacnet_example::EthernetNetwork::hasIp();
   if (connected && !ethernetWasConnected) {
+#if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
     Serial.print("[I] Ethernet station IP: ");
     Serial.println(bacnet_example::EthernetNetwork::localIp());
+#endif
     startEthernetServices();
   } else if (!connected && ethernetWasConnected) {
     clearBacnetRuntime();
     bacnetClient.end();
     bacnetStarted = false;
+#if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
     Serial.println("[W] Ethernet network unavailable");
+#endif
   }
   ethernetWasConnected = connected;
 }
@@ -1948,11 +1968,17 @@ static void updateEthernetNetwork() {
 
 void setup() {
   Serial.begin(115200);
+#if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
   Serial.println("[I] BACnet client demo starting");
+#endif
 
   ConfigManagerClass::setLogger([](const char* msg) {
+#if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
     Serial.print("[D] CM ");
     Serial.println(msg);
+#else
+    (void)msg;
+#endif
   });
 
   resetBacnetPreviews();
@@ -2008,20 +2034,26 @@ void setup() {
     ethernetDns.get().c_str(),
   };
   if (!bacnet_example::EthernetNetwork::begin(APP_NAME, ethernetConfig)) {
+#if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
     Serial.println("[E] Ethernet startup failed");
+#endif
   }
 #else
   ConfigManager.startWebServer();
 #endif
 
+#if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
   Serial.println("[I] Setup completed, starting main loop");
+#endif
 }
 
 #if !BACNET_DEMO_USE_ETHERNET
 void onWiFiConnected() {
   wifiServices.onConnected(ConfigManager, APP_NAME, systemSettings, ntpSettings);
+#if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
   Serial.print("[I] WiFi station IP: ");
   Serial.println(WiFi.localIP());
+#endif
   startBacnetClient();
 }
 
@@ -2030,13 +2062,17 @@ void onWiFiDisconnected() {
   clearBacnetRuntime();
   bacnetClient.end();
   bacnetStarted = false;
+#if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
   Serial.println("[W] WiFi disconnected");
+#endif
 }
 
 void onWiFiAPMode() {
   wifiServices.onAPMode();
+#if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
   Serial.print("[I] WiFi AP mode IP: ");
   Serial.println(WiFi.softAPIP());
+#endif
 }
 #endif
 
@@ -2061,7 +2097,9 @@ static void setupNetworkDefaults() {
 #else
   if (wifiSettings.wifiSsid.get().isEmpty()) {
 #if BACNET_DEMO_HAS_SECRETS
+#if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
     Serial.println("[I] WiFi SSID empty, applying local secret defaults");
+#endif
     wifiSettings.wifiSsid.set(MY_WIFI_SSID);
     wifiSettings.wifiPassword.set(MY_WIFI_PASSWORD);
 
@@ -2081,11 +2119,15 @@ static void setupNetworkDefaults() {
     wifiSettings.dnsPrimary.set(MY_DNS_IP);
 #endif
     ConfigManager.saveAll();
+#if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
     Serial.println("[I] Restarting after applying WiFi defaults");
+#endif
     delay(500);
     ESP.restart();
 #else
+#if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
     Serial.println("[W] WiFi SSID empty and secret/secrets.h missing");
+#endif
 #endif
   }
 

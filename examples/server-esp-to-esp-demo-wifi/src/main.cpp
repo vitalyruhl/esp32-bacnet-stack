@@ -2,6 +2,10 @@
 
 // Keep the established I/O server implementation unchanged. This wrapper adds
 // only the paired-demo diagnostics and its own Preferences namespace.
+#ifndef BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
+#define BACNET_DEMO_ENABLE_COV_DIAGNOSTICS 1
+#endif
+
 #define setup espToEspBaseSetup
 #define loop espToEspBaseLoop
 #define onWiFiConnected espToEspBaseOnWiFiConnected
@@ -16,10 +20,6 @@
 
 #include <Preferences.h>
 #include <esp_system.h>
-
-#ifndef BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
-#define BACNET_DEMO_ENABLE_COV_DIAGNOSTICS 1
-#endif
 
 namespace {
 

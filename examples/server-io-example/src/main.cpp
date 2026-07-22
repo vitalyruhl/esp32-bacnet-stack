@@ -20,6 +20,10 @@
 
 #include "IoInputLogic.h"
 
+#ifndef BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
+#define BACNET_DEMO_ENABLE_COV_DIAGNOSTICS 1
+#endif
+
 namespace {
 
 constexpr char kAppName[] = "ESP32 BACnet I/O Server";
@@ -171,12 +175,14 @@ void logObjectError(const TObject& object, BacnetObjectConfigurationStatus regis
   const BacnetObjectConfigurationError error = object.configurationError();
   const BacnetObjectConfigurationStatus status =
     error.status == BacnetObjectConfigurationStatus::Ok ? registrationStatus : error.status;
+#if BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
   Serial.printf("[E] BACnet object configuration failed: %s (%u:%lu), %s: %s\n",
                 error.objectName == nullptr ? "unnamed object" : error.objectName,
                 static_cast<unsigned int>(error.object.type),
                 static_cast<unsigned long>(error.object.instance),
                 bacnetPropertyIdText(error.property),
                 bacnetObjectConfigurationStatusText(status));
+#endif
 }
 
 void updateHealth(const io_example::InputHealth& health,
@@ -246,6 +252,7 @@ const char* covDiagnosticEventText(BacnetServerCovDiagnosticEvent event) {
 
 void printCovSubscriptionDiagnostic(const BacnetServerCovSubscription& subscription,
                                     const char* prefix) {
+#if BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
   Serial.printf("[COV-DIAG %lu] %s object=%u:%lu process=%lu peer=%u.%u.%u.%u:%u confirmed=%s state=%s\n",
                 static_cast<unsigned long>(millis()),
                 prefix,
@@ -259,6 +266,10 @@ void printCovSubscriptionDiagnostic(const BacnetServerCovSubscription& subscript
                 subscription.peer.port,
                 subscription.confirmed ? "yes" : "no",
                 covStateText(subscription.state));
+#else
+  (void)subscription;
+  (void)prefix;
+#endif
 }
 
 void observeCovDiagnostic(void*, const BacnetServerCovDiagnostic& diagnostic) {
@@ -271,11 +282,13 @@ void observeSetInputDiagnostic(uint32_t now) {
   if (setInputDiagnosticInitialized && gpioActive == lastSetGpioActive && ioState == lastSetIoState) {
     return;
   }
+#if BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
   Serial.printf("[COV-DIAG %lu] SET GPIO%d raw-active=%s io-logical=%s\n",
                 static_cast<unsigned long>(now),
                 kSetButtonDefaultGpio,
                 gpioActive ? "true" : "false",
                 ioState ? "true" : "false");
+#endif
   setInputDiagnosticInitialized = true;
   lastSetGpioActive = gpioActive;
   lastSetIoState = ioState;
@@ -575,10 +588,12 @@ void pollInputs(uint32_t now) {
   const bool previousSetButtonValue = setButtonValue;
   setButtonValue = ioManager.getInputState("set");
   if (setButtonValue != previousSetButtonValue) {
+#if BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
     Serial.printf("[COV-DIAG %lu] BI2 Present_Value %s -> %s\n",
                   static_cast<unsigned long>(now),
                   previousSetButtonValue ? "active" : "inactive",
                   setButtonValue ? "active" : "inactive");
+#endif
     logSetButtonCovSubscriptions();
   }
   setButton.outOfService = !setConfigured;
@@ -704,21 +719,27 @@ void startBacnetWhenConnected() {
   }
   const BacnetServerDevice device{deviceInstance, vendorId, "ESP32 I/O BACnet Server", "Unregistered BACnet Test Server", "ESP32 I/O Server", kVersion, nullptr};
   bacnetBound = bacnetServer.begin(device, udpPort);
+#if BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
   Serial.println(bacnetBound ? "[I] BACnet server online" : "[E] BACnet UDP bind failed");
+#endif
 }
 
 void setupNetworkDefaults() {
   if (!coreSettings.wifi.wifiSsid.get().isEmpty()) {
     return;
   }
+#if BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
   Serial.println("[W] WiFi settings are empty; configure them in ConfigManager");
+#endif
 }
 
 } // namespace
 
 void setup() {
   Serial.begin(115200);
+#if BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
   Serial.println("[I] Starting BACnet I/O server");
+#endif
   ConfigManager.setAppName(kAppName);
   ConfigManager.setAppTitle(kAppName);
   ConfigManager.setVersion(kVersion);
@@ -737,7 +758,9 @@ void setup() {
   const int configuredVendorId = settings.vendorId->get();
   if (deviceInstance > 0x003FFFFFU || udpPort == 0 || configuredVendorId < 0 ||
       configuredVendorId > UINT16_MAX) {
+#if BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
     Serial.println("[E] Invalid BACnet startup settings; using defaults");
+#endif
     deviceInstance = kDeviceInstanceDefault;
     udpPort = BacnetServer::kDefaultPort;
     vendorId = kDevelopmentVendorId;
@@ -768,8 +791,10 @@ void loop() {
 
 void onWiFiConnected() {
   wifiServices.onConnected(ConfigManager, kAppName, coreSettings.system, coreSettings.ntp);
+#if BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
   Serial.print("[I] WiFi connected, local IP ");
   Serial.println(WiFi.localIP());
+#endif
   startBacnetWhenConnected();
 }
 
