@@ -1836,6 +1836,11 @@ void BacnetDeviceSession::pollInFlightSubscription(uint32_t nowMs) {
           break;
       }
       subscription.initialReadPending_ = true;
+      const uint32_t retryDelaySeconds =
+        subscription.options_.covRenewBeforeSeconds != 0U
+          ? subscription.options_.covRenewBeforeSeconds
+          : 1U;
+      subscription.covRenewAtMs_ = nowMs + retryDelaySeconds * 1000UL;
       subscription.clearInFlightState();
       inFlightSubscription_ = nullptr;
       client_.logger().warn("BACnet/COV", "SubscribeCOV fallback to polling %s,%lu reason=%u", bacnetObjectTypeText(subscription.objectId_.type), static_cast<unsigned long>(subscription.objectId_.instance), static_cast<unsigned>(covStatus));
@@ -1923,7 +1928,9 @@ bool BacnetDeviceSession::tryStartCovSubscription(
   BacnetPropertySubscription& subscription, uint32_t nowMs) {
   if (!subscription.active_ || subscription.inFlight_ ||
       inFlightPropertyRead_ != nullptr || inFlightObjectListScan_ != nullptr ||
-      !subscription.options_.preferCov || subscription.covFallback_ ||
+      !subscription.options_.preferCov ||
+      (subscription.covFallback_ &&
+       static_cast<int32_t>(nowMs - subscription.covRenewAtMs_) < 0) ||
       (subscription.covActive_ &&
        static_cast<int32_t>(nowMs - subscription.covRenewAtMs_) < 0)) {
     return false;
