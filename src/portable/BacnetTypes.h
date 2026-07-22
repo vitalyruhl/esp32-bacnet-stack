@@ -261,28 +261,6 @@ enum class BacnetWritePropertyResponseKind : uint8_t {
   Abort,
 };
 
-struct BacnetCovPropertyValue {
-  BacnetPropertyId property = BacnetPropertyId::PresentValue;
-  uint32_t arrayIndex = kBacnetNoArrayIndex;
-  BacnetValue value;
-};
-
-struct BacnetCovNotification {
-  static constexpr size_t kMaxProperties = 4;
-
-  uint32_t processId = 0;
-  BacnetObjectId object;
-  // Legacy primary value. Present_Value is preferred when supplied with
-  // other properties; use properties/propertyCount to inspect all values.
-  BacnetPropertyId property = BacnetPropertyId::PresentValue;
-  uint32_t arrayIndex = kBacnetNoArrayIndex;
-  BacnetValue value;
-  BacnetCovPropertyValue properties[kMaxProperties] = {};
-  size_t propertyCount = 0;
-  bool confirmed = false;
-  uint8_t invokeId = 0;
-};
-
 enum class BacnetSubscribeCovRequestParseStatus : uint8_t {
   Unrelated,
   SubscribeCov,
@@ -443,4 +421,29 @@ struct BacnetIpEndpoint {
   bool isZero() const {
     return address[0] == 0 && address[1] == 0 && address[2] == 0 && address[3] == 0;
   }
+};
+
+struct BacnetCovPropertyValue {
+  BacnetPropertyId property = BacnetPropertyId::PresentValue;
+  uint32_t arrayIndex = kBacnetNoArrayIndex;
+  BacnetValue value;
+};
+
+struct BacnetCovNotification {
+  static constexpr size_t kMaxProperties = 4;
+
+  uint32_t processId = 0;
+  BacnetObjectId object;
+  // Legacy primary value. Present_Value is preferred when supplied with
+  // other properties; use properties/propertyCount to inspect all values.
+  BacnetPropertyId property = BacnetPropertyId::PresentValue;
+  uint32_t arrayIndex = kBacnetNoArrayIndex;
+  BacnetValue value;
+  BacnetCovPropertyValue properties[kMaxProperties] = {};
+  size_t propertyCount = 0;
+  bool confirmed = false;
+  uint8_t invokeId = 0;
+  // The transport source is retained until a session validates the complete
+  // COV identity tuple and, for confirmed notifications, sends SimpleACK.
+  BacnetIpEndpoint source;
 };

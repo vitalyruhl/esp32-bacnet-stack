@@ -462,6 +462,22 @@ BacnetDeviceSession::BacnetDeviceSession(BacnetClient& client,
       deviceInstance_(deviceInstance),
       endpoint_(endpoint) {}
 
+uint32_t BacnetDeviceSession::lastCovPollMs() const {
+  return lastCovPollMs_;
+}
+
+uint32_t BacnetDeviceSession::covSubscribeAttemptCount() const {
+  return covSubscribeAttemptCount_;
+}
+
+uint32_t BacnetDeviceSession::covSendFailureCount() const {
+  return covSendFailureCount_;
+}
+
+uint32_t BacnetDeviceSession::covTimeoutCount() const {
+  return covTimeoutCount_;
+}
+
 BacnetDeviceSession BacnetDeviceSession::fromEndpoint(BacnetClient& client,
                                                       uint32_t deviceInstance,
                                                       BacnetIpEndpoint endpoint) {
@@ -1585,13 +1601,14 @@ void BacnetDeviceSession::releasePropertyRead(BacnetPropertyReadJob& job) {
 }
 
 void BacnetDeviceSession::poll(BacnetPropertySubscription& subscription,
-                               uint32_t nowMs) {
+                                uint32_t nowMs) {
   if (nowMs == kUseClientClock) {
     nowMs = client_.nowMs();
   }
   if (subscription.session_ != this) {
     return;
   }
+  lastCovPollMs_ = nowMs;
 
   pollInFlightSubscription(nowMs);
   if (inFlightSubscription_ != nullptr) {
@@ -1601,6 +1618,11 @@ void BacnetDeviceSession::poll(BacnetPropertySubscription& subscription,
   if (subscription.covActive_) {
     BacnetCovNotification notification;
     if (takeCovNotification(subscription, notification)) {
+      if (notification.confirmed &&
+          !client_.acknowledgeCovNotification(notification)) {
+        queueCovNotification(notification);
+        return;
+      }
       const BacnetValue* value = nullptr;
       for (size_t index = 0; index < notification.propertyCount; ++index) {
         const BacnetCovPropertyValue& property = notification.properties[index];
@@ -1636,6 +1658,7 @@ void BacnetDeviceSession::poll(BacnetPropertySubscription* subscriptions,
   if (nowMs == kUseClientClock) {
     nowMs = client_.nowMs();
   }
+  lastCovPollMs_ = nowMs;
   pollInFlightSubscription(nowMs);
   if (inFlightSubscription_ != nullptr || inFlightPropertyRead_ != nullptr ||
       subscriptions == nullptr || count == 0) {
@@ -1800,9 +1823,11 @@ void BacnetDeviceSession::pollInFlightSubscription(uint32_t nowMs) {
     const BacnetSubscribeCovResponseKind covStatus =
       subscription.options_.usePropertyCov
         ? client_.pollSubscribeCovProperty(subscription.inFlightInvokeId_,
-                                           &rejectReason)
+                                           &rejectReason,
+                                           &endpoint_)
         : client_.pollSubscribeCov(subscription.inFlightInvokeId_,
-                                   &rejectReason);
+                                    &rejectReason,
+                                    &endpoint_);
     if (covStatus == BacnetSubscribeCovResponseKind::Ack) {
       const uint32_t renewBefore = subscription.options_.covRenewBeforeSeconds;
       const uint32_t lifetime = subscription.options_.covLifetimeSeconds;
@@ -1818,8 +1843,7 @@ void BacnetDeviceSession::pollInFlightSubscription(uint32_t nowMs) {
     }
     if (covStatus != BacnetSubscribeCovResponseKind::None ||
         nowMs - subscription.inFlightStartedAt_ >= subscription.options_.timeoutMs) {
-      subscription.covActive_ = false;
-      subscription.covFallback_ = true;
+      scheduleCovRetry(subscription, nowMs);
       switch (covStatus) {
         case BacnetSubscribeCovResponseKind::Error:
           subscription.covStatus_ = BacnetCovSubscriptionStatus::Error;
@@ -1833,14 +1857,9 @@ void BacnetDeviceSession::pollInFlightSubscription(uint32_t nowMs) {
           break;
         default:
           subscription.covStatus_ = BacnetCovSubscriptionStatus::Timeout;
+          ++covTimeoutCount_;
           break;
       }
-      subscription.initialReadPending_ = true;
-      const uint32_t retryDelaySeconds =
-        subscription.options_.covRenewBeforeSeconds != 0U
-          ? subscription.options_.covRenewBeforeSeconds
-          : 1U;
-      subscription.covRenewAtMs_ = nowMs + retryDelaySeconds * 1000UL;
       subscription.clearInFlightState();
       inFlightSubscription_ = nullptr;
       client_.logger().warn("BACnet/COV", "SubscribeCOV fallback to polling %s,%lu reason=%u", bacnetObjectTypeText(subscription.objectId_.type), static_cast<unsigned long>(subscription.objectId_.instance), static_cast<unsigned>(covStatus));
@@ -1881,6 +1900,19 @@ void BacnetDeviceSession::pollInFlightSubscription(uint32_t nowMs) {
                            nowMs,
                            BacnetPropertyReadStatus::Timeout);
   }
+}
+
+void BacnetDeviceSession::scheduleCovRetry(
+  BacnetPropertySubscription& subscription,
+  uint32_t nowMs) {
+  const uint32_t retryDelaySeconds =
+    subscription.options_.covRenewBeforeSeconds != 0U
+      ? subscription.options_.covRenewBeforeSeconds
+      : 1U;
+  subscription.covActive_ = false;
+  subscription.covFallback_ = true;
+  subscription.initialReadPending_ = true;
+  subscription.covRenewAtMs_ = nowMs + retryDelaySeconds * 1000UL;
 }
 
 void BacnetDeviceSession::tryStartSubscriptionPoll(
@@ -1936,6 +1968,7 @@ bool BacnetDeviceSession::tryStartCovSubscription(
     return false;
   }
   const uint8_t invokeId = allocateInvokeId();
+  ++covSubscribeAttemptCount_;
   if (!subscription.covProcessIdAssigned_) {
     // The Process Identifier must survive a client restart so a renewal
     // replaces the server entry instead of temporarily consuming a new slot.
@@ -1965,8 +1998,9 @@ bool BacnetDeviceSession::tryStartCovSubscription(
                           invokeId,
                           subscription.options_.issueConfirmedNotifications);
   if (!sent) {
-    subscription.covFallback_ = true;
+    scheduleCovRetry(subscription, nowMs);
     subscription.covStatus_ = BacnetCovSubscriptionStatus::SendFailed;
+    ++covSendFailureCount_;
     client_.logger().warn("BACnet/COV", "SubscribeCOV send failed; polling fallback");
     return false;
   }
@@ -2104,7 +2138,12 @@ void BacnetDeviceSession::finishSubscriptionPoll(
 bool BacnetDeviceSession::takeCovNotification(
   const BacnetPropertySubscription& subscription,
   BacnetCovNotification& notification) {
-  const auto matches = [&subscription](const BacnetCovNotification& candidate) {
+  const auto matches = [this, &subscription](const BacnetCovNotification& candidate) {
+    if (!BacnetClient::endpointEquals(candidate.source, endpoint_) ||
+        !subscription.covProcessIdAssigned_ ||
+        candidate.processId != subscription.covProcessId_) {
+      return false;
+    }
     if (candidate.object.type != subscription.objectId_.type ||
         candidate.object.instance != subscription.objectId_.instance) {
       return false;
@@ -2133,7 +2172,7 @@ bool BacnetDeviceSession::takeCovNotification(
   }
 
   BacnetCovNotification received;
-  if (!client_.pollCovNotification(received)) {
+  if (!client_.pollCovNotification(received, false)) {
     return false;
   }
   if (matches(received)) {

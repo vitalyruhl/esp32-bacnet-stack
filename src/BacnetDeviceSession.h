@@ -600,6 +600,10 @@ public:
     uint32_t arrayIndex = kBacnetNoArrayIndex) const;
   size_t cachedPropertyCount() const;
   bool isBusy() const;
+  uint32_t lastCovPollMs() const;
+  uint32_t covSubscribeAttemptCount() const;
+  uint32_t covSendFailureCount() const;
+  uint32_t covTimeoutCount() const;
   // Advances an existing transaction only. It never starts a new request.
   void pollInFlight(uint32_t nowMs = kUseClientClock);
   BacnetObjectScanResult scanObjectList(
@@ -680,6 +684,8 @@ private:
                           uint32_t errorCode = 0);
   void releasePropertyRead(BacnetPropertyReadJob& job);
   void pollInFlightSubscription(uint32_t nowMs);
+  static void scheduleCovRetry(BacnetPropertySubscription& subscription,
+                               uint32_t nowMs);
   bool tryStartCovSubscription(BacnetPropertySubscription& subscription,
                                uint32_t nowMs);
   void tryStartSubscriptionPoll(BacnetPropertySubscription& subscription,
@@ -709,6 +715,10 @@ private:
   BacnetObjectListScanJob* inFlightObjectListScan_ = nullptr;
   BacnetPropertyReadJob* inFlightPropertyRead_ = nullptr;
   size_t roundRobinSubscriptionIndex_ = 0;
+  uint32_t lastCovPollMs_ = 0;
+  uint32_t covSubscribeAttemptCount_ = 0;
+  uint32_t covSendFailureCount_ = 0;
+  uint32_t covTimeoutCount_ = 0;
   BacnetCachedProperty propertyCache_[kMaxCachedProperties];
   bool propertyCacheUsed_[kMaxCachedProperties] = {};
   size_t propertyCacheCount_ = 0;

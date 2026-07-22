@@ -17,14 +17,14 @@ public:
   bool begin(uint16_t) override { return true; }
   void end() override {}
   bool send(const BacnetIpEndpoint& destination, const uint8_t* data, size_t length) override {
+    ++sendCalls;
     if (data == nullptr || length > sizeof(lastSent)) {
       return false;
     }
     lastDestination = destination;
     std::memcpy(lastSent, data, length);
     lastSentLength = length;
-    ++sendCalls;
-    return true;
+    return sendResult;
   }
   size_t receive(uint8_t* data, size_t capacity, BacnetIpEndpoint& source) override {
     if (incomingLength == 0 || incomingLength > capacity) {
@@ -54,6 +54,7 @@ public:
   size_t lastSentLength = 0;
   BacnetIpEndpoint lastDestination;
   uint32_t sendCalls = 0;
+  bool sendResult = true;
 };
 
 bool simpleAckIsFor(const TestTransport& transport, uint8_t invoke, uint8_t service) {
@@ -406,13 +407,69 @@ bool testBinaryOutputCovFollowsEffectiveValue() {
          notification.value.unsignedValue == 1;
 }
 
+bool testCovNotificationSendFailureUsesBackoffAndRetainsChange() {
+  TestTransport transport;
+  TestClock clock;
+  BacnetServer server(transport);
+  server.setClock(&clock);
+  BacnetServerAnalogInput inputs[] = {{0, "Input", 1.0F, BacnetEngineeringUnits::Percent}};
+  BacnetServerDevice device;
+  device.deviceInstance = 106;
+  device.apduTimeout = 100;
+  device.numberOfApduRetries = 2;
+  if (!server.setAnalogInputs(inputs, 1) || !server.begin(device)) {
+    return false;
+  }
+  const BacnetObjectId object{static_cast<uint16_t>(BacnetObjectType::AnalogInput), 0};
+  const BacnetIpEndpoint peer(192, 0, 2, 12, 47812);
+  uint8_t request[BacnetProtocol::kMaxSubscribeCovRequestSize] = {};
+  const size_t requestSize = BacnetProtocol::buildSubscribeCovRequest(
+    request, sizeof(request), 16, object, 30);
+  if (requestSize == 0) {
+    return false;
+  }
+  request[8] = 18;
+  transport.queue(request, requestSize, peer);
+  if (server.poll() != BacnetServerPollResult::SubscribeCovAckSent) {
+    return false;
+  }
+
+  transport.sendResult = false;
+  const uint32_t sendsBeforeFailure = transport.sendCalls;
+  if (server.poll() != BacnetServerPollResult::SendFailed ||
+      transport.sendCalls != sendsBeforeFailure + 1U) {
+    return false;
+  }
+  clock.now = 99;
+  if (server.poll() != BacnetServerPollResult::NoDatagram ||
+      transport.sendCalls != sendsBeforeFailure + 1U) {
+    return false;
+  }
+
+  transport.sendResult = true;
+  clock.now = 100;
+  if (server.poll() != BacnetServerPollResult::CovNotificationSent ||
+      transport.sendCalls != sendsBeforeFailure + 2U) {
+    return false;
+  }
+  BacnetCovNotification notification;
+  if (!BacnetProtocol::parseCovNotification(
+        transport.lastSent, transport.lastSentLength, notification) ||
+      notification.value.type != BacnetValueType::Real ||
+      notification.value.realValue != 1.0F) {
+    return false;
+  }
+  return server.poll() == BacnetServerPollResult::NoDatagram;
+}
+
 } // namespace
 
 int main() {
   return testSubscribeCovLifecycle() && testSubscribeCovPropertyAndConfirmedAck() &&
-         testSubscribeCovPropertyIncrement() &&
+           testSubscribeCovPropertyIncrement() &&
          testBinaryOutputCovTracksEffectivePresentValue() &&
-           testSubscriptionCapacityAndErrors() && testBinaryOutputCovFollowsEffectiveValue()
+           testSubscriptionCapacityAndErrors() && testBinaryOutputCovFollowsEffectiveValue() &&
+           testCovNotificationSendFailureUsesBackoffAndRetainsChange()
            ? 0
            : 1;
 }

@@ -59,10 +59,13 @@ public:
                                 bool hasCovIncrement = false,
                                 float covIncrement = 0.0F);
   BacnetSubscribeCovResponseKind pollSubscribeCov(uint8_t expectedInvokeId,
-                                                  uint8_t* rejectReason = nullptr);
+                                                   uint8_t* rejectReason = nullptr,
+                                                   const BacnetIpEndpoint* expectedPeer = nullptr);
   BacnetSubscribeCovResponseKind pollSubscribeCovProperty(uint8_t expectedInvokeId,
-                                                          uint8_t* rejectReason = nullptr);
-  bool pollCovNotification(BacnetCovNotification& notification);
+                                                           uint8_t* rejectReason = nullptr,
+                                                           const BacnetIpEndpoint* expectedPeer = nullptr);
+  bool pollCovNotification(BacnetCovNotification& notification,
+                           bool acknowledgeConfirmed = true);
   bool pollIAm(BacnetIAmDevice& device);
   bool sendReadProperty(const BacnetIpEndpoint& destination,
                         const BacnetPropertyRequest& request,
@@ -111,6 +114,8 @@ public:
   static bool parseReadPropertyError(const uint8_t* buffer, size_t length, uint8_t expectedInvokeId, BacnetValue& value, uint32_t* errorClass, uint32_t* errorCode);
 
 private:
+  friend class BacnetDeviceSession;
+
   static constexpr size_t kMaxDiscoveryPacketSize = 512;
   static constexpr size_t kMaxQueuedCovNotifications = 2;
 
@@ -118,6 +123,9 @@ private:
                             size_t length,
                             const BacnetIpEndpoint& source);
   bool takeQueuedCovNotification(BacnetCovNotification& notification);
+  bool acknowledgeCovNotification(const BacnetCovNotification& notification);
+  static bool endpointEquals(const BacnetIpEndpoint& left,
+                             const BacnetIpEndpoint& right);
 
   BacnetDatagramTransport* transport_ = nullptr;
   BacnetLogger logger_;

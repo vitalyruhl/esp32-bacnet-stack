@@ -1545,9 +1545,21 @@ bool BacnetServer::sendCovNotification(BacnetServerCovSubscription& subscription
   const size_t size = BacnetProtocol::buildCovNotification(
     notification, sizeof(notification), subscription.processId, BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::Device), device_.deviceInstance}, subscription.object, timeRemaining, values, valueCount, subscription.confirmed, invokeId);
   if (size == 0U || !transport_->send(subscription.peer, notification, size)) {
+    const size_t index = static_cast<size_t>(&subscription - covSubscriptions_);
+    if (covSendRetryCounts_[index] < device_.numberOfApduRetries) {
+      ++covSendRetryCounts_[index];
+    }
+    const uint32_t retryDelayMs = device_.apduTimeout != 0U ? device_.apduTimeout : 1000U;
+    const uint32_t retryMultiplier = covSendRetryCounts_[index] != 0U
+                                       ? covSendRetryCounts_[index]
+                                       : 1U;
+    covRetryAtMs_[index] = now + retryDelayMs * retryMultiplier;
     emitCovDiagnostic(BacnetServerCovDiagnosticEvent::NotificationSendFailed, subscription);
     return false;
   }
+  const size_t index = static_cast<size_t>(&subscription - covSubscriptions_);
+  covSendRetryCounts_[index] = 0;
+  covRetryAtMs_[index] = 0;
   subscription.lastSentMs = now;
   subscription.pendingInvokeId = invokeId;
   subscription.state = subscription.confirmed
@@ -1572,6 +1584,12 @@ BacnetServerPollResult BacnetServer::processCovSubscriptions() {
         covSnapshotValid_[index][propertyIndex] = false;
       }
       covConfirmedRetryCounts_[index] = 0;
+      covSendRetryCounts_[index] = 0;
+      covRetryAtMs_[index] = 0;
+      continue;
+    }
+    if (covRetryAtMs_[index] != 0U &&
+        static_cast<int32_t>(now - covRetryAtMs_[index]) < 0) {
       continue;
     }
     if (subscription.state == BacnetServerCovSubscriptionState::AwaitingConfirmedAck) {
@@ -1716,6 +1734,8 @@ BacnetServerPollResult BacnetServer::handleSubscribeCov(
       covSnapshotValid_[index][propertyIndex] = false;
     }
     covConfirmedRetryCounts_[index] = 0;
+    covSendRetryCounts_[index] = 0;
+    covRetryAtMs_[index] = 0;
     emitCovDiagnostic(BacnetServerCovDiagnosticEvent::SubscriptionActivated, *target);
   }
 

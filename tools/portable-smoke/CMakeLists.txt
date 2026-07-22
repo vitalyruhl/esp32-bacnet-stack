@@ -40,6 +40,13 @@ add_executable(server_cov_tests server_cov_tests.cpp)
 target_compile_features(server_cov_tests PRIVATE cxx_std_17)
 target_link_libraries(server_cov_tests PRIVATE bacnet_portable bacnet_server)
 
+add_executable(cov_session_tests
+  cov_session_tests.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/../../src/BacnetDeviceSession.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/../../src/BacnetRemoteObject.cpp)
+target_compile_features(cov_session_tests PRIVATE cxx_std_17)
+target_link_libraries(cov_session_tests PRIVATE bacnet_portable bacnet_client)
+
 add_executable(io_example_input_tests io_example_input_tests.cpp)
 target_compile_features(io_example_input_tests PRIVATE cxx_std_17)
 target_include_directories(io_example_input_tests PRIVATE
@@ -50,6 +57,7 @@ if(BUILD_TESTING)
   add_test(NAME server_analog_value_tests COMMAND server_analog_value_tests)
   add_test(NAME server_object_api_tests COMMAND server_object_api_tests)
   add_test(NAME server_cov_tests COMMAND server_cov_tests)
+  add_test(NAME cov_session_tests COMMAND cov_session_tests)
   add_test(NAME io_example_input_tests COMMAND io_example_input_tests)
 endif()
 

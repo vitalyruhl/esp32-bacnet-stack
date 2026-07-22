@@ -574,5 +574,7 @@ private:
   uint8_t covSnapshotBitCount_[kMaxCovSubscriptions][kCovObjectPropertyCount] = {};
   bool covSnapshotValid_[kMaxCovSubscriptions][kCovObjectPropertyCount] = {};
   uint8_t covConfirmedRetryCounts_[kMaxCovSubscriptions] = {};
+  uint8_t covSendRetryCounts_[kMaxCovSubscriptions] = {};
+  uint32_t covRetryAtMs_[kMaxCovSubscriptions] = {};
   uint8_t nextCovInvokeId_ = 1;
 };
