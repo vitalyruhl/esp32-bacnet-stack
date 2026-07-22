@@ -111,24 +111,12 @@ void appendStatusFlags(char* buffer, size_t capacity,
 }
 
 const BacnetValueObjectPreview* previewAt(size_t index) {
-  switch (index) {
-    case 0:
-      return &analogValues[0];
-    case 1:
-      return &analogValues[1];
-    case 2:
-      return &binaryValues[0];
-    case 3:
-      return &binaryValues[1];
-    case 4:
-      return &binaryValues[2];
-    case 5:
-      return &binaryValues[3];
-    case 6:
-      return &binaryValues[4];
-    default:
-      return nullptr;
+  constexpr size_t kAnalogPreviewCount = 2;
+  if (index < kAnalogPreviewCount) {
+    return index < kPreviewCount ? &analogValues[index] : nullptr;
   }
+  index -= kAnalogPreviewCount;
+  return index < kPreviewCount ? &binaryValues[index] : nullptr;
 }
 
 const BacnetValueObjectPreview* findRemotePreview(BacnetObjectType type,
