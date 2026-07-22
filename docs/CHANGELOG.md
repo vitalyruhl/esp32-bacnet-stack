@@ -29,6 +29,11 @@ This changelog is a curated overview. The canonical library version is in
   a successful acknowledgement restores active COV mode.
 - Confirmed server notifications wait for `SimpleACK` and use the configured
   bounded APDU retry count.
+- Bound local SubscribeCOV send failures and server notification send failures
+  with per-subscription retry timing while preserving polling fallback and
+  pending value changes.
+- Validate session COV routing by peer and Process Identifier before accepting
+  a notification or sending its confirmed-notification `SimpleACK`.
 
 ### Notes
 

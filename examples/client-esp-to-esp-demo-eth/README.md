@@ -37,3 +37,26 @@ serial console; `192.168.2.127` is the current laboratory configuration. See
 [Change of Value (COV)](../../docs/cov.md) and the paired
 [COV HIL runner](../hil-cov-espClient-to-espServer-acceptance/README.md) for
 the protocol and acceptance scope.
+
+## Quiet diagnostic build
+
+`eth-com6-quiet` keeps BACnet and client-demo behavior enabled while compiling
+out BACnet logging, client-demo logging, and the shared demo's periodic serial
+diagnostics:
+
+```sh
+pio run -d examples/client-esp-to-esp-demo-eth -e eth-com6-quiet
+```
+
+It does not disable ESP-IDF, Ethernet, PHY, Wi-Fi, or other framework-driver
+logs.
+
+## Laboratory serial-reset finding
+
+The paired HIL station was verified with its external DTR/RTS auto-reset
+transistor circuit removed and only the manual BOOT and RESET buttons connected.
+With that hardware change, the Ethernet client remained stable while the serial
+monitor was closed. The earlier apparent serial-closed failure was traced to
+the external reset/boot-strapping circuit pulling GPIO0 to an unsafe level and
+causing reset or download-mode behavior. It is not a confirmed BACnet, logging,
+or closed-UART software failure.

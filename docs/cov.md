@@ -63,10 +63,12 @@ to receive the registration result.
 ## Notifications and acknowledgement
 
 Set `BacnetSubscribeOptions::issueConfirmedNotifications` to request confirmed
-notifications. `BacnetClient::pollCovNotification()` automatically returns a
-`SimpleACK` for a confirmed COV notification before exposing it. Applications
-using the session API obtain the same behavior by continuing to call
-`BacnetDeviceSession::poll()`; they do not send a separate acknowledgement.
+notifications. The low-level `BacnetClient::pollCovNotification()` default
+still returns a `SimpleACK` for a syntactically valid confirmed notification.
+The session API first validates the UDP peer, COV Process Identifier, monitored
+object, subscription form, property, and array index. It sends `SimpleACK`
+only after that complete tuple matches its local subscription; a notification
+for another session or peer is not acknowledged by that session.
 
 After accepting a subscription, the server invalidates its prior COV snapshot.
 The next server `poll()` therefore sends an initial notification. Later
@@ -95,9 +97,9 @@ send a remote cancellation. Destruction has the same local-only effect.
 
 The client subscription abstraction has two independent paths:
 
-- When a SubscribeCOV response is an Error, Reject, Abort, or timeout, it sets
-  the handle to the corresponding COV status, uses the configured polling
-  fallback, and schedules the next COV registration after
+- When a SubscribeCOV response is an Error, Reject, Abort, timeout, or local
+  send failure, it sets the handle to the corresponding COV status, uses the
+  configured polling fallback, and schedules the next COV registration after
   `covRenewBeforeSeconds` (or one second when that setting is zero).
 - `fallbackPollMs = 0` disables periodic fallback polls. An initial refresh
   may still be requested by the handle's `immediateFirstRead` setting.
@@ -109,13 +111,11 @@ For confirmed server notifications, retries after a missing `SimpleACK` are
 bounded by `BacnetServerDevice::numberOfApduRetries` and its `apduTimeout`.
 After that retry limit, the server returns the subscription to active state.
 
-This is not a universal transport-retry guarantee: a local failure while
-sending a SubscribeCOV request immediately enters polling fallback, but the
-current implementation does not apply the delayed renewal interval to that
-specific send-failure path. Similarly, an outbound server notification send
-failure is reported through the COV diagnostic listener and is retried on a
-subsequent server poll if its value remains changed. Applications that need a
-strict transport request-rate bound must supervise transport availability.
+An outbound server notification send failure keeps the prior snapshot intact.
+The affected subscription waits for an `apduTimeout`-based backoff (one second
+when that timeout is zero) before retrying; its retry multiplier is capped by
+`numberOfApduRetries`. Other subscriptions continue independently, and a
+successful send clears that subscription's send-retry state.
 
 ## Server API and diagnostics
 
@@ -131,8 +131,9 @@ public diagnostics are intended for short, local observation:
   send-failure events synchronously during `poll()`.
 
 The table and diagnostics are not a persistence or authentication mechanism.
-Client routing uses the COV monitored object/property information; do not use
-this subset as an authenticated source-verification layer.
+Session routing validates the expected peer and COV identity tuple to prevent
+cross-session delivery, but this subset is not an authenticated source-
+verification layer.
 
 ## Scope boundary
 

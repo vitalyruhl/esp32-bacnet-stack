@@ -23,3 +23,14 @@ The **ESP-to-ESP** page shows local BACnet process objects, COV peer state,
 and persistent restart/network diagnostics. For the COV protocol scope, see
 [Change of Value (COV)](../../docs/cov.md); for the paired acceptance scenario,
 see the [COV HIL runner](../hil-cov-espClient-to-espServer-acceptance/README.md).
+
+## Quiet diagnostic build
+
+`wifi-com7-quiet` compiles out BACnet logging and the wrapper's direct COV
+diagnostics without changing BACnet behavior:
+
+```sh
+pio run -d examples/server-esp-to-esp-demo-wifi -e wifi-com7-quiet
+```
+
+It does not disable ESP-IDF, Wi-Fi, PHY, or other framework-driver logs.
