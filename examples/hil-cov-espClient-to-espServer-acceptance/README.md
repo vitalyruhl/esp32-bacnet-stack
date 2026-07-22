@@ -1,14 +1,15 @@
 # ESP32 COV Acceptance HIL Runner
 
-Local hardware-in-the-loop acceptance runner for BACnet COV between an
-Ethernet ESP32 client and a WiFi ESP32 BACnet server. This is separate from
-the WAGO client acceptance example.
+Local hardware-in-the-loop acceptance runner for BACnet COV from an Ethernet
+ESP32 client to a Wi-Fi ESP32 BACnet server. This is separate from the WAGO
+client acceptance example.
 
 ## Scope
 
-- ETH client: WT32-ETH01 on COM6.
-- WiFi server: the I/O example, currently configured for `192.168.2.126` and
-  Device instance `1682127`.
+- ETH client: WT32-ETH01 using the local `eth-com6-cov-hil` environment.
+- Wi-Fi server: the paired I/O wrapper. The checked-in target
+  `192.168.2.126` and Device instance `1682127` are laboratory configuration
+  values, not portable defaults.
 - Requires local Ethernet settings in `src/secret/secrets.h`; that file is
   ignored and is never committed.
 - The runner sends no ReadProperty request to observe a COV change.
@@ -28,6 +29,17 @@ The `eth-com6-cov-hil` environment performs only the following COV checks:
 The serial output logs the target, process identifier, subscription type,
 confirmation mode, and the failing scenario phase. The operator is prompted
 to press each button or change the LDR during a bounded observation window.
+
+## Current laboratory evidence
+
+The current focused ESP-to-ESP run discovered `192.168.2.126:47808` from the
+Ethernet client at `.127` for Device `1682127`. It passed (`total=1 pass=1
+fail=0`) the following scope: unconfirmed BI2 Object-COV with initial value,
+renewal, and cancellation; confirmed BI1 Object-COV with automatic `SimpleACK`;
+BI0 `SubscribeCOVProperty` for `Present_Value`; and AI0
+`SubscribeCOVProperty` with `COV_Increment 0.5`. The paired client card was
+also visually checked with stable COV mode. This is focused local hardware
+evidence, not a claim about every network, restart, or long-duration condition.
 
 ## Build and upload
 
@@ -53,3 +65,6 @@ The final result is `PASS` only when the enabled COV scenario completes.
 Server-side ConfigManager diagnostics must be checked concurrently for the
 single object-level entry, endpoint, process ID, lifetime, notification state,
 last send, and confirmed-notification acknowledgement.
+
+See [Change of Value (COV)](../../docs/cov.md) for the public protocol/API
+scope and lifecycle boundaries.

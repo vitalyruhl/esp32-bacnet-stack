@@ -1,12 +1,14 @@
 # ESP-to-ESP WiFi BACnet Server Demo
 
-This permanent paired-demo wrapper reuses the proven `server-io-example`
-source without changing it. It adds only paired-demo GUI cards and persistent
-runtime diagnostics in the dedicated `esp2esp_srv` Preferences namespace.
+This permanent paired-demo wrapper is the Wi-Fi BACnet server side of the
+ESP-to-ESP COV setup. It reuses the proven `server-io-example` source without
+changing it, and adds only paired-demo GUI cards and persistent runtime
+diagnostics in the dedicated `esp2esp_srv` Preferences namespace.
 
-The target server is the WiFi ESP32 on COM7. Configure WiFi through
-ConfigManager; the paired Ethernet client uses BACnet/IP address
-`192.168.2.126` and device instance `1682127` by default.
+Configure Wi-Fi through ConfigManager. The checked-in `wifi-com7` environment
+is the local laboratory convenience profile. Its paired client target
+`192.168.2.126` and Device instance `1682127` are lab configuration values,
+not general defaults for a deployed BACnet network.
 
 ## Build and upload
 
@@ -18,4 +20,6 @@ pio device monitor -p COM7 -b 115200
 
 Open the ConfigManager GUI at the WiFi address shown on the serial console.
 The **ESP-to-ESP** page shows local BACnet process objects, COV peer state,
-and persistent restart/network diagnostics.
+and persistent restart/network diagnostics. For the COV protocol scope, see
+[Change of Value (COV)](../../docs/cov.md); for the paired acceptance scenario,
+see the [COV HIL runner](../hil-cov-espClient-to-espServer-acceptance/README.md).

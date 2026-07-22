@@ -3,18 +3,32 @@
 This changelog is a curated overview. The canonical library version is in
 `library.json`.
 
-## 0.36.0 - 2026-07-18
+## 0.36.0 - Unreleased
 
 ### Added
 
 - Added portable, caller-owned read-only Analog Input and Binary Input server
   object profiles with shared ReadProperty, Object_List, Property_List, and
   optional metadata/state-provider support.
-- Added `examples/server-io-example`, a ConfigManager-backed ESP32 WiFi input station
-  with LDR, DS18B20, and three debounced buttons. The physically installed
-  SSD1306 is intentionally not initialized by the firmware.
+- Added `examples/server-io-example`, a ConfigManager-backed ESP32 WiFi input
+  station with LDR, DS18B20, and three debounced buttons. The physically
+  installed SSD1306 is intentionally not initialized by the firmware.
 - Added reusable command-priority Binary Output support and BO0/BO1 LED
   bindings for `examples/server-io-example`.
+- Added the portable server COV subset and the paired ESP-to-ESP COV examples:
+  Object-COV and Property-COV subscriptions, initial notifications, confirmed
+  and unconfirmed notifications, renewal, cancellation, and real-valued
+  `COV_Increment`.
+- Added the focused Ethernet-client to Wi-Fi-server COV acceptance runner and
+  the paired Ethernet client display of remote server hardware inputs.
+
+### Changed
+
+- COV registration response failures and timeouts retain the subscription
+  handle, use its polling fallback, and schedule a later registration attempt;
+  a successful acknowledgement restores active COV mode.
+- Confirmed server notifications wait for `SimpleACK` and use the configured
+  bounded APDU retry count.
 
 ### Notes
 

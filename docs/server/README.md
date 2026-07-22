@@ -61,6 +61,10 @@ object-level subscription is one entry that encodes Present_Value and
 Status_Flags together; a property subscription encodes only its requested
 property. Confirmed COV notifications wait non-blockingly for SimpleACK.
 
+See [Change of Value (COV)](../cov.md) for the supported Object-COV and
+Property-COV forms, `COV_Increment`, lifetime/renewal/cancellation semantics,
+bounded confirmed-notification retries, diagnostics, and scope boundaries.
+
 This is not a complete BACnet/IP server feature: there is no EventNotification,
 Analog Output/PWM, or generic real-I/O policy.
 
