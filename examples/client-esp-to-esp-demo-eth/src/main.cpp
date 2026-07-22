@@ -131,6 +131,97 @@ const BacnetValueObjectPreview* previewAt(size_t index) {
   }
 }
 
+const BacnetValueObjectPreview* findRemotePreview(BacnetObjectType type,
+                                                  uint32_t instance) {
+  const BacnetValueObjectPreview* groups[] = {
+    analogValues, binaryValues, multiStateValues};
+  for (const BacnetValueObjectPreview* group : groups) {
+    for (size_t index = 0; index < kPreviewCount; ++index) {
+      const BacnetValueObjectPreview& preview = group[index];
+      if (preview.discovered && preview.object.type == static_cast<uint16_t>(type) &&
+          preview.object.instance == instance) {
+        return &preview;
+      }
+    }
+  }
+  return nullptr;
+}
+
+const BacnetValue* remotePresentValue(const BacnetValueObjectPreview* preview) {
+  if (preview == nullptr) {
+    return nullptr;
+  }
+  if (preview->subscription && preview->subscription->hasValue() &&
+      preview->subscription->lastStatus() == BacnetDeviceSessionReadStatus::Ack) {
+    return &preview->subscription->lastValue();
+  }
+  if (preview->scanned != nullptr &&
+      preview->scanned->presentValueStatus == BacnetDeviceSessionReadStatus::Ack) {
+    return &preview->scanned->presentValue;
+  }
+  return nullptr;
+}
+
+bool bacnetValueIsActive(const BacnetValue& value, bool& active) {
+  switch (value.type) {
+    case BacnetValueType::Boolean:
+      active = value.booleanValue;
+      return true;
+    case BacnetValueType::Unsigned:
+    case BacnetValueType::Enumerated:
+      active = value.unsignedValue != 0U;
+      return true;
+    case BacnetValueType::Signed:
+      active = value.signedValue != 0;
+      return true;
+    default:
+      return false;
+  }
+}
+
+const char* remoteReceiveMode(const BacnetValueObjectPreview* preview) {
+  if (preview == nullptr || preview->subscription == nullptr) {
+    return "?";
+  }
+  switch (preview->subscription->covStatus()) {
+    case BacnetCovSubscriptionStatus::Active:
+      return "C";
+    case BacnetCovSubscriptionStatus::Error:
+    case BacnetCovSubscriptionStatus::Reject:
+    case BacnetCovSubscriptionStatus::Abort:
+    case BacnetCovSubscriptionStatus::Timeout:
+    case BacnetCovSubscriptionStatus::SendFailed:
+      return "P";
+    case BacnetCovSubscriptionStatus::Pending:
+      return "?";
+  }
+  return "?";
+}
+
+void setRemoteBinaryInput(JsonObject& data,
+                          const char* key,
+                          const BacnetValueObjectPreview* preview) {
+  const BacnetValue* value = remotePresentValue(preview);
+  bool active = false;
+  if (value == nullptr || !bacnetValueIsActive(*value, active)) {
+    data[key] = nullptr;
+    return;
+  }
+  data[key] = active;
+}
+
+void setRemoteLightSensor(JsonObject& data,
+                          const BacnetValueObjectPreview* preview) {
+  const BacnetValue* value = remotePresentValue(preview);
+  if (value == nullptr || value->type != BacnetValueType::Real) {
+    data["serverLightSensor"] = "unavailable";
+    return;
+  }
+  char formatted[24] = {};
+  std::snprintf(formatted, sizeof(formatted), "%.1f %%", value->realValue);
+  data["serverLightSensor"] = formatted;
+}
+
 void appendPreviewSummary(char* buffer, size_t capacity, size_t index) {
   if (buffer == nullptr || capacity == 0) {
     return;
@@ -169,6 +260,24 @@ void fillClientLiveRuntime(JsonObject& data) {
     appendPreviewSummary(value, sizeof(value), index);
     data[key] = value;
   }
+
+  const BacnetValueObjectPreview* lightSensor =
+    findRemotePreview(BacnetObjectType::AnalogInput, 0);
+  const BacnetValueObjectPreview* resetButton =
+    findRemotePreview(BacnetObjectType::BinaryInput, 0);
+  const BacnetValueObjectPreview* midButton =
+    findRemotePreview(BacnetObjectType::BinaryInput, 1);
+  const BacnetValueObjectPreview* setButton =
+    findRemotePreview(BacnetObjectType::BinaryInput, 2);
+
+  setRemoteLightSensor(data, lightSensor);
+  setRemoteBinaryInput(data, "serverResetButton", resetButton);
+  setRemoteBinaryInput(data, "serverMidButton", midButton);
+  setRemoteBinaryInput(data, "serverSetButton", setButton);
+  data["serverLightSensorMode"] = remoteReceiveMode(lightSensor);
+  data["serverResetButtonMode"] = remoteReceiveMode(resetButton);
+  data["serverMidButtonMode"] = remoteReceiveMode(midButton);
+  data["serverSetButtonMode"] = remoteReceiveMode(setButton);
 }
 
 void addClientLiveText(const char* key, const char* label, int order) {
@@ -181,6 +290,23 @@ void addClientLiveText(const char* key, const char* label, int order) {
   meta.group = "Live client state";
   meta.order = order;
   meta.isString = true;
+  ConfigManager.getRuntime().addRuntimeMeta(meta);
+}
+
+void addRemoteHardwareInput(const char* key,
+                            const char* label,
+                            int order,
+                            bool isBoolean) {
+  RuntimeFieldMeta meta;
+  meta.sourceGroup = "esp2espClient";
+  meta.key = key;
+  meta.label = label;
+  meta.page = "ESP-to-ESP";
+  meta.card = "Server Hardware Inputs";
+  meta.group = "Remote BACnet inputs";
+  meta.order = order;
+  meta.isBool = isBoolean;
+  meta.isString = !isBoolean;
   ConfigManager.getRuntime().addRuntimeMeta(meta);
 }
 
@@ -201,6 +327,14 @@ void setupClientLiveUi() {
     std::snprintf(label, sizeof(label), "Remote variable %u", static_cast<unsigned int>(index + 1U));
     addClientLiveText(key, label, 200 + static_cast<int>(index));
   }
+  addRemoteHardwareInput("serverLightSensor", "Light Sensor (AI0)", 10, false);
+  addRemoteHardwareInput("serverLightSensorMode", "Light Sensor receive mode", 11, false);
+  addRemoteHardwareInput("serverResetButton", "Reset Button (BI0)", 20, true);
+  addRemoteHardwareInput("serverResetButtonMode", "Reset Button receive mode", 21, false);
+  addRemoteHardwareInput("serverMidButton", "Mid Button (BI1)", 30, true);
+  addRemoteHardwareInput("serverMidButtonMode", "Mid Button receive mode", 31, false);
+  addRemoteHardwareInput("serverSetButton", "Set Button (BI2)", 40, true);
+  addRemoteHardwareInput("serverSetButtonMode", "Set Button receive mode", 41, false);
 }
 
 void updateClientDiagnostics() {
