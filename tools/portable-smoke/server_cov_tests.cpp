@@ -3,6 +3,7 @@
 #include "BacnetServer.h"
 
 #include <cstring>
+#include <limits>
 
 namespace {
 
@@ -462,6 +463,44 @@ bool testCovNotificationSendFailureUsesBackoffAndRetainsChange() {
   return server.poll() == BacnetServerPollResult::NoDatagram;
 }
 
+bool testCovNotificationSendFailureCapsExtremeBackoff() {
+  TestTransport transport;
+  TestClock clock;
+  BacnetServer server(transport);
+  server.setClock(&clock);
+  BacnetServerAnalogInput inputs[] = {{0, "Input", 1.0F, BacnetEngineeringUnits::Percent}};
+  BacnetServerDevice device;
+  device.deviceInstance = 107;
+  device.apduTimeout = std::numeric_limits<uint32_t>::max();
+  device.numberOfApduRetries = 2;
+  if (!server.setAnalogInputs(inputs, 1) || !server.begin(device)) {
+    return false;
+  }
+  const BacnetObjectId object{static_cast<uint16_t>(BacnetObjectType::AnalogInput), 0};
+  const BacnetIpEndpoint peer(192, 0, 2, 13, 47813);
+  uint8_t request[BacnetProtocol::kMaxSubscribeCovRequestSize] = {};
+  const size_t requestSize = BacnetProtocol::buildSubscribeCovRequest(
+    request, sizeof(request), 17, object, 30);
+  if (requestSize == 0) {
+    return false;
+  }
+  request[8] = 19;
+  transport.queue(request, requestSize, peer);
+  if (server.poll() != BacnetServerPollResult::SubscribeCovAckSent) {
+    return false;
+  }
+
+  transport.sendResult = false;
+  const uint32_t sendsBeforeFailure = transport.sendCalls;
+  if (server.poll() != BacnetServerPollResult::SendFailed ||
+      transport.sendCalls != sendsBeforeFailure + 1U) {
+    return false;
+  }
+  clock.now = 1;
+  return server.poll() == BacnetServerPollResult::NoDatagram &&
+         transport.sendCalls == sendsBeforeFailure + 1U;
+}
+
 } // namespace
 
 int main() {
@@ -469,7 +508,8 @@ int main() {
            testSubscribeCovPropertyIncrement() &&
          testBinaryOutputCovTracksEffectivePresentValue() &&
            testSubscriptionCapacityAndErrors() && testBinaryOutputCovFollowsEffectiveValue() &&
-           testCovNotificationSendFailureUsesBackoffAndRetainsChange()
+           testCovNotificationSendFailureUsesBackoffAndRetainsChange() &&
+           testCovNotificationSendFailureCapsExtremeBackoff()
            ? 0
            : 1;
 }

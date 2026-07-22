@@ -207,7 +207,8 @@ bool testSessionValidatesPeerAndProcessBeforeConfirmedAck() {
 
   const uint32_t processId = (static_cast<uint32_t>(object.type) << 22U) | object.instance;
   const uint32_t sendsBeforeForeign = transport.sendCalls;
-  if (!queueConfirmedNotification(transport, processId, object, foreignPeer, 41)) {
+  const BacnetIpEndpoint wrongPortPeer(192, 0, 2, 1, 47809);
+  if (!queueConfirmedNotification(transport, processId, object, wrongPortPeer, 40)) {
     return false;
   }
   session.poll(subscription, 1002);
@@ -215,7 +216,7 @@ bool testSessionValidatesPeerAndProcessBeforeConfirmedAck() {
     return false;
   }
 
-  if (!queueConfirmedNotification(transport, processId + 1U, object, peer, 42)) {
+  if (!queueConfirmedNotification(transport, processId, object, foreignPeer, 41)) {
     return false;
   }
   session.poll(subscription, 1003);
@@ -223,10 +224,18 @@ bool testSessionValidatesPeerAndProcessBeforeConfirmedAck() {
     return false;
   }
 
-  if (!queueConfirmedNotification(transport, processId, object, peer, 43)) {
+  if (!queueConfirmedNotification(transport, processId + 1U, object, peer, 42)) {
     return false;
   }
   session.poll(subscription, 1004);
+  if (!expect(transport.sendCalls == sendsBeforeForeign)) {
+    return false;
+  }
+
+  if (!queueConfirmedNotification(transport, processId, object, peer, 43)) {
+    return false;
+  }
+  session.poll(subscription, 1005);
   return expect(transport.sendCalls == sendsBeforeForeign + 1U) &&
          expect(BacnetProtocol::isSimpleAck(
            transport.lastSent, transport.lastSentLength, 43, 0x01U)) &&

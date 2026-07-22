@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <limits>
 
 namespace {
 
@@ -1553,7 +1554,18 @@ bool BacnetServer::sendCovNotification(BacnetServerCovSubscription& subscription
     const uint32_t retryMultiplier = covSendRetryCounts_[index] != 0U
                                        ? covSendRetryCounts_[index]
                                        : 1U;
-    covRetryAtMs_[index] = now + retryDelayMs * retryMultiplier;
+    constexpr uint64_t kMaxCovRetryDelayMs =
+      static_cast<uint64_t>(std::numeric_limits<int32_t>::max()) - 1U;
+    const uint64_t requestedRetryDelayMs =
+      static_cast<uint64_t>(retryDelayMs) * retryMultiplier;
+    const uint32_t boundedRetryDelayMs = static_cast<uint32_t>(
+      std::min(requestedRetryDelayMs, kMaxCovRetryDelayMs));
+    uint32_t retryAtMs = now + boundedRetryDelayMs;
+    // Zero denotes no pending retry; keep it distinct from a wrapped deadline.
+    if (retryAtMs == 0U) {
+      retryAtMs = 1U;
+    }
+    covRetryAtMs_[index] = retryAtMs;
     emitCovDiagnostic(BacnetServerCovDiagnosticEvent::NotificationSendFailed, subscription);
     return false;
   }
