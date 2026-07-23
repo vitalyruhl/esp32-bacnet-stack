@@ -10,8 +10,8 @@ completed server feature set.
   ReadProperty responses, and Reject responses for unsupported confirmed
   services.
 - The portable object model exposes caller-owned read-only inputs/values and
-  commandable Binary Outputs. Binary Outputs share a portable 16-slot priority
-  state and accept WriteProperty for Present Value only.
+  commandable Binary Outputs and Binary Values. Both object types share the
+  portable 16-slot priority state and accept WriteProperty for Present Value.
 - Analog Values support stored Present Values or a lightweight function-pointer
   provider with caller context. No globally allocated Analog Value capacity is
   reserved when no values are registered.

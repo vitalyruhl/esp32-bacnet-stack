@@ -3,7 +3,7 @@
 The portable `BacnetServer` runtime accepts an injected
 `BacnetDatagramTransport`, is driven by non-blocking `poll()`, decodes Who-Is,
 emits I-Am, serves caller-owned objects through ReadProperty, and supports
-WriteProperty for registered commandable Binary Outputs plus incoming
+WriteProperty for registered commandable Binary Outputs and Binary Values plus incoming
 SubscribeCOV and SubscribeCOVProperty requests.
 
 The active Device profile exposes its mandatory identity, protocol-capability,
@@ -55,6 +55,14 @@ the server and object `setLocalWritePriority()` defaults apply only to
 `BacnetBinaryOutput::writeValue()`, while an explicit local priority overrides
 both. Local priority zero updates Relinquish_Default, and `relinquish()`
 releases an explicit 1..16 slot. Priority Array itself is read-only.
+
+Commandable Binary Values use the same caller-owned priority storage without
+an output callback, polarity, reliability, or platform binding. Their compact
+standard profile contains Object Identifier, Object Name, Object Type, Present
+Value, Status Flags, Event State, Out Of Service, Priority Array, Relinquish
+Default, and Property List. The paired
+`server-esp-to-esp-demo-wifi` demo registers BV320 as its shared live-COV
+instance.
 
 The server retains a fixed allocation-free COV subscription table. An
 object-level subscription is one entry that encodes Present_Value and

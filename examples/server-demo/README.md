@@ -1,6 +1,6 @@
 # BACnet Server Demo
 
-This demo runs the portable read-only `BacnetServer` through the existing
+This demo runs the portable `BacnetServer` through the existing
 Arduino UDP adapter. The `usb` environment connects an ESP32 through WiFi;
 the `eth` environment compiles the same Device and Analog Value profile for a
 WT32-ETH01 Ethernet server. Network initialization is separate, while the
@@ -13,6 +13,9 @@ The demo listens on BACnet/IP UDP port `47808` and exposes Device `1682127`:
   the normal server object model.
 - AV201 is a polling/callback value in seconds. Its provider returns elapsed
   uptime and does not keep a second stored Present Value copy.
+- BV320 is a commandable Binary Value with caller-owned priority storage. Its
+  initial effective value is `inactive` through `Relinquish_Default`; writes
+  use the standard 1 through 16 BACnet priority slots.
 
 ## BACnet server configuration
 

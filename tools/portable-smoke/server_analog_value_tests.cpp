@@ -16,7 +16,7 @@ template <typename Object>
 struct HasLocalWritePriority<
   Object,
   std::void_t<decltype(std::declval<Object&>().setLocalWritePriority(uint8_t{}))>>
-  : std::true_type {};
+    : std::true_type {};
 
 static_assert(!HasLocalWritePriority<BacnetAnalogInput>::value,
               "input objects must not expose local command priorities");
@@ -214,23 +214,16 @@ bool propertyListMatches(TestTransport& transport,
                          size_t expectedCount,
                          uint8_t invokeId) {
   BacnetValue value;
-  if (!readProperty(transport, server, source,
-                    BacnetPropertyRequest{object, BacnetPropertyId::PropertyList, 0},
-                    invokeId++, value) ||
+  if (!readProperty(transport, server, source, BacnetPropertyRequest{object, BacnetPropertyId::PropertyList, 0}, invokeId++, value) ||
       value.type != BacnetValueType::Unsigned ||
       value.unsignedValue != expectedCount) {
     return false;
   }
   for (size_t index = 0; index < expectedCount; ++index) {
-    if (!readProperty(transport, server, source,
-                      BacnetPropertyRequest{object, BacnetPropertyId::PropertyList,
-                                            static_cast<uint32_t>(index + 1U)},
-                      invokeId++, value) ||
+    if (!readProperty(transport, server, source, BacnetPropertyRequest{object, BacnetPropertyId::PropertyList, static_cast<uint32_t>(index + 1U)}, invokeId++, value) ||
         value.type != BacnetValueType::Enumerated ||
         value.unsignedValue != static_cast<uint32_t>(expected[index]) ||
-        !readProperty(transport, server, source,
-                      BacnetPropertyRequest{object, expected[index], kBacnetNoArrayIndex},
-                      invokeId++, value)) {
+        !readProperty(transport, server, source, BacnetPropertyRequest{object, expected[index], kBacnetNoArrayIndex}, invokeId++, value)) {
       return false;
     }
   }
@@ -404,21 +397,13 @@ bool testRegisteredAnalogValues() {
       value.type != BacnetValueType::Enumerated || value.unsignedValue != 62) {
     return false;
   }
-  if (!readProperty(transport, server, source,
-                    BacnetPropertyRequest{providerObject, BacnetPropertyId::Description,
-                                          kBacnetNoArrayIndex}, 36, value) ||
+  if (!readProperty(transport, server, source, BacnetPropertyRequest{providerObject, BacnetPropertyId::Description, kBacnetNoArrayIndex}, 36, value) ||
       std::strcmp(value.displayText(), "Provider metadata") != 0 ||
-      !readProperty(transport, server, source,
-                    BacnetPropertyRequest{providerObject, BacnetPropertyId::MinPresentValue,
-                                          kBacnetNoArrayIndex}, 37, value) ||
+      !readProperty(transport, server, source, BacnetPropertyRequest{providerObject, BacnetPropertyId::MinPresentValue, kBacnetNoArrayIndex}, 37, value) ||
       value.type != BacnetValueType::Real || !equals(value.realValue, -10.0F) ||
-      !readProperty(transport, server, source,
-                    BacnetPropertyRequest{providerObject, BacnetPropertyId::Reliability,
-                                          kBacnetNoArrayIndex}, 38, value) ||
+      !readProperty(transport, server, source, BacnetPropertyRequest{providerObject, BacnetPropertyId::Reliability, kBacnetNoArrayIndex}, 38, value) ||
       value.type != BacnetValueType::Enumerated || value.unsignedValue != 2 ||
-      !readProperty(transport, server, source,
-                    BacnetPropertyRequest{providerObject, BacnetPropertyId::PropertyList, 0},
-                    39, value) || value.unsignedValue != 14) {
+      !readProperty(transport, server, source, BacnetPropertyRequest{providerObject, BacnetPropertyId::PropertyList, 0}, 39, value) || value.unsignedValue != 14) {
     return false;
   }
 
@@ -640,30 +625,19 @@ bool testIndividuallyRegisteredOptionalProperties() {
     return BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::AnalogValue),
                           values[index].instance};
   };
-  registrations[registrationCount++] = {object(1), BacnetPropertyId::Description,
-                                        readTextProperty, kDescription};
+  registrations[registrationCount++] = {object(1), BacnetPropertyId::Description, readTextProperty, kDescription};
   if (nullDescription != nullptr) {
-    registrations[registrationCount++] = {object(2), BacnetPropertyId::Description,
-                                          readTextProperty, nullDescription};
+    registrations[registrationCount++] = {object(2), BacnetPropertyId::Description, readTextProperty, nullDescription};
   }
-  registrations[registrationCount++] = {object(3), BacnetPropertyId::Description,
-                                        readTextProperty, kEmptyDescription};
-  registrations[registrationCount++] = {object(4), BacnetPropertyId::MinPresentValue,
-                                        readRealProperty, &minimum};
-  registrations[registrationCount++] = {object(5), BacnetPropertyId::MaxPresentValue,
-                                        readRealProperty, &maximum};
-  registrations[registrationCount++] = {object(6), BacnetPropertyId::Resolution,
-                                        readRealProperty, &resolution};
-  registrations[registrationCount++] = {object(7), BacnetPropertyId::Reliability,
-                                        readEnumeratedProperty, &reliability};
-  registrations[registrationCount++] = {object(8), BacnetPropertyId::MinPresentValue,
-                                        readRealProperty, &minimum};
-  registrations[registrationCount++] = {object(8), BacnetPropertyId::MaxPresentValue,
-                                        readRealProperty, &maximum};
-  registrations[registrationCount++] = {object(9), BacnetPropertyId::Description,
-                                        readTextProperty, kDescriptionResolutionText};
-  registrations[registrationCount++] = {object(9), BacnetPropertyId::Resolution,
-                                        readRealProperty, &resolution};
+  registrations[registrationCount++] = {object(3), BacnetPropertyId::Description, readTextProperty, kEmptyDescription};
+  registrations[registrationCount++] = {object(4), BacnetPropertyId::MinPresentValue, readRealProperty, &minimum};
+  registrations[registrationCount++] = {object(5), BacnetPropertyId::MaxPresentValue, readRealProperty, &maximum};
+  registrations[registrationCount++] = {object(6), BacnetPropertyId::Resolution, readRealProperty, &resolution};
+  registrations[registrationCount++] = {object(7), BacnetPropertyId::Reliability, readEnumeratedProperty, &reliability};
+  registrations[registrationCount++] = {object(8), BacnetPropertyId::MinPresentValue, readRealProperty, &minimum};
+  registrations[registrationCount++] = {object(8), BacnetPropertyId::MaxPresentValue, readRealProperty, &maximum};
+  registrations[registrationCount++] = {object(9), BacnetPropertyId::Description, readTextProperty, kDescriptionResolutionText};
+  registrations[registrationCount++] = {object(9), BacnetPropertyId::Resolution, readRealProperty, &resolution};
   // The complete BME280 profile is registered after the compact combinations.
   BacnetServerPropertyRegistration bmeRegistrations[] = {
     {object(10), BacnetPropertyId::Description, readTextProperty, kBmeDescription},
@@ -690,67 +664,104 @@ bool testIndividuallyRegisteredOptionalProperties() {
 
   const BacnetIpEndpoint source(192, 0, 2, 44, 47809);
   static constexpr BacnetPropertyId kBase[] = {
-    BacnetPropertyId::ObjectIdentifier, BacnetPropertyId::ObjectName,
-    BacnetPropertyId::ObjectType, BacnetPropertyId::PresentValue,
-    BacnetPropertyId::StatusFlags, BacnetPropertyId::EventState,
-    BacnetPropertyId::OutOfService, BacnetPropertyId::Units,
+    BacnetPropertyId::ObjectIdentifier,
+    BacnetPropertyId::ObjectName,
+    BacnetPropertyId::ObjectType,
+    BacnetPropertyId::PresentValue,
+    BacnetPropertyId::StatusFlags,
+    BacnetPropertyId::EventState,
+    BacnetPropertyId::OutOfService,
+    BacnetPropertyId::Units,
     BacnetPropertyId::PropertyList,
   };
   static constexpr BacnetPropertyId kDescriptionOnly[] = {
-    BacnetPropertyId::ObjectIdentifier, BacnetPropertyId::ObjectName,
-    BacnetPropertyId::ObjectType, BacnetPropertyId::PresentValue,
-    BacnetPropertyId::StatusFlags, BacnetPropertyId::EventState,
-    BacnetPropertyId::OutOfService, BacnetPropertyId::Units,
-    BacnetPropertyId::PropertyList, BacnetPropertyId::Description,
+    BacnetPropertyId::ObjectIdentifier,
+    BacnetPropertyId::ObjectName,
+    BacnetPropertyId::ObjectType,
+    BacnetPropertyId::PresentValue,
+    BacnetPropertyId::StatusFlags,
+    BacnetPropertyId::EventState,
+    BacnetPropertyId::OutOfService,
+    BacnetPropertyId::Units,
+    BacnetPropertyId::PropertyList,
+    BacnetPropertyId::Description,
   };
   static constexpr BacnetPropertyId kMinimumOnly[] = {
-    BacnetPropertyId::ObjectIdentifier, BacnetPropertyId::ObjectName,
-    BacnetPropertyId::ObjectType, BacnetPropertyId::PresentValue,
-    BacnetPropertyId::StatusFlags, BacnetPropertyId::EventState,
-    BacnetPropertyId::OutOfService, BacnetPropertyId::Units,
-    BacnetPropertyId::PropertyList, BacnetPropertyId::MinPresentValue,
+    BacnetPropertyId::ObjectIdentifier,
+    BacnetPropertyId::ObjectName,
+    BacnetPropertyId::ObjectType,
+    BacnetPropertyId::PresentValue,
+    BacnetPropertyId::StatusFlags,
+    BacnetPropertyId::EventState,
+    BacnetPropertyId::OutOfService,
+    BacnetPropertyId::Units,
+    BacnetPropertyId::PropertyList,
+    BacnetPropertyId::MinPresentValue,
   };
   static constexpr BacnetPropertyId kMaximumOnly[] = {
-    BacnetPropertyId::ObjectIdentifier, BacnetPropertyId::ObjectName,
-    BacnetPropertyId::ObjectType, BacnetPropertyId::PresentValue,
-    BacnetPropertyId::StatusFlags, BacnetPropertyId::EventState,
-    BacnetPropertyId::OutOfService, BacnetPropertyId::Units,
-    BacnetPropertyId::PropertyList, BacnetPropertyId::MaxPresentValue,
+    BacnetPropertyId::ObjectIdentifier,
+    BacnetPropertyId::ObjectName,
+    BacnetPropertyId::ObjectType,
+    BacnetPropertyId::PresentValue,
+    BacnetPropertyId::StatusFlags,
+    BacnetPropertyId::EventState,
+    BacnetPropertyId::OutOfService,
+    BacnetPropertyId::Units,
+    BacnetPropertyId::PropertyList,
+    BacnetPropertyId::MaxPresentValue,
   };
   static constexpr BacnetPropertyId kResolutionOnly[] = {
-    BacnetPropertyId::ObjectIdentifier, BacnetPropertyId::ObjectName,
-    BacnetPropertyId::ObjectType, BacnetPropertyId::PresentValue,
-    BacnetPropertyId::StatusFlags, BacnetPropertyId::EventState,
-    BacnetPropertyId::OutOfService, BacnetPropertyId::Units,
-    BacnetPropertyId::PropertyList, BacnetPropertyId::Resolution,
+    BacnetPropertyId::ObjectIdentifier,
+    BacnetPropertyId::ObjectName,
+    BacnetPropertyId::ObjectType,
+    BacnetPropertyId::PresentValue,
+    BacnetPropertyId::StatusFlags,
+    BacnetPropertyId::EventState,
+    BacnetPropertyId::OutOfService,
+    BacnetPropertyId::Units,
+    BacnetPropertyId::PropertyList,
+    BacnetPropertyId::Resolution,
   };
   static constexpr BacnetPropertyId kReliabilityOnly[] = {
-    BacnetPropertyId::ObjectIdentifier, BacnetPropertyId::ObjectName,
-    BacnetPropertyId::ObjectType, BacnetPropertyId::PresentValue,
-    BacnetPropertyId::StatusFlags, BacnetPropertyId::EventState,
-    BacnetPropertyId::OutOfService, BacnetPropertyId::Units,
-    BacnetPropertyId::PropertyList, BacnetPropertyId::Reliability,
+    BacnetPropertyId::ObjectIdentifier,
+    BacnetPropertyId::ObjectName,
+    BacnetPropertyId::ObjectType,
+    BacnetPropertyId::PresentValue,
+    BacnetPropertyId::StatusFlags,
+    BacnetPropertyId::EventState,
+    BacnetPropertyId::OutOfService,
+    BacnetPropertyId::Units,
+    BacnetPropertyId::PropertyList,
+    BacnetPropertyId::Reliability,
   };
   static constexpr BacnetPropertyId kMinMax[] = {
-    BacnetPropertyId::ObjectIdentifier, BacnetPropertyId::ObjectName,
-    BacnetPropertyId::ObjectType, BacnetPropertyId::PresentValue,
-    BacnetPropertyId::StatusFlags, BacnetPropertyId::EventState,
-    BacnetPropertyId::OutOfService, BacnetPropertyId::Units,
-    BacnetPropertyId::PropertyList, BacnetPropertyId::MinPresentValue,
+    BacnetPropertyId::ObjectIdentifier,
+    BacnetPropertyId::ObjectName,
+    BacnetPropertyId::ObjectType,
+    BacnetPropertyId::PresentValue,
+    BacnetPropertyId::StatusFlags,
+    BacnetPropertyId::EventState,
+    BacnetPropertyId::OutOfService,
+    BacnetPropertyId::Units,
+    BacnetPropertyId::PropertyList,
+    BacnetPropertyId::MinPresentValue,
     BacnetPropertyId::MaxPresentValue,
   };
   static constexpr BacnetPropertyId kDescriptionResolution[] = {
-    BacnetPropertyId::ObjectIdentifier, BacnetPropertyId::ObjectName,
-    BacnetPropertyId::ObjectType, BacnetPropertyId::PresentValue,
-    BacnetPropertyId::StatusFlags, BacnetPropertyId::EventState,
-    BacnetPropertyId::OutOfService, BacnetPropertyId::Units,
-    BacnetPropertyId::PropertyList, BacnetPropertyId::Description,
+    BacnetPropertyId::ObjectIdentifier,
+    BacnetPropertyId::ObjectName,
+    BacnetPropertyId::ObjectType,
+    BacnetPropertyId::PresentValue,
+    BacnetPropertyId::StatusFlags,
+    BacnetPropertyId::EventState,
+    BacnetPropertyId::OutOfService,
+    BacnetPropertyId::Units,
+    BacnetPropertyId::PropertyList,
+    BacnetPropertyId::Description,
     BacnetPropertyId::Resolution,
   };
-  const auto check = [&](size_t index, const BacnetPropertyId* expected, size_t count,
-                         uint8_t invokeId) {
-    return propertyListMatches(transport, server, source, object(index), expected, count,
-                               invokeId);
+  const auto check = [&](size_t index, const BacnetPropertyId* expected, size_t count, uint8_t invokeId) {
+    return propertyListMatches(transport, server, source, object(index), expected, count, invokeId);
   };
   if (!check(0, kBase, sizeof(kBase) / sizeof(kBase[0]), 1) ||
       !check(1, kDescriptionOnly, sizeof(kDescriptionOnly) / sizeof(kDescriptionOnly[0]), 40) ||
@@ -761,11 +772,8 @@ bool testIndividuallyRegisteredOptionalProperties() {
       !check(6, kResolutionOnly, sizeof(kResolutionOnly) / sizeof(kResolutionOnly[0]), 20) ||
       !check(7, kReliabilityOnly, sizeof(kReliabilityOnly) / sizeof(kReliabilityOnly[0]), 60) ||
       !check(8, kMinMax, sizeof(kMinMax) / sizeof(kMinMax[0]), 100) ||
-      !check(9, kDescriptionResolution,
-             sizeof(kDescriptionResolution) / sizeof(kDescriptionResolution[0]), 150) ||
-      !readError(transport, server, source,
-                 BacnetPropertyRequest{object(2), BacnetPropertyId::Description,
-                                       kBacnetNoArrayIndex}, 210, 32)) {
+      !check(9, kDescriptionResolution, sizeof(kDescriptionResolution) / sizeof(kDescriptionResolution[0]), 150) ||
+      !readError(transport, server, source, BacnetPropertyRequest{object(2), BacnetPropertyId::Description, kBacnetNoArrayIndex}, 210, 32)) {
     return false;
   }
   const BacnetPropertyId optionalProperties[] = {
@@ -775,8 +783,7 @@ bool testIndividuallyRegisteredOptionalProperties() {
     BacnetPropertyId::Resolution,
     BacnetPropertyId::Reliability,
   };
-  const auto contains = [](const BacnetPropertyId* list, size_t count,
-                           BacnetPropertyId property) {
+  const auto contains = [](const BacnetPropertyId* list, size_t count, BacnetPropertyId property) {
     for (size_t index = 0; index < count; ++index) {
       if (list[index] == property)
         return true;
@@ -798,24 +805,19 @@ bool testIndividuallyRegisteredOptionalProperties() {
     {6, kResolutionOnly, sizeof(kResolutionOnly) / sizeof(kResolutionOnly[0])},
     {7, kReliabilityOnly, sizeof(kReliabilityOnly) / sizeof(kReliabilityOnly[0])},
     {8, kMinMax, sizeof(kMinMax) / sizeof(kMinMax[0])},
-    {9, kDescriptionResolution,
-     sizeof(kDescriptionResolution) / sizeof(kDescriptionResolution[0])},
+    {9, kDescriptionResolution, sizeof(kDescriptionResolution) / sizeof(kDescriptionResolution[0])},
   };
   uint8_t errorInvokeId = 212;
   for (const OptionalCase& optionalCase : cases) {
     for (BacnetPropertyId property : optionalProperties) {
       if (!contains(optionalCase.properties, optionalCase.propertyCount, property) &&
-          !readError(transport, server, source,
-                     BacnetPropertyRequest{object(optionalCase.objectIndex), property,
-                                           kBacnetNoArrayIndex}, errorInvokeId++, 32)) {
+          !readError(transport, server, source, BacnetPropertyRequest{object(optionalCase.objectIndex), property, kBacnetNoArrayIndex}, errorInvokeId++, 32)) {
         return false;
       }
     }
   }
   BacnetValue emptyDescription;
-  if (!readProperty(transport, server, source,
-                    BacnetPropertyRequest{object(3), BacnetPropertyId::Description,
-                                          kBacnetNoArrayIndex}, 211, emptyDescription) ||
+  if (!readProperty(transport, server, source, BacnetPropertyRequest{object(3), BacnetPropertyId::Description, kBacnetNoArrayIndex}, 211, emptyDescription) ||
       emptyDescription.type != BacnetValueType::CharacterString ||
       emptyDescription.textLength != 0) {
     return false;
@@ -828,18 +830,23 @@ bool testIndividuallyRegisteredOptionalProperties() {
     return false;
   }
   static constexpr BacnetPropertyId kBmeProfile[] = {
-    BacnetPropertyId::ObjectIdentifier, BacnetPropertyId::ObjectName,
-    BacnetPropertyId::ObjectType, BacnetPropertyId::PresentValue,
-    BacnetPropertyId::StatusFlags, BacnetPropertyId::EventState,
-    BacnetPropertyId::OutOfService, BacnetPropertyId::Units,
-    BacnetPropertyId::PropertyList, BacnetPropertyId::Description,
-    BacnetPropertyId::MinPresentValue, BacnetPropertyId::MaxPresentValue,
-    BacnetPropertyId::Resolution, BacnetPropertyId::Reliability,
+    BacnetPropertyId::ObjectIdentifier,
+    BacnetPropertyId::ObjectName,
+    BacnetPropertyId::ObjectType,
+    BacnetPropertyId::PresentValue,
+    BacnetPropertyId::StatusFlags,
+    BacnetPropertyId::EventState,
+    BacnetPropertyId::OutOfService,
+    BacnetPropertyId::Units,
+    BacnetPropertyId::PropertyList,
+    BacnetPropertyId::Description,
+    BacnetPropertyId::MinPresentValue,
+    BacnetPropertyId::MaxPresentValue,
+    BacnetPropertyId::Resolution,
+    BacnetPropertyId::Reliability,
   };
   return check(10, kBmeProfile, sizeof(kBmeProfile) / sizeof(kBmeProfile[0]), 1) &&
-         readError(transport, server, source,
-                   BacnetPropertyRequest{object(10), static_cast<BacnetPropertyId>(999),
-                                         kBacnetNoArrayIndex}, 100, 32);
+         readError(transport, server, source, BacnetPropertyRequest{object(10), static_cast<BacnetPropertyId>(999), kBacnetNoArrayIndex}, 100, 32);
 }
 
 bool testStartConfigurationAndVersionFallback() {
@@ -909,8 +916,7 @@ bool testLimitStates() {
          bacnetAnalogValueLimitEvaluate(41.0F, true, limits).fault &&
          bacnetAnalogValueLimitEvaluate(0.0F, false, limits).state ==
            BacnetAnalogValueLimitState::SensorFault &&
-         bacnetAnalogValueLimitEvaluate(-4.8F, true, limits,
-           BacnetAnalogValueLimitState::LowWarning).state ==
+         bacnetAnalogValueLimitEvaluate(-4.8F, true, limits, BacnetAnalogValueLimitState::LowWarning).state ==
            BacnetAnalogValueLimitState::Normal &&
          !bacnetAnalogValueLimitConfigIsValid({0.0F, 10.0F, 5.0F, 20.0F, 0.0F});
 }
@@ -932,10 +938,10 @@ bool testReadOnlyInputObjects() {
   BacnetServerDevice device;
   device.deviceInstance = 4567;
   BacnetServerAnalogInput analogInputs[] = {{0, "Light Sensor", 42.5F, BacnetEngineeringUnits::Percent},
-                                             {1, "Temperature", 20.0F, BacnetEngineeringUnits::DegreesCelsius}};
+                                            {1, "Temperature", 20.0F, BacnetEngineeringUnits::DegreesCelsius}};
   BacnetServerBinaryInput binaryInputs[] = {{0, "Reset Button", true},
-                                             {1, "Mid Button", false},
-                                             {2, "Set Button", true}};
+                                            {1, "Mid Button", false},
+                                            {2, "Set Button", true}};
   const uint32_t noSensor = 1;
   const uint32_t faultEvent = 1;
   const uint32_t faultFlags = 1UL << 1U;
@@ -953,30 +959,22 @@ bool testReadOnlyInputObjects() {
   const BacnetIpEndpoint source(192, 0, 2, 44, 47809);
   BacnetValue value;
   const BacnetObjectId lightObject{static_cast<uint16_t>(BacnetObjectType::AnalogInput), 0};
-  if (!readProperty(transport, server, source,
-                    {lightObject, BacnetPropertyId::PresentValue, kBacnetNoArrayIndex}, 1, value) ||
+  if (!readProperty(transport, server, source, {lightObject, BacnetPropertyId::PresentValue, kBacnetNoArrayIndex}, 1, value) ||
       value.type != BacnetValueType::Real || !equals(value.realValue, 42.5F) ||
-      !readProperty(transport, server, source,
-                    {lightObject, BacnetPropertyId::Units, kBacnetNoArrayIndex}, 2, value) ||
+      !readProperty(transport, server, source, {lightObject, BacnetPropertyId::Units, kBacnetNoArrayIndex}, 2, value) ||
       value.unsignedValue != BacnetEngineeringUnits::Percent ||
-      !readProperty(transport, server, source,
-                    {resetObject, BacnetPropertyId::PresentValue, kBacnetNoArrayIndex}, 3, value) ||
+      !readProperty(transport, server, source, {resetObject, BacnetPropertyId::PresentValue, kBacnetNoArrayIndex}, 3, value) ||
       value.type != BacnetValueType::Enumerated || value.unsignedValue != 1 ||
-      !readProperty(transport, server, source,
-                    {temperatureObject, BacnetPropertyId::Reliability, kBacnetNoArrayIndex}, 4, value) ||
+      !readProperty(transport, server, source, {temperatureObject, BacnetPropertyId::Reliability, kBacnetNoArrayIndex}, 4, value) ||
       value.unsignedValue != noSensor ||
-      !readProperty(transport, server, source,
-                    {temperatureObject, BacnetPropertyId::EventState, kBacnetNoArrayIndex}, 5, value) ||
+      !readProperty(transport, server, source, {temperatureObject, BacnetPropertyId::EventState, kBacnetNoArrayIndex}, 5, value) ||
       value.unsignedValue != faultEvent ||
-      !readProperty(transport, server, source,
-                    {temperatureObject, BacnetPropertyId::StatusFlags, kBacnetNoArrayIndex}, 6, value) ||
+      !readProperty(transport, server, source, {temperatureObject, BacnetPropertyId::StatusFlags, kBacnetNoArrayIndex}, 6, value) ||
       value.type != BacnetValueType::BitString || value.bitStringValue != faultFlags ||
       value.bitStringBitCount != 4) {
     return false;
   }
-  return readProperty(transport, server, source,
-                      {BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::Device), device.deviceInstance},
-                       BacnetPropertyId::ObjectList, 0}, 7, value) &&
+  return readProperty(transport, server, source, {BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::Device), device.deviceInstance}, BacnetPropertyId::ObjectList, 0}, 7, value) &&
          value.unsignedValue == 6;
 }
 
@@ -1011,8 +1009,8 @@ bool writeOutput(TestTransport& transport,
   transport.queue(frame, frameSize, source);
   return server.poll() == BacnetServerPollResult::WritePropertyAckSent &&
          BacnetProtocol::classifyWritePropertyResponse(transport.lastSent,
-                                                        transport.lastSentLength,
-                                                        invokeId) ==
+                                                       transport.lastSentLength,
+                                                       invokeId) ==
            BacnetWritePropertyResponseKind::Ack;
 }
 
@@ -1052,15 +1050,11 @@ bool testCommandableBinaryOutputs() {
   const BacnetIpEndpoint source(192, 0, 2, 44, 47809);
   const BacnetObjectId object{static_cast<uint16_t>(BacnetObjectType::BinaryOutput), 0};
   BacnetValue value;
-  if (!readProperty(transport, server, source,
-                    {object, BacnetPropertyId::PresentValue, kBacnetNoArrayIndex}, 1,
-                    value) || value.type != BacnetValueType::Enumerated || value.unsignedValue != 0 ||
-      !readProperty(transport, server, source,
-                    {object, BacnetPropertyId::PriorityArray, 0}, 2, value) ||
+  if (!readProperty(transport, server, source, {object, BacnetPropertyId::PresentValue, kBacnetNoArrayIndex}, 1, value) || value.type != BacnetValueType::Enumerated || value.unsignedValue != 0 ||
+      !readProperty(transport, server, source, {object, BacnetPropertyId::PriorityArray, 0}, 2, value) ||
       value.type != BacnetValueType::Unsigned ||
       value.unsignedValue != BacnetPriorityArray::kSlotCount ||
-      !readProperty(transport, server, source,
-                    {object, BacnetPropertyId::PriorityArray, 16}, 3, value) ||
+      !readProperty(transport, server, source, {object, BacnetPropertyId::PriorityArray, 16}, 3, value) ||
       value.type != BacnetValueType::Null) {
     return false;
   }
@@ -1079,24 +1073,15 @@ bool testCommandableBinaryOutputs() {
   priority8.hasPriority = true;
   priority8.priority = 8;
   BacnetWritePropertyOptions noPriority;
-  if (!writeOutput(transport, server, source, object, BacnetPropertyId::PresentValue,
-                   active, noPriority, 4) || !outputs[0].priority.occupied[15] ||
+  if (!writeOutput(transport, server, source, object, BacnetPropertyId::PresentValue, active, noPriority, 4) || !outputs[0].priority.occupied[15] ||
       !applied.presentValue ||
-      !writeOutput(transport, server, source, object, BacnetPropertyId::PresentValue,
-                   nullValue, priority16, 5) || applied.presentValue ||
-      !writeOutput(transport, server, source, object, BacnetPropertyId::PresentValue,
-                   active, priority16, 6) || !applied.presentValue || applied.outOfService ||
-      !writeOutput(transport, server, source, object, BacnetPropertyId::PresentValue,
-                   inactive, priority8, 7) || applied.presentValue ||
-      !writeOutput(transport, server, source, object, BacnetPropertyId::PresentValue,
-                   active, priority16, 8) || applied.presentValue ||
-      !writeOutput(transport, server, source, object, BacnetPropertyId::PresentValue,
-                   nullValue, priority8, 9) || !applied.presentValue ||
-      !writeOutput(transport, server, source, object, BacnetPropertyId::PresentValue,
-                   nullValue, priority16, 10) || applied.presentValue ||
-      !readProperty(transport, server, source,
-                    {object, BacnetPropertyId::PresentValue, kBacnetNoArrayIndex}, 11,
-                    value) || value.unsignedValue != 0) {
+      !writeOutput(transport, server, source, object, BacnetPropertyId::PresentValue, nullValue, priority16, 5) || applied.presentValue ||
+      !writeOutput(transport, server, source, object, BacnetPropertyId::PresentValue, active, priority16, 6) || !applied.presentValue || applied.outOfService ||
+      !writeOutput(transport, server, source, object, BacnetPropertyId::PresentValue, inactive, priority8, 7) || applied.presentValue ||
+      !writeOutput(transport, server, source, object, BacnetPropertyId::PresentValue, active, priority16, 8) || applied.presentValue ||
+      !writeOutput(transport, server, source, object, BacnetPropertyId::PresentValue, nullValue, priority8, 9) || !applied.presentValue ||
+      !writeOutput(transport, server, source, object, BacnetPropertyId::PresentValue, nullValue, priority16, 10) || applied.presentValue ||
+      !readProperty(transport, server, source, {object, BacnetPropertyId::PresentValue, kBacnetNoArrayIndex}, 11, value) || value.unsignedValue != 0) {
     return false;
   }
   BacnetWritePropertyOptions invalidPriority;
@@ -1104,8 +1089,7 @@ bool testCommandableBinaryOutputs() {
   invalidPriority.priority = 1;
   uint8_t invalidFrame[BacnetProtocol::kMaxWritePropertyRequestSize] = {};
   size_t invalidSize = BacnetProtocol::buildWritePropertyRequest(
-    invalidFrame, sizeof(invalidFrame), object, BacnetPropertyId::PresentValue,
-    active, invalidPriority, 12);
+    invalidFrame, sizeof(invalidFrame), object, BacnetPropertyId::PresentValue, active, invalidPriority, 12);
   if (invalidSize == 0)
     return false;
   invalidFrame[invalidSize - 1U] = 17;
@@ -1117,23 +1101,131 @@ bool testCommandableBinaryOutputs() {
   BacnetValue invalidType;
   invalidType.type = BacnetValueType::Real;
   invalidType.realValue = 1.0F;
-  if (!writeOutputError(transport, server, source, object,
-                        BacnetPropertyId::PresentValue, invalidType, priority16, 13, 9) ||
-      !writeOutputError(transport, server, source, object,
-                        BacnetPropertyId::PriorityArray, active, priority16, 14, 40)) {
+  if (!writeOutputError(transport, server, source, object, BacnetPropertyId::PresentValue, invalidType, priority16, 13, 9) ||
+      !writeOutputError(transport, server, source, object, BacnetPropertyId::PriorityArray, active, priority16, 14, 40)) {
     return false;
   }
   BacnetValue outOfService;
   outOfService.type = BacnetValueType::Boolean;
   outOfService.booleanValue = true;
-  if (!writeOutput(transport, server, source, object, BacnetPropertyId::OutOfService,
-                   outOfService, noPriority, 15) || !applied.outOfService ||
-      !readProperty(transport, server, source,
-                    {object, BacnetPropertyId::OutOfService, kBacnetNoArrayIndex}, 16,
-                    value) || !value.booleanValue) {
+  if (!writeOutput(transport, server, source, object, BacnetPropertyId::OutOfService, outOfService, noPriority, 15) || !applied.outOfService ||
+      !readProperty(transport, server, source, {object, BacnetPropertyId::OutOfService, kBacnetNoArrayIndex}, 16, value) || !value.booleanValue) {
     return false;
   }
   return true;
+}
+
+bool testCommandableBinaryValue() {
+  TestTransport transport;
+  BacnetServer server(transport);
+  BacnetServerBinaryValue values[] = {{320, "BV320"}};
+  values[0].priority.relinquishDefault = true;
+  BacnetServerDevice device;
+  device.deviceInstance = 7891;
+  if (!server.setBinaryValues(values, 1) || !server.begin(device)) {
+    return false;
+  }
+
+  const BacnetIpEndpoint source(192, 0, 2, 45, 47809);
+  const BacnetObjectId deviceObject{static_cast<uint16_t>(BacnetObjectType::Device),
+                                    device.deviceInstance};
+  const BacnetObjectId object{static_cast<uint16_t>(BacnetObjectType::BinaryValue), 320};
+  BacnetValue value;
+  if (!readProperty(transport, server, source, {deviceObject, BacnetPropertyId::ObjectList, 0}, 1, value) ||
+      value.type != BacnetValueType::Unsigned || value.unsignedValue != 2 ||
+      !readProperty(transport, server, source, {deviceObject, BacnetPropertyId::ObjectList, 2}, 2, value) ||
+      value.type != BacnetValueType::ObjectIdentifier ||
+      value.objectValue.type != object.type || value.objectValue.instance != object.instance) {
+    return false;
+  }
+
+  static constexpr BacnetPropertyId kExpectedProperties[] = {
+    BacnetPropertyId::ObjectIdentifier,
+    BacnetPropertyId::ObjectName,
+    BacnetPropertyId::ObjectType,
+    BacnetPropertyId::PresentValue,
+    BacnetPropertyId::StatusFlags,
+    BacnetPropertyId::EventState,
+    BacnetPropertyId::OutOfService,
+    BacnetPropertyId::PriorityArray,
+    BacnetPropertyId::RelinquishDefault,
+    BacnetPropertyId::PropertyList,
+  };
+  if (!readProperty(transport, server, source, {object, BacnetPropertyId::PropertyList, 0}, 3, value) ||
+      value.type != BacnetValueType::Unsigned ||
+      value.unsignedValue != sizeof(kExpectedProperties) / sizeof(kExpectedProperties[0])) {
+    return false;
+  }
+  for (size_t index = 0; index < sizeof(kExpectedProperties) / sizeof(kExpectedProperties[0]);
+       ++index) {
+    if (!readProperty(transport, server, source, {object, BacnetPropertyId::PropertyList, static_cast<uint32_t>(index + 1U)}, static_cast<uint8_t>(4U + index), value) ||
+        value.type != BacnetValueType::Enumerated ||
+        value.unsignedValue != static_cast<uint32_t>(kExpectedProperties[index])) {
+      return false;
+    }
+  }
+
+  if (!readProperty(transport, server, source, {object, BacnetPropertyId::PresentValue, kBacnetNoArrayIndex}, 20, value) ||
+      value.type != BacnetValueType::Enumerated || value.unsignedValue != 1 ||
+      !readProperty(transport, server, source, {object, BacnetPropertyId::RelinquishDefault, kBacnetNoArrayIndex}, 21, value) ||
+      value.type != BacnetValueType::Enumerated || value.unsignedValue != 1 ||
+      !readProperty(transport, server, source, {object, BacnetPropertyId::PriorityArray, 0}, 22, value) ||
+      value.type != BacnetValueType::Unsigned ||
+      value.unsignedValue != BacnetPriorityArray::kSlotCount) {
+    return false;
+  }
+  for (uint32_t slot = 1; slot <= BacnetPriorityArray::kSlotCount; ++slot) {
+    if (!readProperty(transport, server, source, {object, BacnetPropertyId::PriorityArray, slot}, static_cast<uint8_t>(22U + slot), value) ||
+        value.type != BacnetValueType::Null) {
+      return false;
+    }
+  }
+
+  BacnetValue active;
+  active.type = BacnetValueType::Enumerated;
+  active.unsignedValue = 1;
+  BacnetValue inactive;
+  inactive.type = BacnetValueType::Enumerated;
+  inactive.unsignedValue = 0;
+  BacnetValue nullValue;
+  nullValue.type = BacnetValueType::Null;
+  BacnetWritePropertyOptions noPriority;
+  BacnetWritePropertyOptions priority8;
+  priority8.hasPriority = true;
+  priority8.priority = 8;
+  BacnetWritePropertyOptions priority16;
+  priority16.hasPriority = true;
+  priority16.priority = 16;
+  if (!writeOutput(transport, server, source, object, BacnetPropertyId::PresentValue, inactive, noPriority, 40) || !values[0].priority.occupied[15] ||
+      values[0].priority.effectiveValue() ||
+      !writeOutput(transport, server, source, object, BacnetPropertyId::PresentValue, active, priority8, 41) || !values[0].priority.effectiveValue() ||
+      !writeOutput(transport, server, source, object, BacnetPropertyId::PresentValue, inactive, priority16, 42) || !values[0].priority.effectiveValue() ||
+      !readProperty(transport, server, source, {object, BacnetPropertyId::PresentValue, kBacnetNoArrayIndex}, 43, value) || value.unsignedValue != 1 ||
+      !writeOutput(transport, server, source, object, BacnetPropertyId::PresentValue, nullValue, priority8, 44) || values[0].priority.effectiveValue() ||
+      !writeOutput(transport, server, source, object, BacnetPropertyId::PresentValue, nullValue, priority16, 45) || !values[0].priority.effectiveValue()) {
+    return false;
+  }
+
+  BacnetWritePropertyOptions invalidPriority;
+  invalidPriority.hasPriority = true;
+  invalidPriority.priority = 1;
+  uint8_t invalidFrame[BacnetProtocol::kMaxWritePropertyRequestSize] = {};
+  const size_t invalidSize = BacnetProtocol::buildWritePropertyRequest(
+    invalidFrame, sizeof(invalidFrame), object, BacnetPropertyId::PresentValue, active, invalidPriority, 46);
+  if (invalidSize == 0) {
+    return false;
+  }
+  invalidFrame[invalidSize - 1U] = 17;
+  transport.queue(invalidFrame, invalidSize, source);
+  if (server.poll() != BacnetServerPollResult::WritePropertyErrorSent ||
+      transport.lastSentLength < 13 || transport.lastSent[12] != 37) {
+    return false;
+  }
+  BacnetValue invalidType;
+  invalidType.type = BacnetValueType::Real;
+  invalidType.realValue = 1.0F;
+  return writeOutputError(transport, server, source, object, BacnetPropertyId::PresentValue, invalidType, priority16, 47, 9) &&
+         writeOutputError(transport, server, source, object, BacnetPropertyId::PriorityArray, active, priority16, 48, 40);
 }
 
 bool testWritePriorityDefaultsAndEffectiveOutput() {
@@ -1194,32 +1286,27 @@ bool testWritePriorityDefaultsAndEffectiveOutput() {
   priority8.hasPriority = true;
   priority8.priority = 8;
 
-  if (!writeOutput(transport, server, source, object, BacnetPropertyId::PresentValue,
-                   active, noPriority, 1) || !outputs[0].priority.occupied[15] ||
-      !writeOutput(transport, server, source, object, BacnetPropertyId::PresentValue,
-                   inactive, priority8, 2) || !outputs[0].priority.occupied[7] ||
-      !writeOutput(transport, server, source, object, BacnetPropertyId::PresentValue,
-                   nullValue, priority8, 4) || outputs[0].priority.occupied[7] ||
-      !writeOutput(transport, server, source, object, BacnetPropertyId::PresentValue,
-                   nullValue, noPriority, 5) || outputs[0].priority.occupied[14] ||
+  if (!writeOutput(transport, server, source, object, BacnetPropertyId::PresentValue, active, noPriority, 1) || !outputs[0].priority.occupied[15] ||
+      !writeOutput(transport, server, source, object, BacnetPropertyId::PresentValue, inactive, priority8, 2) || !outputs[0].priority.occupied[7] ||
+      !writeOutput(transport, server, source, object, BacnetPropertyId::PresentValue, nullValue, priority8, 4) || outputs[0].priority.occupied[7] ||
+      !writeOutput(transport, server, source, object, BacnetPropertyId::PresentValue, nullValue, noPriority, 5) || outputs[0].priority.occupied[14] ||
       outputs[0].priority.occupied[15]) {
     return false;
   }
   BacnetWritePropertyOptions invalidZero;
   invalidZero.hasPriority = true;
   invalidZero.priority = 0;
-  return !writeOutput(transport, server, source, object, BacnetPropertyId::PresentValue,
-                      active, invalidZero, 6);
+  return !writeOutput(transport, server, source, object, BacnetPropertyId::PresentValue, active, invalidZero, 6);
 }
 
 } // namespace
 
 int main() {
   return testRegisteredAnalogValues() && testDisabledAnalogValues() &&
-           testIndividuallyRegisteredOptionalProperties() &&
-           testStartConfigurationAndVersionFallback() && testLimitStates()
-           && testReadOnlyInputObjects() && testCommandableBinaryOutputs() &&
-           testWritePriorityDefaultsAndEffectiveOutput()
+             testIndividuallyRegisteredOptionalProperties() &&
+             testStartConfigurationAndVersionFallback() && testLimitStates() && testReadOnlyInputObjects() && testCommandableBinaryOutputs() &&
+             testCommandableBinaryValue() &&
+             testWritePriorityDefaultsAndEffectiveOutput()
            ? 0
            : 1;
 }

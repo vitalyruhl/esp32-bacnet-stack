@@ -9,13 +9,17 @@ namespace {
 
 class TestClock final : public BacnetMonotonicClock {
 public:
-  uint32_t nowMs() const override { return now; }
+  uint32_t nowMs() const override {
+    return now;
+  }
   uint32_t now = 0;
 };
 
 class TestTransport final : public BacnetDatagramTransport {
 public:
-  bool begin(uint16_t) override { return true; }
+  bool begin(uint16_t) override {
+    return true;
+  }
   void end() override {}
   bool send(const BacnetIpEndpoint& destination, const uint8_t* data, size_t length) override {
     ++sendCalls;
@@ -59,8 +63,7 @@ public:
 };
 
 bool simpleAckIsFor(const TestTransport& transport, uint8_t invoke, uint8_t service) {
-  return BacnetProtocol::isSimpleAck(transport.lastSent, transport.lastSentLength,
-                                     invoke, service);
+  return BacnetProtocol::isSimpleAck(transport.lastSent, transport.lastSentLength, invoke, service);
 }
 
 bool testSubscribeCovLifecycle() {
@@ -92,8 +95,7 @@ bool testSubscribeCovLifecycle() {
     return false;
   }
   BacnetCovNotification notification;
-  if (!BacnetProtocol::parseCovNotification(transport.lastSent, transport.lastSentLength,
-                                            notification) ||
+  if (!BacnetProtocol::parseCovNotification(transport.lastSent, transport.lastSentLength, notification) ||
       notification.processId != 7 || notification.object.type != object.type ||
       notification.object.instance != object.instance ||
       notification.propertyCount != 2 ||
@@ -106,8 +108,7 @@ bool testSubscribeCovLifecycle() {
   }
   inputs[0].presentValue = 2.0F;
   if (server.poll() != BacnetServerPollResult::CovNotificationSent ||
-      !BacnetProtocol::parseCovNotification(transport.lastSent, transport.lastSentLength,
-                                            notification) || notification.propertyCount != 2 ||
+      !BacnetProtocol::parseCovNotification(transport.lastSent, transport.lastSentLength, notification) || notification.propertyCount != 2 ||
       notification.value.realValue != 2.0F ||
       server.poll() != BacnetServerPollResult::NoDatagram) {
     return false;
@@ -207,8 +208,7 @@ bool testSubscribeCovPropertyAndConfirmedAck() {
       !server.covSubscriptionAt(0, subscription)) {
     return false;
   }
-  const uint8_t error[] = {0x81, 0x0A, 0x00, 0x09, 0x01, 0x00, 0x50,
-                           subscription.pendingInvokeId, 0x01};
+  const uint8_t error[] = {0x81, 0x0A, 0x00, 0x09, 0x01, 0x00, 0x50, subscription.pendingInvokeId, 0x01};
   transport.queue(error, sizeof(error), peer);
   if (server.poll() != BacnetServerPollResult::Ignored ||
       !server.covSubscriptionAt(0, subscription) ||
@@ -220,8 +220,7 @@ bool testSubscribeCovPropertyAndConfirmedAck() {
       !server.covSubscriptionAt(0, subscription)) {
     return false;
   }
-  const uint8_t reject[] = {0x81, 0x0A, 0x00, 0x09, 0x01, 0x00, 0x60,
-                            subscription.pendingInvokeId, 0x04};
+  const uint8_t reject[] = {0x81, 0x0A, 0x00, 0x09, 0x01, 0x00, 0x60, subscription.pendingInvokeId, 0x04};
   transport.queue(reject, sizeof(reject), peer);
   if (server.poll() != BacnetServerPollResult::Ignored) {
     return false;
@@ -231,8 +230,7 @@ bool testSubscribeCovPropertyAndConfirmedAck() {
       !server.covSubscriptionAt(0, subscription)) {
     return false;
   }
-  const uint8_t abort[] = {0x81, 0x0A, 0x00, 0x08, 0x01, 0x00, 0x70,
-                           subscription.pendingInvokeId};
+  const uint8_t abort[] = {0x81, 0x0A, 0x00, 0x08, 0x01, 0x00, 0x70, subscription.pendingInvokeId};
   transport.queue(abort, sizeof(abort), peer);
   if (server.poll() != BacnetServerPollResult::Ignored) {
     return false;
@@ -270,8 +268,7 @@ bool testSubscribeCovPropertyIncrement() {
   const BacnetIpEndpoint peer(192, 0, 2, 10, 47810);
   uint8_t request[BacnetProtocol::kMaxSubscribeCovRequestSize] = {};
   const size_t requestSize = BacnetProtocol::buildSubscribeCovPropertyRequest(
-    request, sizeof(request), 14, object, BacnetPropertyId::PresentValue, 30,
-    false, kBacnetNoArrayIndex, true, 0.5F);
+    request, sizeof(request), 14, object, BacnetPropertyId::PresentValue, 30, false, kBacnetNoArrayIndex, true, 0.5F);
   if (requestSize == 0) {
     return false;
   }
@@ -408,6 +405,83 @@ bool testBinaryOutputCovFollowsEffectiveValue() {
          notification.value.unsignedValue == 1;
 }
 
+bool testBinaryValueCovFollowsEffectiveValue() {
+  TestTransport transport;
+  BacnetServer server(transport);
+  BacnetServerBinaryValue values[] = {{320, "BV320"}};
+  values[0].priority.relinquishDefault = false;
+  BacnetServerDevice device;
+  device.deviceInstance = 108;
+  if (!server.setBinaryValues(values, 1) || !server.begin(device)) {
+    return false;
+  }
+  const BacnetObjectId object{static_cast<uint16_t>(BacnetObjectType::BinaryValue), 320};
+  const BacnetIpEndpoint peer(192, 0, 2, 31, 47808);
+  uint8_t subscribe[BacnetProtocol::kMaxSubscribeCovRequestSize] = {};
+  const size_t subscribeSize = BacnetProtocol::buildSubscribeCovRequest(
+    subscribe, sizeof(subscribe), 31, object, 30);
+  subscribe[8] = 33;
+  transport.queue(subscribe, subscribeSize, peer);
+  if (server.poll() != BacnetServerPollResult::SubscribeCovAckSent ||
+      server.poll() != BacnetServerPollResult::CovNotificationSent) {
+    return false;
+  }
+
+  BacnetValue inactive;
+  inactive.type = BacnetValueType::Enumerated;
+  inactive.unsignedValue = 0;
+  BacnetValue active;
+  active.type = BacnetValueType::Enumerated;
+  active.unsignedValue = 1;
+  BacnetValue nullValue;
+  nullValue.type = BacnetValueType::Null;
+  BacnetWritePropertyOptions priority8;
+  priority8.hasPriority = true;
+  priority8.priority = 8;
+  BacnetWritePropertyOptions priority16;
+  priority16.hasPriority = true;
+  priority16.priority = 16;
+  uint8_t write[BacnetProtocol::kMaxWritePropertyRequestSize] = {};
+  size_t writeSize = BacnetProtocol::buildWritePropertyRequest(
+    write, sizeof(write), object, BacnetPropertyId::PresentValue, active, priority8, 34);
+  transport.queue(write, writeSize, peer);
+  if (server.poll() != BacnetServerPollResult::WritePropertyAckSent ||
+      server.poll() != BacnetServerPollResult::CovNotificationSent) {
+    return false;
+  }
+  BacnetCovNotification notification;
+  if (!BacnetProtocol::parseCovNotification(transport.lastSent,
+                                            transport.lastSentLength,
+                                            notification) ||
+      notification.property != BacnetPropertyId::PresentValue ||
+      notification.value.type != BacnetValueType::Enumerated ||
+      notification.value.unsignedValue != 1) {
+    return false;
+  }
+
+  writeSize = BacnetProtocol::buildWritePropertyRequest(
+    write, sizeof(write), object, BacnetPropertyId::PresentValue, inactive, priority16, 35);
+  transport.queue(write, writeSize, peer);
+  if (server.poll() != BacnetServerPollResult::WritePropertyAckSent ||
+      server.poll() != BacnetServerPollResult::NoDatagram) {
+    return false;
+  }
+
+  writeSize = BacnetProtocol::buildWritePropertyRequest(
+    write, sizeof(write), object, BacnetPropertyId::PresentValue, nullValue, priority8, 36);
+  transport.queue(write, writeSize, peer);
+  if (server.poll() != BacnetServerPollResult::WritePropertyAckSent ||
+      server.poll() != BacnetServerPollResult::CovNotificationSent ||
+      !BacnetProtocol::parseCovNotification(transport.lastSent,
+                                            transport.lastSentLength,
+                                            notification)) {
+    return false;
+  }
+  return notification.property == BacnetPropertyId::PresentValue &&
+         notification.value.type == BacnetValueType::Enumerated &&
+         notification.value.unsignedValue == 0;
+}
+
 bool testCovNotificationSendFailureUsesBackoffAndRetainsChange() {
   TestTransport transport;
   TestClock clock;
@@ -505,11 +579,12 @@ bool testCovNotificationSendFailureCapsExtremeBackoff() {
 
 int main() {
   return testSubscribeCovLifecycle() && testSubscribeCovPropertyAndConfirmedAck() &&
-           testSubscribeCovPropertyIncrement() &&
-         testBinaryOutputCovTracksEffectivePresentValue() &&
-           testSubscriptionCapacityAndErrors() && testBinaryOutputCovFollowsEffectiveValue() &&
-           testCovNotificationSendFailureUsesBackoffAndRetainsChange() &&
-           testCovNotificationSendFailureCapsExtremeBackoff()
+             testSubscribeCovPropertyIncrement() &&
+             testBinaryOutputCovTracksEffectivePresentValue() &&
+             testSubscriptionCapacityAndErrors() && testBinaryOutputCovFollowsEffectiveValue() &&
+             testBinaryValueCovFollowsEffectiveValue() &&
+             testCovNotificationSendFailureUsesBackoffAndRetainsChange() &&
+             testCovNotificationSendFailureCapsExtremeBackoff()
            ? 0
            : 1;
 }

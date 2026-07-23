@@ -101,6 +101,15 @@ struct BacnetServerBinaryOutput {
   bool hasLocalWritePriority = false;
 };
 
+// Caller-owned commandable Binary Value. It uses the same portable priority
+// state as Binary Output without introducing an output or hardware binding.
+struct BacnetServerBinaryValue {
+  uint32_t instance = 0;
+  const char* objectName = nullptr;
+  BacnetCommandPriority<bool> priority;
+  bool outOfService = false;
+};
+
 // Result returned by the object-centric configuration API. The API never
 // allocates; callers keep configured objects and bound values alive while the
 // server is using them.
@@ -427,6 +436,9 @@ public:
   bool setBinaryOutputs(BacnetServerBinaryOutput* binaryOutputs,
                         size_t count);
   size_t binaryOutputCount() const;
+  bool setBinaryValues(BacnetServerBinaryValue* binaryValues,
+                       size_t count);
+  size_t binaryValueCount() const;
   static constexpr size_t kMaxObjectCentricAnalogInputs = 8;
   static constexpr size_t kMaxObjectCentricBinaryInputs = 8;
   static constexpr size_t kMaxObjectCentricBinaryOutputs = 8;
@@ -510,15 +522,20 @@ private:
   bool readBinaryOutputProperty(const BacnetServerBinaryOutput& binaryOutput,
                                 BacnetPropertyId property,
                                 BacnetValue& value) const;
+  bool readBinaryValueProperty(const BacnetServerBinaryValue& binaryValue,
+                               BacnetPropertyId property,
+                               BacnetValue& value) const;
   const BacnetServerAnalogValue* findAnalogValue(uint32_t instance) const;
   const BacnetServerAnalogInput* findAnalogInput(uint32_t instance) const;
   const BacnetServerBinaryInput* findBinaryInput(uint32_t instance) const;
   BacnetServerBinaryOutput* findBinaryOutput(uint32_t instance) const;
+  BacnetServerBinaryValue* findBinaryValue(uint32_t instance) const;
   const BacnetObjectPropertySource* findObjectPropertySource(
     BacnetObjectId object) const;
   const BacnetServerAnalogInput* analogInputAt(size_t index) const;
   const BacnetServerBinaryInput* binaryInputAt(size_t index) const;
   BacnetServerBinaryOutput* binaryOutputAt(size_t index) const;
+  BacnetServerBinaryValue* binaryValueAt(size_t index) const;
   const BacnetServerPropertyRegistration* findPropertyRegistration(
     BacnetObjectId object,
     BacnetPropertyId property) const;
@@ -535,6 +552,9 @@ private:
   static bool binaryOutputPriorityEntry(const void* context,
                                         size_t index,
                                         BacnetValue& value);
+  static bool binaryValuePriorityEntry(const void* context,
+                                       size_t index,
+                                       BacnetValue& value);
 
   BacnetDatagramTransport* transport_ = nullptr; // Non-owning.
   bool running_ = false;
@@ -559,6 +579,8 @@ private:
   BacnetServerBinaryOutput* objectCentricBinaryOutputs_[kMaxObjectCentricBinaryOutputs] = {};
   BacnetObjectPropertySource* objectCentricBinaryOutputProperties_[kMaxObjectCentricBinaryOutputs] = {};
   size_t objectCentricBinaryOutputCount_ = 0;
+  BacnetServerBinaryValue* binaryValues_ = nullptr; // Caller-owned.
+  size_t binaryValueCount_ = 0;
   BacnetServerActivityListener activityListener_ = nullptr;
   void* activityListenerContext_ = nullptr;
   BacnetServerCovDiagnosticListener covDiagnosticListener_ = nullptr;
