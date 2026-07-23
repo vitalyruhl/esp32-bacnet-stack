@@ -21,7 +21,7 @@ public:
   static constexpr size_t kWhoIsRequestSize = 8;
   static constexpr size_t kMaxReadPropertyRequestSize = 25;
   static constexpr size_t kMaxWritePropertyRequestSize = BacnetProtocol::kMaxWritePropertyRequestSize;
-  static constexpr size_t kMaxSubscribeCovRequestSize = 32;
+  static constexpr size_t kMaxSubscribeCovRequestSize = BacnetProtocol::kMaxSubscribeCovRequestSize;
   static constexpr uint32_t kNoArrayIndex = kBacnetNoArrayIndex;
 
   // Compatibility constructor. Bind an explicit transport before calling begin().
@@ -48,9 +48,24 @@ public:
                         uint32_t lifetimeSeconds,
                         uint8_t invokeId = 1,
                         bool issueConfirmedNotifications = false);
+  bool sendSubscribeCovProperty(const BacnetIpEndpoint& destination,
+                                uint32_t processId,
+                                BacnetObjectId object,
+                                BacnetPropertyId property,
+                                uint32_t lifetimeSeconds,
+                                uint8_t invokeId = 1,
+                                bool issueConfirmedNotifications = false,
+                                uint32_t arrayIndex = kNoArrayIndex,
+                                bool hasCovIncrement = false,
+                                float covIncrement = 0.0F);
   BacnetSubscribeCovResponseKind pollSubscribeCov(uint8_t expectedInvokeId,
-                                                  uint8_t* rejectReason = nullptr);
-  bool pollCovNotification(BacnetCovNotification& notification);
+                                                   uint8_t* rejectReason = nullptr,
+                                                   const BacnetIpEndpoint* expectedPeer = nullptr);
+  BacnetSubscribeCovResponseKind pollSubscribeCovProperty(uint8_t expectedInvokeId,
+                                                           uint8_t* rejectReason = nullptr,
+                                                           const BacnetIpEndpoint* expectedPeer = nullptr);
+  bool pollCovNotification(BacnetCovNotification& notification,
+                           bool acknowledgeConfirmed = true);
   bool pollIAm(BacnetIAmDevice& device);
   bool sendReadProperty(const BacnetIpEndpoint& destination,
                         const BacnetPropertyRequest& request,
@@ -99,10 +114,23 @@ public:
   static bool parseReadPropertyError(const uint8_t* buffer, size_t length, uint8_t expectedInvokeId, BacnetValue& value, uint32_t* errorClass, uint32_t* errorCode);
 
 private:
+  friend class BacnetDeviceSession;
+
   static constexpr size_t kMaxDiscoveryPacketSize = 512;
+  static constexpr size_t kMaxQueuedCovNotifications = 2;
+
+  bool queueCovNotification(const uint8_t* packet,
+                            size_t length,
+                            const BacnetIpEndpoint& source);
+  bool takeQueuedCovNotification(BacnetCovNotification& notification);
+  bool acknowledgeCovNotification(const BacnetCovNotification& notification);
+  static bool endpointEquals(const BacnetIpEndpoint& left,
+                             const BacnetIpEndpoint& right);
 
   BacnetDatagramTransport* transport_ = nullptr;
   BacnetLogger logger_;
   bool running_ = false;
   uint16_t localPort_ = kDefaultPort;
+  BacnetCovNotification queuedCovNotifications_[kMaxQueuedCovNotifications] = {};
+  size_t queuedCovNotificationCount_ = 0;
 };

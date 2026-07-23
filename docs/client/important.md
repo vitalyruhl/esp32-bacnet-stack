@@ -33,10 +33,9 @@
 ## Subscription And Fallback Behavior
 
 - `BacnetProperty::subscribe()` provides a property subscription abstraction.
-- Set `BacnetSubscribeOptions::preferCov` to request SubscribeCOV. A successful
-  registration routes COV notifications; Error, Reject, Abort, timeout, or
-  send failure retains the same subscription handle and uses its configured
-  polling fallback.
+- Set `BacnetSubscribeOptions::preferCov` to request COV, and
+  `usePropertyCov` for SubscribeCOVProperty. See [Change of Value (COV)](../cov.md)
+  for confirmation, lifetime, cancellation, retry, and fallback semantics.
 - `fallbackPollMs = 0` disables periodic fallback polling.
 - `requestRefresh()` schedules an immediate one-shot refresh when the subscription is idle.
 - One session processes at most one subscription read in flight.

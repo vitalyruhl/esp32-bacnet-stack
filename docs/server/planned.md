@@ -1,7 +1,7 @@
 # Planned Server Work
 
-BACnet/IP server support is delivered as a small portable read-only subset, not
-as a completed server feature set.
+BACnet/IP server support is delivered as a small portable subset, not as a
+completed server feature set.
 
 ## Current Boundary
 
@@ -9,19 +9,22 @@ as a completed server feature set.
   Device identity, non-blocking `poll()`, Who-Is decoding, I-Am responses,
   ReadProperty responses, and Reject responses for unsupported confirmed
   services.
-- The portable object model exposes the Device Object and caller-owned,
-  read-only Analog Value objects. `examples/server-demo` injects the existing
-  Arduino UDP adapter and keeps WiFi/Ethernet setup and demo binding outside
-  those portable modules.
+- The portable object model exposes caller-owned read-only inputs/values and
+  commandable Binary Outputs and Binary Values. Both object types share the
+  portable 16-slot priority state and accept WriteProperty for Present Value.
 - Analog Values support stored Present Values or a lightweight function-pointer
   provider with caller context. No globally allocated Analog Value capacity is
   reserved when no values are registered.
 - The current project focus remains the BACnet/IP client roadmap and validation.
-- The demo is intentionally read-only and does not claim COV, alarm, priority,
-  WriteProperty, real I/O, or production-server coverage.
+- The server implements a bounded COV subset: object-level Present_Value plus
+  Status_Flags and property-level subscriptions, including confirmed delivery,
+  renewal, expiry, cancellation, and real-valued COV_Increment. It does not
+  claim alarm/event reporting, Analog Output/PWM, relay safety policies, or
+  production-server coverage.
 
 ## Planning Notes
 
 - Future server work must stay separate from demo-only glue and from optional UI integrations.
-- COV, alarms, events, priorities, WriteProperty, trends, real I/O, and
-  platform-specific adapters remain separate work.
+- Alarms, events, Analog Output/PWM, relay failsafes, trends, additional real
+  I/O, and platform-specific adapters remain separate work. COV extensions
+  beyond the implemented bounded subset also remain separate work.

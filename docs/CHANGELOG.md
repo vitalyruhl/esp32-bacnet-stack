@@ -3,6 +3,57 @@
 This changelog is a curated overview. The canonical library version is in
 `library.json`.
 
+## 0.37.0 - Unreleased
+
+### Added
+
+- Added commandable Binary Value BV320 with portable caller-owned 16-slot
+  BACnet priority storage, `Priority_Array`, `Relinquish_Default`, ReadProperty,
+  WriteProperty, Object_List/Property_List, and effective-value COV behavior.
+- Added BV320 to the paired ESP-to-ESP WiFi server and Ethernet client COV
+  demo, including its live diagnostics and the expected eight active
+  subscriptions.
+
+## 0.36.0 - 2026-07-22
+
+### Added
+
+- Added portable, caller-owned read-only Analog Input and Binary Input server
+  object profiles with shared ReadProperty, Object_List, Property_List, and
+  optional metadata/state-provider support.
+- Added `examples/server-io-example`, a ConfigManager-backed ESP32 WiFi input
+  station with LDR, DS18B20, and three debounced buttons. The physically
+  installed SSD1306 is intentionally not initialized by the firmware.
+- Added reusable command-priority Binary Output support and BO0/BO1 LED
+  bindings for `examples/server-io-example`.
+- Added the portable server COV subset and the paired ESP-to-ESP COV examples:
+  Object-COV and Property-COV subscriptions, initial notifications, confirmed
+  and unconfirmed notifications, renewal, cancellation, and real-valued
+  `COV_Increment`.
+- Added the focused Ethernet-client to Wi-Fi-server COV acceptance runner and
+  the paired Ethernet client display of remote server hardware inputs.
+
+### Changed
+
+- COV registration response failures and timeouts retain the subscription
+  handle, use its polling fallback, and schedule a later registration attempt;
+  a successful acknowledgement restores active COV mode.
+- Confirmed server notifications wait for `SimpleACK` and use the configured
+  bounded APDU retry count.
+- Bound local SubscribeCOV send failures and server notification send failures
+  with per-subscription retry timing while preserving polling fallback and
+  pending value changes.
+- Validate session COV routing by peer and Process Identifier before accepting
+  a notification or sending its confirmed-notification `SimpleACK`.
+
+### Notes
+
+- The development station supports commandable Binary Output LEDs through
+  WriteProperty Present Value, a 16-slot Priority_Array, and Relinquish Default.
+  Priority_Array remains read-only. Real WiFi/BACnet input and LED HIL is
+  accepted. Relays, Analog Output/PWM, output failsafes, alarms, and Intrinsic
+  Reporting remain future work.
+
 ## 0.35.0 - 2026-07-18
 
 ### Added

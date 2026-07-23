@@ -82,6 +82,7 @@ enum class BacnetPropertyId : uint32_t {
   OutOfService = 81,
   PresentValue = 85,
   PriorityArray = 87,
+  Polarity = 84,
   ProtocolObjectTypesSupported = 96,
   ProtocolServicesSupported = 97,
   ProtocolVersion = 98,
@@ -260,12 +261,26 @@ enum class BacnetWritePropertyResponseKind : uint8_t {
   Abort,
 };
 
-struct BacnetCovNotification {
+enum class BacnetSubscribeCovRequestParseStatus : uint8_t {
+  Unrelated,
+  SubscribeCov,
+  SubscribeCovProperty,
+  Malformed,
+};
+
+// Parsed server-side subscription request. SubscribeCOVProperty keeps the
+// property reference explicit so a subscription is never widened silently.
+struct BacnetSubscribeCovRequestHeader {
+  uint8_t invokeId = 0;
   uint32_t processId = 0;
   BacnetObjectId object;
+  bool isPropertySubscription = false;
   BacnetPropertyId property = BacnetPropertyId::PresentValue;
   uint32_t arrayIndex = kBacnetNoArrayIndex;
-  BacnetValue value;
+  bool issueConfirmedNotifications = false;
+  uint32_t lifetimeSeconds = 0;
+  bool hasCovIncrement = false;
+  float covIncrement = 0.0F;
 };
 
 enum class BacnetSubscribeCovResponseKind : uint8_t {
@@ -308,6 +323,8 @@ inline const char* bacnetPropertyName(BacnetPropertyId property) {
       return "outOfService";
     case BacnetPropertyId::PresentValue:
       return "presentValue";
+    case BacnetPropertyId::Polarity:
+      return "polarity";
     case BacnetPropertyId::ProtocolRevision:
       return "protocolRevision";
     case BacnetPropertyId::ProtocolVersion:
@@ -373,10 +390,24 @@ struct BacnetReadPropertyRequestHeader {
   BacnetPropertyRequest request;
 };
 
+struct BacnetWritePropertyRequestHeader {
+  uint8_t invokeId = 0;
+  BacnetPropertyRequest request;
+  BacnetValue value;
+  bool hasPriority = false;
+  uint8_t priority = 0;
+};
+
 enum class BacnetReadPropertyRequestParseStatus : uint8_t {
   Unrelated,
   Malformed,
   ReadProperty,
+};
+
+enum class BacnetWritePropertyRequestParseStatus : uint8_t {
+  Unrelated,
+  Malformed,
+  WriteProperty,
 };
 
 struct BacnetIpEndpoint {
@@ -390,4 +421,29 @@ struct BacnetIpEndpoint {
   bool isZero() const {
     return address[0] == 0 && address[1] == 0 && address[2] == 0 && address[3] == 0;
   }
+};
+
+struct BacnetCovPropertyValue {
+  BacnetPropertyId property = BacnetPropertyId::PresentValue;
+  uint32_t arrayIndex = kBacnetNoArrayIndex;
+  BacnetValue value;
+};
+
+struct BacnetCovNotification {
+  static constexpr size_t kMaxProperties = 4;
+
+  uint32_t processId = 0;
+  BacnetObjectId object;
+  // Legacy primary value. Present_Value is preferred when supplied with
+  // other properties; use properties/propertyCount to inspect all values.
+  BacnetPropertyId property = BacnetPropertyId::PresentValue;
+  uint32_t arrayIndex = kBacnetNoArrayIndex;
+  BacnetValue value;
+  BacnetCovPropertyValue properties[kMaxProperties] = {};
+  size_t propertyCount = 0;
+  bool confirmed = false;
+  uint8_t invokeId = 0;
+  // The transport source is retained until a session validates the complete
+  // COV identity tuple and, for confirmed notifications, sends SimpleACK.
+  BacnetIpEndpoint source;
 };

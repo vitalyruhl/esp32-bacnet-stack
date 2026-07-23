@@ -10,6 +10,9 @@ using BacnetObjectListEntryProvider = bool (*)(const void* context,
 using BacnetPropertyListEntryProvider = bool (*)(const void* context,
                                                  size_t index,
                                                  BacnetPropertyId& property);
+using BacnetPriorityArrayEntryProvider = bool (*)(const void* context,
+                                                  size_t index,
+                                                  BacnetValue& value);
 
 class BacnetProtocol {
 public:
@@ -18,7 +21,8 @@ public:
   static constexpr size_t kRejectResponseSize = 9;
   static constexpr size_t kMaxReadPropertyRequestSize = 25;
   static constexpr size_t kMaxWritePropertyRequestSize = 544;
-  static constexpr size_t kMaxSubscribeCovRequestSize = 32;
+  static constexpr size_t kMaxSubscribeCovRequestSize = 40;
+  static constexpr size_t kMaxCovNotificationSize = 1476;
 
   static size_t buildWhoIsRequest(uint8_t* buffer, size_t bufferSize);
   static bool parseWhoIsRequest(const uint8_t* buffer,
@@ -32,6 +36,14 @@ public:
     const uint8_t* buffer,
     size_t length,
     BacnetReadPropertyRequestHeader& request);
+  static BacnetWritePropertyRequestParseStatus parseWritePropertyRequest(
+    const uint8_t* buffer,
+    size_t length,
+    BacnetWritePropertyRequestHeader& request);
+  static BacnetSubscribeCovRequestParseStatus parseSubscribeCovRequest(
+    const uint8_t* buffer,
+    size_t length,
+    BacnetSubscribeCovRequestHeader& request);
   static size_t buildReadPropertyAck(uint8_t* buffer,
                                      size_t bufferSize,
                                      const BacnetReadPropertyRequestHeader& request,
@@ -41,6 +53,26 @@ public:
                                        uint8_t invokeId,
                                        uint32_t errorClass,
                                        uint32_t errorCode);
+  static size_t buildReadPropertyPriorityArrayAck(
+    uint8_t* buffer,
+    size_t bufferSize,
+    const BacnetReadPropertyRequestHeader& request,
+    const BacnetPriorityArray& values);
+  static size_t buildReadPropertyPriorityArrayAck(
+    uint8_t* buffer,
+    size_t bufferSize,
+    const BacnetReadPropertyRequestHeader& request,
+    size_t slotCount,
+    BacnetPriorityArrayEntryProvider valueAt,
+    const void* context);
+  static size_t buildWritePropertyAck(uint8_t* buffer,
+                                      size_t bufferSize,
+                                      uint8_t invokeId);
+  static size_t buildWritePropertyError(uint8_t* buffer,
+                                        size_t bufferSize,
+                                        uint8_t invokeId,
+                                        uint32_t errorClass,
+                                        uint32_t errorCode);
   static size_t buildReadPropertyObjectListAck(
     uint8_t* buffer,
     size_t bufferSize,
@@ -78,9 +110,49 @@ public:
                                     size_t bufferSize,
                                     uint8_t invokeId,
                                     uint8_t reason);
+  static size_t buildSimpleAckResponse(uint8_t* buffer,
+                                       size_t bufferSize,
+                                       uint8_t invokeId,
+                                       uint8_t serviceChoice);
+  static size_t buildServiceErrorResponse(uint8_t* buffer,
+                                          size_t bufferSize,
+                                          uint8_t invokeId,
+                                          uint8_t serviceChoice,
+                                          uint32_t errorClass,
+                                          uint32_t errorCode);
   static size_t encodeApplicationValue(uint8_t* buffer, size_t bufferSize, const BacnetValue& value);
   static size_t buildSubscribeCovRequest(uint8_t* buffer, size_t bufferSize, uint32_t processId, BacnetObjectId object, uint32_t lifetimeSeconds, bool issueConfirmedNotifications = false);
+  static size_t buildSubscribeCovPropertyRequest(uint8_t* buffer,
+                                                 size_t bufferSize,
+                                                 uint32_t processId,
+                                                 BacnetObjectId object,
+                                                 BacnetPropertyId property,
+                                                 uint32_t lifetimeSeconds,
+                                                 bool issueConfirmedNotifications = false,
+                                                 uint32_t arrayIndex = kBacnetNoArrayIndex,
+                                                 bool hasCovIncrement = false,
+                                                 float covIncrement = 0.0F);
+  static size_t buildCovNotification(uint8_t* buffer,
+                                     size_t bufferSize,
+                                     uint32_t processId,
+                                     BacnetObjectId initiatingDevice,
+                                     BacnetObjectId monitoredObject,
+                                     uint32_t timeRemainingSeconds,
+                                     const BacnetCovPropertyValue* values,
+                                     size_t valueCount,
+                                     bool confirmed = false,
+                                     uint8_t invokeId = 0);
+  static bool isSimpleAck(const uint8_t* buffer,
+                          size_t length,
+                          uint8_t expectedInvokeId,
+                          uint8_t expectedServiceChoice);
   static BacnetSubscribeCovResponseKind classifySubscribeCovResponse(
+    const uint8_t* buffer,
+    size_t length,
+    uint8_t expectedInvokeId,
+    uint8_t* rejectReason = nullptr,
+    uint8_t expectedServiceChoice = 0x05U);
+  static BacnetSubscribeCovResponseKind classifyConfirmedCovNotificationResponse(
     const uint8_t* buffer, size_t length, uint8_t expectedInvokeId, uint8_t* rejectReason = nullptr);
   static const char* rejectReasonText(uint8_t rejectReason);
   static bool parseCovNotification(const uint8_t* buffer, size_t length, BacnetCovNotification& notification);

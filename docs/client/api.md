@@ -16,6 +16,9 @@ Current public responsibilities:
 - Who-Is sending through `sendWhoIs()`
 - I-Am polling through `pollIAm()`
 - ReadProperty send/poll helpers through `sendReadProperty()`, `pollReadProperty()`, and `pollReadPropertyStatus()`
+- direct COV request/poll helpers through `sendSubscribeCov()`,
+  `sendSubscribeCovProperty()`, `pollSubscribeCov()`,
+  `pollSubscribeCovProperty()`, and `pollCovNotification()`
 - explicit WriteProperty send/poll helpers through `sendWriteProperty()` and
   `pollWriteProperty()` when `ESP_BACNET_ENABLE_WRITE_PROPERTY=1`
 - request/response encoding and decoding helpers such as `buildWhoIsRequest()`,
@@ -103,7 +106,9 @@ Current public responsibilities:
 	metadata for one session/object/property/array-index entry
 - `BacnetScannedObject`, `BacnetObjectScanOptions`, `BacnetObjectScanResult`, and `BacnetObjectListScanJob`: object-list scan support types
 - `BacnetPropertyReadResult`, `BacnetPropertyListReadResult`, and `BacnetPropertyReadAllResult`: property-list and safe read-all support types
-- `BacnetSubscribeOptions`, `BacnetPropertySubscription`, and `BacnetSubscriptionNotification`: SubscribeCOV with polling-fallback subscription support
+- `BacnetSubscribeOptions`, `BacnetPropertySubscription`, and
+  `BacnetSubscriptionNotification`: SubscribeCOV and SubscribeCOVProperty
+  with polling-fallback subscription support; see [Change of Value (COV)](../cov.md)
 
 ## Not Implemented
 

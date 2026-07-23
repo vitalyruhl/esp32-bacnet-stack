@@ -1,0 +1,215 @@
+{
+  "version": 1,
+  "author": "Vitaly Ruhl",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "wokwi-esp32-devkit-v1", "id": "esp", "top": 23.9, "left": 4.6, "attrs": {} },
+    {
+      "type": "wokwi-text",
+      "id": "title",
+      "top": -28.8,
+      "left": -19.2,
+      "attrs": { "text": "ESP32 I/O Dev Station" }
+    },
+    {
+      "type": "wokwi-potentiometer",
+      "id": "biasPot",
+      "top": -385.3,
+      "left": -19.4,
+      "attrs": { "value": "500" }
+    },
+    {
+      "type": "wokwi-text",
+      "id": "ldrLabel",
+      "top": -460.8,
+      "left": -326.4,
+      "attrs": { "text": "LDR + Bias Pot: wiper -> VP/GPIO36; VN/GPIO39 -> GND" }
+    },
+    {
+      "type": "wokwi-ds18b20",
+      "id": "ds18b20",
+      "top": -125.93,
+      "left": 263.28,
+      "attrs": { "temperature": "22" }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "dsPullup",
+      "top": -83,
+      "left": 335.15,
+      "rotate": 270,
+      "attrs": { "value": "4700" }
+    },
+    {
+      "type": "wokwi-text",
+      "id": "dsLabel",
+      "top": -144,
+      "left": 48,
+      "attrs": { "text": "DS18B20: GPIO18, 4.7k pull-up to 3.3V" }
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "rstButton",
+      "top": 323,
+      "left": -240,
+      "attrs": { "color": "green" }
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "midButton",
+      "top": 265.4,
+      "left": -240,
+      "attrs": { "color": "blue" }
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "setButton",
+      "top": 380,
+      "left": -235,
+      "attrs": { "color": "yellow" }
+    },
+    {
+      "type": "wokwi-text",
+      "id": "buttonsLabel",
+      "top": 220.8,
+      "left": -624,
+      "attrs": { "text": "Low-active buttons: RST GPIO14 / MID GPIO33 / SET GPIO4 (strap)" }
+    },
+    {
+      "type": "board-ssd1306",
+      "id": "oled",
+      "top": 262.34,
+      "left": 336.23,
+      "attrs": { "i2cAddress": "0x3c" }
+    },
+    {
+      "type": "wokwi-bme280",
+      "id": "bme280",
+      "top": 90,
+      "left": 345,
+      "attrs": { "address": "0x76" }
+    },
+    {
+      "type": "wokwi-text",
+      "id": "i2cLabel",
+      "top": 355.2,
+      "left": 163.2,
+      "attrs": { "text": "Shared I2C: SDA GPIO21, SCL GPIO22; BME280 shown, not read" }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led1",
+      "top": -22.8,
+      "left": -178.2,
+      "attrs": { "color": "red", "label": "LED 1 BO0 GPIO25", "flip": "" }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "led1Resistor",
+      "top": 42.65,
+      "left": -126.2,
+      "rotate": 180,
+      "attrs": { "value": "220" }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led2",
+      "top": 34.8,
+      "left": -303.4,
+      "attrs": { "color": "yellow", "label": "LED 2 BO1 GPIO26", "flip": "" }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "led2Resistor",
+      "top": 71.45,
+      "left": -126.2,
+      "rotate": 180,
+      "attrs": { "value": "220" }
+    },
+    { "type": "wokwi-relay-module", "id": "relay1", "top": -287.8, "left": 748.8, "attrs": {} },
+    { "type": "wokwi-relay-module", "id": "relay2", "top": -287.8, "left": 201.6, "attrs": {} },
+    { "type": "wokwi-relay-module", "id": "relay3", "top": -287.8, "left": 518.4, "attrs": {} },
+    {
+      "type": "wokwi-text",
+      "id": "outputLabel",
+      "top": -355.2,
+      "left": 201.6,
+      "attrs": {
+        "text": "Commandable: LED1 BO0 GPIO25; LED2 BO1 GPIO26. Reserved, not driven: Relay1 GPIO19; Relay2 GPIO27; Relay3 GPIO23"
+      }
+    },
+    { "type": "wokwi-gnd", "id": "gnd1", "top": 192, "left": 277.8, "attrs": {} },
+    { "type": "wokwi-gnd", "id": "gnd2", "top": -220.8, "left": 172.2, "attrs": {} },
+    { "type": "wokwi-vcc", "id": "vcc1", "top": -335.24, "left": 153.6, "attrs": {} },
+    { "type": "wokwi-vcc", "id": "vcc2", "top": -325.64, "left": 480, "attrs": {} },
+    { "type": "wokwi-vcc", "id": "vcc3", "top": -325.64, "left": 729.6, "attrs": {} },
+    { "type": "wokwi-gnd", "id": "gnd3", "top": -249.6, "left": 450.6, "attrs": {} },
+    { "type": "wokwi-gnd", "id": "gnd4", "top": -240, "left": 690.6, "attrs": {} },
+    { "type": "wokwi-gnd", "id": "gnd5", "top": 19.2, "left": -231, "attrs": {} },
+    { "type": "wokwi-gnd", "id": "gnd6", "top": 76.8, "left": -336.6, "attrs": {} },
+    { "type": "wokwi-gnd", "id": "gnd7", "top": 480, "left": -144.6, "attrs": {} },
+    { "type": "wokwi-vcc", "id": "vcc5", "top": -431.24, "left": -163.2, "attrs": {} },
+    { "type": "wokwi-vcc", "id": "vcc4", "top": 240.76, "left": 67.2, "attrs": {} },
+    { "type": "wokwi-vcc", "id": "vcc6", "top": -162.44, "left": 355.2, "attrs": {} },
+    { "type": "wokwi-gnd", "id": "gnd8", "top": -105.6, "left": 201, "attrs": {} },
+    { "type": "wokwi-vcc", "id": "vcc7", "top": 125.56, "left": 355.2, "attrs": {} },
+    {
+      "type": "wokwi-resistor",
+      "id": "r1",
+      "top": -350.4,
+      "left": -182.95,
+      "rotate": 90,
+      "attrs": { "value": "9000" }
+    },
+    {
+      "type": "wokwi-text",
+      "id": "text1",
+      "top": -355.2,
+      "left": -220.8,
+      "attrs": { "text": "9k LDR" }
+    }
+  ],
+  "connections": [
+    [ "biasPot:SIG", "esp:VP", "yellow", [ "v134.4", "h-154", "v192", "h124.8", "v48.3" ] ],
+    [ "ds18b20:DQ", "esp:D18", "yellow", [ "v28.8", "h-76.8", "v153.6" ] ],
+    [ "dsPullup:1", "ds18b20:DQ", "yellow", [] ],
+    [ "rstButton:1.r", "esp:D14", "green", [ "h77", "v-192.1" ] ],
+    [ "midButton:1.r", "esp:D33", "green", [ "h48.2", "v-172.8" ] ],
+    [ "setButton:1.r", "esp:D19", "green", [ "h302.4", "v-249.1" ] ],
+    [ "esp:D22", "oled:SCL", "gray", [] ],
+    [ "esp:D21", "oled:SDA", "#8f4814", [] ],
+    [ "esp:GND.1", "oled:GND", "black", [] ],
+    [ "esp:D22", "bme280:SCL", "purple", [] ],
+    [ "esp:D21", "bme280:SDA", "blue", [] ],
+    [ "esp:3V3", "bme280:VCC", "red", [] ],
+    [ "esp:GND.1", "bme280:GND", "black", [] ],
+    [ "esp:D25", "led1Resistor:1", "orange", [ "h-53", "v-67.75" ] ],
+    [ "led1Resistor:2", "led1:A", "orange", [] ],
+    [ "esp:D26", "led2Resistor:1", "orange", [ "h-43.4", "v8.4", "h-28.8", "v-57.6" ] ],
+    [ "led2Resistor:2", "led2:A", "orange", [ "h-105.9", "v-48.2" ] ],
+    [ "esp:D12", "relay1:IN", "orange", [ "h-86.4", "v248.9", "h806.4", "v-652.6" ] ],
+    [ "esp:D27", "relay2:IN", "purple", [ "h-384", "v-345.9", "h528", "v-38.2" ] ],
+    [ "esp:D23", "relay3:IN", "orange", [ "h393.3", "v-297.3" ] ],
+    [ "gnd1:GND", "esp:GND.1", "black", [ "v0" ] ],
+    [ "relay2:GND", "gnd2:GND", "black", [ "h0" ] ],
+    [ "vcc1:VCC", "relay2:VCC", "red", [ "v0" ] ],
+    [ "vcc2:VCC", "relay3:VCC", "red", [ "v0" ] ],
+    [ "vcc3:VCC", "relay1:VCC", "red", [ "v0" ] ],
+    [ "relay3:GND", "gnd3:GND", "black", [ "h0" ] ],
+    [ "relay1:GND", "gnd4:GND", "black", [ "h0" ] ],
+    [ "gnd5:GND", "led1:C", "black", [ "v0" ] ],
+    [ "gnd6:GND", "led2:C", "black", [ "v0" ] ],
+    [ "gnd7:GND", "setButton:2.r", "black", [ "v0" ] ],
+    [ "gnd7:GND", "rstButton:2.r", "black", [ "v0" ] ],
+    [ "gnd7:GND", "midButton:2.r", "black", [ "v0" ] ],
+    [ "vcc1:VCC", "biasPot:VCC", "red", [ "v28.8", "h-133.6" ] ],
+    [ "vcc4:VCC", "esp:3V3", "red", [ "h48", "v-86.4" ] ],
+    [ "vcc6:VCC", "dsPullup:2", "red", [ "v9.6", "v18" ] ],
+    [ "gnd8:GND", "ds18b20:GND", "black", [ "h28.8", "v28.8" ] ],
+    [ "ds18b20:VCC", "vcc6:VCC", "red", [ "v9.6", "h28.8", "v-48", "h48" ] ],
+    [ "oled:VCC", "vcc7:VCC", "red", [ "v0" ] ],
+    [ "r1:1", "vcc5:VCC", "green", [ "h0" ] ],
+    [ "r1:2", "biasPot:GND", "green", [ "v27.6", "h163.2" ] ]
+  ],
+  "dependencies": {}
+}

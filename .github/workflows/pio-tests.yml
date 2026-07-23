@@ -35,7 +35,15 @@ jobs:
         run: |
           mkdir -p .Temp/package-ci
           pio pkg pack . -o .Temp/package-ci
-          python tools/release/check-package-content.py .Temp/package-ci/ESP32BACnetStack-0.35.0.tar.gz --version 0.35.0
+          package_version="$(python -c 'import json; print(json.load(open("library.json", encoding="utf-8"))["version"])')"
+          expected_package=".Temp/package-ci/ESP32BACnetStack-${package_version}.tar.gz"
+          shopt -s nullglob
+          packages=(.Temp/package-ci/*.tar.gz)
+          if [[ ${#packages[@]} -ne 1 || "${packages[0]}" != "$expected_package" ]]; then
+            printf 'Expected exactly %s; found: %s\n' "$expected_package" "${packages[*]:-<none>}" >&2
+            exit 1
+          fi
+          python tools/release/check-package-content.py "$expected_package" --version "$package_version"
 
       - name: Build root project
         run: pio run -e usb

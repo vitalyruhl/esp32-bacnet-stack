@@ -74,6 +74,19 @@ int main() {
                      nullptr, 0, 7, analogValue200, 120) == 0,
                    "null SubscribeCOV request buffer");
 
+  uint8_t propertyRequest[BacnetProtocol::kMaxSubscribeCovRequestSize] = {};
+  const size_t propertyRequestSize = BacnetProtocol::buildSubscribeCovPropertyRequest(
+    propertyRequest, sizeof(propertyRequest), 12, analogValue200,
+    BacnetPropertyId::PresentValue, 60, false, kBacnetNoArrayIndex, true, 0.5F);
+  BacnetSubscribeCovRequestHeader parsedPropertyRequest;
+  passed &= expect(propertyRequestSize != 0 &&
+                     BacnetProtocol::parseSubscribeCovRequest(
+                       propertyRequest, propertyRequestSize, parsedPropertyRequest) ==
+                       BacnetSubscribeCovRequestParseStatus::SubscribeCovProperty &&
+                     parsedPropertyRequest.hasCovIncrement &&
+                     parsedPropertyRequest.covIncrement == 0.5F,
+                   "SubscribeCOVProperty COV_Increment round trip");
+
   const uint8_t reject[] = {
     0x81, 0x0A, 0x00, 0x09, 0x01, 0x00, 0x60, 0x07, 0x04};
   uint8_t rejectReason = 0xFF;

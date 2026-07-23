@@ -39,7 +39,7 @@ constexpr uint16_t kBacnetPort = BacnetServer::kDefaultPort;
 constexpr uint32_t kDemoDeviceInstance = 1682127;
 // ASHRAE-reserved; local test/example use only.
 constexpr uint16_t kDemoVendorId = 555;
-constexpr char kDemoVersion[] = "0.35.0";
+constexpr char kDemoVersion[] = "0.37.0";
 constexpr uint32_t kStoredValueUpdateMs = 250;
 constexpr float kStoredValueOffset = 20.0F;
 constexpr float kStoredValueAmplitude = 10.0F;
@@ -86,6 +86,10 @@ BacnetServerAnalogValue analogValues[] = {
     readPollingUptime,      // presentValueProvider: called for each property read
     &pollingDemo,           // presentValueContext: caller-owned provider state
   },
+};
+
+BacnetServerBinaryValue binaryValues[] = {
+  {320, "BV320 Commandable Value"},
 };
 
 const BacnetServerDevice kDevice{
@@ -176,6 +180,11 @@ void setup() {
   if (!bacnetServer.setAnalogValues(analogValues,
                                     sizeof(analogValues) / sizeof(analogValues[0]))) {
     Serial.println("[E] BACnet Analog Value configuration failed");
+    return;
+  }
+  if (!bacnetServer.setBinaryValues(binaryValues,
+                                    sizeof(binaryValues) / sizeof(binaryValues[0]))) {
+    Serial.println("[E] BACnet Binary Value configuration failed");
     return;
   }
   if (!bacnetServer.begin(kDevice, kBacnetPort)) {

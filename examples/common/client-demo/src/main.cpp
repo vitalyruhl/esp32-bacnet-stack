@@ -28,6 +28,10 @@
 #include "BacnetDemoBinaryValueStatus.h"
 #include "BacnetDemoFormat.h"
 #include "BacnetDemoLogging.h"
+
+#ifndef BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
+#define BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS 1
+#endif
 #include "BacnetDemoPropertyBrowser.h"
 #include "BacnetDemoWatchedAnalogValue.h"
 
@@ -82,6 +86,14 @@
 #endif
 #endif
 
+#ifndef BACNET_DEMO_DEFAULT_COV_LIFETIME_SECONDS
+#define BACNET_DEMO_DEFAULT_COV_LIFETIME_SECONDS 120
+#endif
+
+#ifndef BACNET_DEMO_OBJECT_COV_LIFETIME_SECONDS
+#define BACNET_DEMO_OBJECT_COV_LIFETIME_SECONDS 0
+#endif
+
 extern ConfigManagerClass ConfigManager;
 
 static cm::CoreSettings& coreSettings = cm::CoreSettings::instance();
@@ -91,7 +103,7 @@ static Config<int> bacnetWritePriority{ConfigOptions<int>{.key = "BacnetWritePri
 static Config<int> bacnetOverrideAvInstance{ConfigOptions<int>{.key = "BacnetOverrideAV", .name = "AV Override Instance", .category = "BACnet Override", .defaultValue = 200, .showInWeb = true, .sortOrder = 20}};
 static Config<int> bacnetPollingAvInstance{ConfigOptions<int>{.key = "BacnetPollingAV", .name = "AV Polling Instance", .category = "BACnet Override", .defaultValue = 201, .showInWeb = true, .sortOrder = 30}};
 static Config<int> bacnetOverrideBvInstance{ConfigOptions<int>{.key = "BacnetOverrideBV", .name = "BV Override Instance", .category = "BACnet Override", .defaultValue = 320, .showInWeb = true, .sortOrder = 40}};
-static Config<int> bacnetCovLifetime{ConfigOptions<int>{.key = "BacnetCovLifetime", .name = "COV Lifetime Seconds", .category = "BACnet Override", .defaultValue = 120, .showInWeb = true, .sortOrder = 50}};
+static Config<int> bacnetCovLifetime{ConfigOptions<int>{.key = "BacnetCovLifetime", .name = "COV Lifetime Seconds", .category = "BACnet Override", .defaultValue = BACNET_DEMO_DEFAULT_COV_LIFETIME_SECONDS, .showInWeb = true, .sortOrder = 50}};
 static Config<int> bacnetBrowserObjectType{ConfigOptions<int>{.key = "BacnetBrowserObjectType", .name = "Object Type", .category = "BACnet Property Browser", .defaultValue = static_cast<int>(BacnetObjectType::Device), .showInWeb = true, .sortOrder = 10}};
 static Config<int> bacnetBrowserObjectInstance{ConfigOptions<int>{.key = "BacnetBrowserObjectInstance", .name = "Object Instance", .category = "BACnet Property Browser", .defaultValue = 0, .showInWeb = true, .sortOrder = 20}};
 static Config<int> bacnetBrowserPropertyRow{ConfigOptions<int>{.key = "BacnetBrowserPropertyRow", .name = "Property Row (1..8)", .category = "BACnet Property Browser", .defaultValue = 1, .showInWeb = true, .sortOrder = 30}};
@@ -158,10 +170,27 @@ static BacnetDemoLogging demoLogging(ConfigManager, bacnetClient);
 #define CLIENT_DEMO_ENABLE_WATCH_METADATA_FIELD 0
 #endif
 
+#ifndef BACNET_DEMO_ENABLE_WATCHED_VALUES
+#define BACNET_DEMO_ENABLE_WATCHED_VALUES 1
+#endif
+
+#ifndef BACNET_DEMO_ENABLE_OBJECT_COV
+#define BACNET_DEMO_ENABLE_OBJECT_COV 0
+#endif
+
+#ifndef BACNET_DEMO_ENABLE_RUNTIME_GUI
+#define BACNET_DEMO_ENABLE_RUNTIME_GUI 1
+#endif
+
+#ifndef BACNET_DEMO_MAX_FOUND_OBJECTS_TO_DISPLAY
+#define BACNET_DEMO_MAX_FOUND_OBJECTS_TO_DISPLAY 3
+#endif
+
 static constexpr uint32_t kWhoIsIntervalMs = 30000;
 static constexpr uint32_t kBacnetScanReadTimeoutMs = 3000;
 static constexpr uint32_t kBacnetMaxObjectListEntriesToInspect = 600;
-static constexpr size_t kBacnetMaxFoundObjectsToDisplay = 3;
+static constexpr size_t kBacnetMaxFoundObjectsToDisplay =
+  BACNET_DEMO_MAX_FOUND_OBJECTS_TO_DISPLAY;
 static constexpr size_t kBacnetScanResultCapacity = kBacnetMaxFoundObjectsToDisplay * 3;
 static constexpr size_t kBacnetPreviewPropertyCount = 4;
 static constexpr uint32_t kBacnetSubscriptionFallbackPollMs = 30000;
@@ -185,6 +214,14 @@ static BacnetObjectListScanPhase lastLoggedScanPhase = BacnetObjectListScanPhase
 static uint32_t lastLoggedScanIndex = 0;
 static unsigned long lastWhoIsAt = 0;
 
+static uint32_t processObjectCovLifetimeSeconds() {
+#if BACNET_DEMO_OBJECT_COV_LIFETIME_SECONDS > 0
+  return BACNET_DEMO_OBJECT_COV_LIFETIME_SECONDS;
+#else
+  return static_cast<uint32_t>(bacnetCovLifetime.get());
+#endif
+}
+
 struct BacnetPropertySpec {
   const char* name = "";
   BacnetPropertyId id = BacnetPropertyId::ObjectName;
@@ -203,7 +240,14 @@ struct BacnetValueObjectPreview {
   const BacnetScannedObject* scanned = nullptr;
   BacnetDeviceSessionReadStatus presentValueStatus =
     BacnetDeviceSessionReadStatus::Skipped;
+  BacnetValue statusFlags;
+  BacnetPropertyReadStatus statusFlagsStatus =
+    BacnetPropertyReadStatus::Skipped;
+  uint32_t covUpdateCount = 0;
+  uint32_t lastCovUpdateMs = 0;
+  bool usesPropertyCov = false;
   std::unique_ptr<BacnetPropertySubscription> subscription;
+  std::unique_ptr<BacnetPropertySubscription> statusSubscription;
 };
 
 struct BacnetObjectStatusPreview {
@@ -306,10 +350,12 @@ static bool parseBacnetAddress(const char* label,
     return true;
   }
 
+#if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
   Serial.print("[E] Invalid BACnet ");
   Serial.print(label);
   Serial.print(" IP: ");
   Serial.println(addressText != nullptr ? addressText : "<null>");
+#endif
   demoLogging.log(BacnetDemoLogging::Level::Error, "invalid BACnet %s IP: %s", label, addressText != nullptr ? addressText : "<null>");
   return false;
 }
@@ -1278,6 +1324,7 @@ static void setupRuntimeUI() {
                       "Bounded On-Demand Read",
                       50);
 
+#if BACNET_DEMO_ENABLE_WATCHED_VALUES
   auto watchedAnalogGroup = ConfigManager.liveGroup("bacnetWatch")
                               .page("Sensors", 10)
                               .card("Watched Analog Value", 30)
@@ -1371,6 +1418,7 @@ static void setupRuntimeUI() {
 #else
   addRuntimeTextField("bacnetWatch", "override_status", "Write Feature", "Sensors", "Manual Priority Overrides", "Explicit Actions", 10);
 #endif
+#endif
 }
 
 static void sendWhoIs() {
@@ -1379,7 +1427,9 @@ static void sendWhoIs() {
   }
 
   if (!bacnetClient.sendWhoIs(bacnetIpEndpointFromArduino(whoIsDestination))) {
+#if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
     Serial.println("[W] BACnet Who-Is send failed");
+#endif
     demoLogging.log(BacnetDemoLogging::Level::Warn, "Who-Is send failed");
     return;
   }
@@ -1409,6 +1459,17 @@ static void onPresentValueUpdate(
   }
 
   preview->presentValueStatus = notification.status;
+  if (notification.covPropertyCount > 0) {
+    ++preview->covUpdateCount;
+    preview->lastCovUpdateMs = millis();
+  }
+  for (size_t index = 0; index < notification.covPropertyCount; ++index) {
+    const BacnetCovPropertyValue& property = notification.covProperties[index];
+    if (property.property == BacnetPropertyId::StatusFlags) {
+      preview->statusFlags = property.value;
+      preview->statusFlagsStatus = BacnetPropertyReadStatus::Ack;
+    }
+  }
   char objectName[24] = {};
   FixedTextBuffer objectOut(objectName, sizeof(objectName));
   bacnetAppendObjectDisplayName(objectOut, notification.objectId);
@@ -1421,6 +1482,21 @@ static void onPresentValueUpdate(
                     : bacnetReadStatusText(preview->presentValueStatus));
 }
 
+static void onStatusFlagsUpdate(
+  const BacnetSubscriptionNotification& notification) {
+  auto* preview =
+    static_cast<BacnetValueObjectPreview*>(notification.userData);
+  if (preview == nullptr) {
+    return;
+  }
+  preview->statusFlagsStatus = notification.status == BacnetDeviceSessionReadStatus::Ack
+                                 ? BacnetPropertyReadStatus::Ack
+                                 : BacnetPropertyReadStatus::Error;
+  if (notification.hasValue && notification.value != nullptr) {
+    preview->statusFlags = *notification.value;
+  }
+}
+
 static bool subscribePresentValue(BacnetDeviceSession& session,
                                   BacnetValueObjectPreview& preview) {
   if (!preview.discovered) {
@@ -1428,6 +1504,13 @@ static bool subscribePresentValue(BacnetDeviceSession& session,
   }
 
   BacnetSubscribeOptions options;
+  options.preferCov = BACNET_DEMO_ENABLE_OBJECT_COV != 0;
+  options.covLifetimeSeconds = processObjectCovLifetimeSeconds();
+  options.covRenewBeforeSeconds = 5;
+  options.usePropertyCov = options.preferCov &&
+                           bacnetIsAnalogProcessObject(preview.object.type);
+  options.hasCovIncrement = options.usePropertyCov;
+  options.covIncrement = options.usePropertyCov ? 0.5F : 0.0F;
   options.fallbackPollMs = kBacnetSubscriptionFallbackPollMs;
   options.timeoutMs = kBacnetScanReadTimeoutMs;
   options.immediateFirstRead = false;
@@ -1437,9 +1520,24 @@ static bool subscribePresentValue(BacnetDeviceSession& session,
     session.object(preview.object)
       .property(BacnetPropertyId::PresentValue)
       .subscribe(onPresentValueUpdate, &preview, options)));
+  preview.usesPropertyCov = options.usePropertyCov;
+#if BACNET_DEMO_ENABLE_OBJECT_COV
+  BacnetSubscribeOptions statusOptions;
+  statusOptions.fallbackPollMs = 300000;
+  statusOptions.timeoutMs = kBacnetScanReadTimeoutMs;
+  statusOptions.immediateFirstRead = true;
+  statusOptions.notifyOnStatusChange = true;
+  preview.statusSubscription.reset(new BacnetPropertySubscription(
+    session.object(preview.object)
+      .property(BacnetPropertyId::StatusFlags)
+      .subscribe(onStatusFlagsUpdate, &preview, statusOptions)));
+#endif
   demoLogging.log(BacnetDemoLogging::Level::Info,
-                  "subscription created %s present-value fallbackMs=%lu active=%s",
+                  "subscription created %s present-value mode=%s lifetime=%lu fallbackMs=%lu active=%s",
                   bacnetObjectDisplayName(preview.object).c_str(),
+                  options.usePropertyCov ? "property-cov" :
+                    (options.preferCov ? "object-cov" : "polling"),
+                  static_cast<unsigned long>(options.covLifetimeSeconds),
                   static_cast<unsigned long>(options.fallbackPollMs),
                   preview.subscription && preview.subscription->active() ? "yes"
                                                                          : "no");
@@ -1553,8 +1651,10 @@ static void finishValueObjectScan(BacnetDeviceSession& session,
   }
 
   readBacnetObjectStatusPreview(session);
+#if BACNET_DEMO_ENABLE_WATCHED_VALUES
   watchedAnalogValue.setup(session);
   polledAnalogValue.setup(session);
+#endif
 
   bacnetScanFinished = true;
   bacnetScanRunning = false;
@@ -1596,8 +1696,10 @@ static void scanSelectedBacnetDevice() {
       bacnetScanRunning = false;
       bacnetScanFinished = true;
       readBacnetObjectStatusPreview(*activeBacnetSession);
+#if BACNET_DEMO_ENABLE_WATCHED_VALUES
       watchedAnalogValue.setup(*activeBacnetSession);
       polledAnalogValue.setup(*activeBacnetSession);
+#endif
       return;
     }
   }
@@ -1629,12 +1731,14 @@ static void selectBacnetDevice(uint32_t deviceInstance,
   bacnetDeviceSelected = true;
   bacnetScanStatus = "Scan queued for selected device";
 
+#if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
   Serial.print("[I] BACnet selected device ");
   Serial.print(deviceInstance);
   Serial.print(" at ");
   Serial.print(address);
   Serial.print(":");
   Serial.println(port);
+#endif
   demoLogging.log(BacnetDemoLogging::Level::Info, "selected device %lu at %s:%u", static_cast<unsigned long>(deviceInstance), address.toString().c_str(), static_cast<unsigned>(port));
 
   bacnetScanRequested = true;
@@ -1653,12 +1757,14 @@ static void selectBacnetDevice(const BacnetIAmDevice& device) {
   bacnetDeviceSelected = true;
   bacnetScanStatus = "Scan queued for selected device";
 
+#if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
   Serial.print("[I] BACnet selected device ");
   Serial.print(device.deviceInstance);
   Serial.print(" at ");
   Serial.print(bacnetIpAddressFromEndpoint(device.endpoint));
   Serial.print(":");
   Serial.println(activeBacnetSession->port());
+#endif
   const IPAddress address = bacnetIpAddressFromEndpoint(device.endpoint);
   demoLogging.log(BacnetDemoLogging::Level::Info, "selected device %lu at %s:%u", static_cast<unsigned long>(device.deviceInstance), address.toString().c_str(), static_cast<unsigned>(device.endpoint.port));
 
@@ -1700,21 +1806,27 @@ static void startBacnetClient() {
   if (!bacnetAddressConfigValid) {
     if (!bacnetAddressConfigErrorLogged) {
       bacnetAddressConfigErrorLogged = true;
+#if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
       Serial.println("[E] BACnet disabled: invalid BACnet IP config");
+#endif
       demoLogging.log(BacnetDemoLogging::Level::Error, "disabled: invalid BACnet IP config");
     }
     return;
   }
 
   if (!bacnetClient.begin()) {
+#if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
     Serial.println("[E] BACnet UDP listener failed to start");
+#endif
     demoLogging.log(BacnetDemoLogging::Level::Error, "client UDP listener failed");
     return;
   }
 
   bacnetStarted = true;
+#if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
   Serial.print("[I] BACnet client started on UDP port ");
   Serial.println(bacnetClient.localPort());
+#endif
 
   sendWhoIs();
   selectBacnetDevice(BACNET_TARGET_DEVICE_INSTANCE,
@@ -1757,24 +1869,38 @@ static void pollBacnetSubscriptions() {
     if (analogValues[i].subscription) {
       activeBacnetSession->poll(*analogValues[i].subscription, now);
     }
+    if (analogValues[i].statusSubscription) {
+      activeBacnetSession->poll(*analogValues[i].statusSubscription, now);
+    }
     if (binaryValues[i].subscription) {
       activeBacnetSession->poll(*binaryValues[i].subscription, now);
+    }
+    if (binaryValues[i].statusSubscription) {
+      activeBacnetSession->poll(*binaryValues[i].statusSubscription, now);
     }
     if (multiStateValues[i].subscription) {
       activeBacnetSession->poll(*multiStateValues[i].subscription, now);
     }
+    if (multiStateValues[i].statusSubscription) {
+      activeBacnetSession->poll(*multiStateValues[i].statusSubscription, now);
+    }
   }
 
+#if BACNET_DEMO_ENABLE_WATCHED_VALUES
   watchedAnalogValue.poll(*activeBacnetSession, now);
   polledAnalogValue.poll(*activeBacnetSession, now);
+#endif
   propertyBrowser.poll(*activeBacnetSession, now);
   updatePropertyBrowserStatus();
+#if BACNET_DEMO_ENABLE_WATCHED_VALUES
   overrideBinaryValueStatus.configure(
     static_cast<uint32_t>(bacnetOverrideBvInstance.get()));
   overrideBinaryValueStatus.poll(*activeBacnetSession, now);
+#endif
 }
 
 static void registerBacnetOverrideSettings() {
+#if BACNET_DEMO_ENABLE_WATCHED_VALUES
 #if defined(ESP_BACNET_ENABLE_WRITE_PROPERTY) && ESP_BACNET_ENABLE_WRITE_PROPERTY && \
   defined(ESP_BACNET_ENABLE_PRIORITY_WRITE) && ESP_BACNET_ENABLE_PRIORITY_WRITE
   ConfigManager.addSetting(&bacnetWritePriority);
@@ -1782,6 +1908,7 @@ static void registerBacnetOverrideSettings() {
   ConfigManager.addSetting(&bacnetOverrideBvInstance);
 #endif
   ConfigManager.addSetting(&bacnetPollingAvInstance);
+#endif
   ConfigManager.addSetting(&bacnetCovLifetime);
   ConfigManager.addSetting(&bacnetBrowserObjectType);
   ConfigManager.addSetting(&bacnetBrowserObjectInstance);
@@ -1812,7 +1939,9 @@ static void startEthernetServices() {
                  ntpSettings.server1.get().c_str(),
                  ntpSettings.server2.get().c_str());
     ethernetServicesStarted = true;
+#if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
     Serial.println("[I] ConfigManager services started on Ethernet");
+#endif
   }
   startBacnetClient();
 }
@@ -1820,14 +1949,18 @@ static void startEthernetServices() {
 static void updateEthernetNetwork() {
   const bool connected = bacnet_example::EthernetNetwork::hasIp();
   if (connected && !ethernetWasConnected) {
+#if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
     Serial.print("[I] Ethernet station IP: ");
     Serial.println(bacnet_example::EthernetNetwork::localIp());
+#endif
     startEthernetServices();
   } else if (!connected && ethernetWasConnected) {
     clearBacnetRuntime();
     bacnetClient.end();
     bacnetStarted = false;
+#if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
     Serial.println("[W] Ethernet network unavailable");
+#endif
   }
   ethernetWasConnected = connected;
 }
@@ -1835,16 +1968,24 @@ static void updateEthernetNetwork() {
 
 void setup() {
   Serial.begin(115200);
+#if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
   Serial.println("[I] BACnet client demo starting");
+#endif
 
   ConfigManagerClass::setLogger([](const char* msg) {
+#if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
     Serial.print("[D] CM ");
     Serial.println(msg);
+#else
+    (void)msg;
+#endif
   });
 
   resetBacnetPreviews();
+#if BACNET_DEMO_ENABLE_WATCHED_VALUES
   watchedAnalogValue.setLogger(demoLogging.watchedAnalogCallback());
   polledAnalogValue.setLogger(demoLogging.watchedAnalogCallback());
+#endif
   ConfigManager.setAppName(APP_NAME);
   ConfigManager.setAppTitle(APP_NAME);
   ConfigManager.setVersion(APP_VERSION);
@@ -1866,15 +2007,19 @@ void setup() {
   coreSettings.attachNtp(ConfigManager);
 
   ConfigManager.loadAll();
+#if BACNET_DEMO_ENABLE_WATCHED_VALUES
   watchedAnalogValue.configure(
     static_cast<uint32_t>(bacnetOverrideAvInstance.get()), true, static_cast<uint32_t>(bacnetCovLifetime.get()));
   polledAnalogValue.configure(
     static_cast<uint32_t>(bacnetPollingAvInstance.get()), false, 0);
   overrideBinaryValueStatus.configure(
     static_cast<uint32_t>(bacnetOverrideBvInstance.get()));
+#endif
   setupNetworkDefaults();
 
+#if BACNET_DEMO_ENABLE_RUNTIME_GUI
   setupRuntimeUI();
+#endif
 
 #if !BACNET_DEMO_USE_ETHERNET && defined(WIFI_FILTER_MAC_PRIORITY)
   ConfigManager.setAccessPointMacPriority(WIFI_FILTER_MAC_PRIORITY);
@@ -1889,20 +2034,26 @@ void setup() {
     ethernetDns.get().c_str(),
   };
   if (!bacnet_example::EthernetNetwork::begin(APP_NAME, ethernetConfig)) {
+#if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
     Serial.println("[E] Ethernet startup failed");
+#endif
   }
 #else
   ConfigManager.startWebServer();
 #endif
 
+#if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
   Serial.println("[I] Setup completed, starting main loop");
+#endif
 }
 
 #if !BACNET_DEMO_USE_ETHERNET
 void onWiFiConnected() {
   wifiServices.onConnected(ConfigManager, APP_NAME, systemSettings, ntpSettings);
+#if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
   Serial.print("[I] WiFi station IP: ");
   Serial.println(WiFi.localIP());
+#endif
   startBacnetClient();
 }
 
@@ -1911,13 +2062,17 @@ void onWiFiDisconnected() {
   clearBacnetRuntime();
   bacnetClient.end();
   bacnetStarted = false;
+#if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
   Serial.println("[W] WiFi disconnected");
+#endif
 }
 
 void onWiFiAPMode() {
   wifiServices.onAPMode();
+#if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
   Serial.print("[I] WiFi AP mode IP: ");
   Serial.println(WiFi.softAPIP());
+#endif
 }
 #endif
 
@@ -1942,7 +2097,9 @@ static void setupNetworkDefaults() {
 #else
   if (wifiSettings.wifiSsid.get().isEmpty()) {
 #if BACNET_DEMO_HAS_SECRETS
+#if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
     Serial.println("[I] WiFi SSID empty, applying local secret defaults");
+#endif
     wifiSettings.wifiSsid.set(MY_WIFI_SSID);
     wifiSettings.wifiPassword.set(MY_WIFI_PASSWORD);
 
@@ -1962,11 +2119,15 @@ static void setupNetworkDefaults() {
     wifiSettings.dnsPrimary.set(MY_DNS_IP);
 #endif
     ConfigManager.saveAll();
+#if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
     Serial.println("[I] Restarting after applying WiFi defaults");
+#endif
     delay(500);
     ESP.restart();
 #else
+#if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
     Serial.println("[W] WiFi SSID empty and secret/secrets.h missing");
+#endif
 #endif
   }
 
@@ -1991,6 +2152,7 @@ void loop() {
   scanSelectedBacnetDevice();
 
   static unsigned long lastLoopLog = 0;
+#if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
   if (millis() - lastLoopLog > 60000) {
     lastLoopLog = millis();
 #if BACNET_DEMO_USE_ETHERNET
@@ -2007,4 +2169,5 @@ void loop() {
     Serial.print(" maxAlloc=");
     Serial.println(ESP.getMaxAllocHeap());
   }
+#endif
 }

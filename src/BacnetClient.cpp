@@ -22,6 +22,7 @@ BacnetClient::BacnetClient(BacnetDatagramTransport& transport,
 
 bool BacnetClient::begin(uint16_t port) {
   localPort_ = port;
+  queuedCovNotificationCount_ = 0;
   running_ = transport_ != nullptr && transport_->begin(localPort_);
   if (running_) {
     logger_.info("BACnet/Client", "client started on UDP %u", static_cast<unsigned>(localPort_));
@@ -39,6 +40,7 @@ void BacnetClient::end() {
     transport_->end();
   }
   running_ = false;
+  queuedCovNotificationCount_ = 0;
 }
 
 bool BacnetClient::isRunning() const {
@@ -103,8 +105,30 @@ bool BacnetClient::sendSubscribeCov(const BacnetIpEndpoint& destination,
   return transport_->send(destination, request, requestSize);
 }
 
+bool BacnetClient::sendSubscribeCovProperty(const BacnetIpEndpoint& destination,
+                                            uint32_t processId,
+                                            BacnetObjectId object,
+                                            BacnetPropertyId property,
+                                            uint32_t lifetimeSeconds,
+                                            uint8_t invokeId,
+                                            bool issueConfirmedNotifications,
+                                            uint32_t arrayIndex,
+                                            bool hasCovIncrement,
+                                            float covIncrement) {
+  uint8_t request[kMaxSubscribeCovRequestSize] = {};
+  const size_t requestSize = BacnetProtocol::buildSubscribeCovPropertyRequest(
+    request, sizeof(request), processId, object, property, lifetimeSeconds, issueConfirmedNotifications, arrayIndex, hasCovIncrement, covIncrement);
+  if (!running_ || requestSize == 0) {
+    return false;
+  }
+  request[8] = invokeId;
+  return transport_->send(destination, request, requestSize);
+}
+
 BacnetSubscribeCovResponseKind BacnetClient::pollSubscribeCov(
-  uint8_t expectedInvokeId, uint8_t* rejectReason) {
+  uint8_t expectedInvokeId,
+  uint8_t* rejectReason,
+  const BacnetIpEndpoint* expectedPeer) {
   if (!running_)
     return BacnetSubscribeCovResponseKind::None;
   uint8_t packet[kMaxDiscoveryPacketSize] = {};
@@ -112,18 +136,111 @@ BacnetSubscribeCovResponseKind BacnetClient::pollSubscribeCov(
   const size_t bytesRead = transport_->receive(packet, sizeof(packet), source);
   if (bytesRead == 0)
     return BacnetSubscribeCovResponseKind::None;
+  if (queueCovNotification(packet, bytesRead, source)) {
+    return BacnetSubscribeCovResponseKind::None;
+  }
+  if (expectedPeer != nullptr && !endpointEquals(source, *expectedPeer)) {
+    return BacnetSubscribeCovResponseKind::None;
+  }
   return BacnetProtocol::classifySubscribeCovResponse(
     packet, bytesRead, expectedInvokeId, rejectReason);
 }
 
-bool BacnetClient::pollCovNotification(BacnetCovNotification& notification) {
-  if (!running_)
-    return false;
+BacnetSubscribeCovResponseKind BacnetClient::pollSubscribeCovProperty(
+  uint8_t expectedInvokeId,
+  uint8_t* rejectReason,
+  const BacnetIpEndpoint* expectedPeer) {
+  if (!running_) {
+    return BacnetSubscribeCovResponseKind::None;
+  }
   uint8_t packet[kMaxDiscoveryPacketSize] = {};
   BacnetIpEndpoint source;
   const size_t bytesRead = transport_->receive(packet, sizeof(packet), source);
-  return bytesRead != 0 && BacnetProtocol::parseCovNotification(
-                             packet, bytesRead, notification);
+  if (bytesRead == 0) {
+    return BacnetSubscribeCovResponseKind::None;
+  }
+  if (queueCovNotification(packet, bytesRead, source)) {
+    return BacnetSubscribeCovResponseKind::None;
+  }
+  if (expectedPeer != nullptr && !endpointEquals(source, *expectedPeer)) {
+    return BacnetSubscribeCovResponseKind::None;
+  }
+  return BacnetProtocol::classifySubscribeCovResponse(
+    packet, bytesRead, expectedInvokeId, rejectReason, 0x1CU);
+}
+
+bool BacnetClient::pollCovNotification(BacnetCovNotification& notification,
+                                       bool acknowledgeConfirmed) {
+  if (!running_)
+    return false;
+  if (takeQueuedCovNotification(notification)) {
+    return !acknowledgeConfirmed || acknowledgeCovNotification(notification);
+  }
+  uint8_t packet[kMaxDiscoveryPacketSize] = {};
+  BacnetIpEndpoint source;
+  const size_t bytesRead = transport_->receive(packet, sizeof(packet), source);
+  if (bytesRead == 0) {
+    return false;
+  }
+  BacnetCovNotification received;
+  if (!BacnetProtocol::parseCovNotification(packet, bytesRead, received)) {
+    return false;
+  }
+  received.source = source;
+  if (acknowledgeConfirmed && !acknowledgeCovNotification(received)) {
+    return false;
+  }
+  notification = received;
+  return true;
+}
+
+bool BacnetClient::queueCovNotification(const uint8_t* packet,
+                                        size_t length,
+                                        const BacnetIpEndpoint& source) {
+  BacnetCovNotification notification;
+  if (!BacnetProtocol::parseCovNotification(packet, length, notification)) {
+    return false;
+  }
+  notification.source = source;
+  if (queuedCovNotificationCount_ == kMaxQueuedCovNotifications) {
+    for (size_t index = 1; index < queuedCovNotificationCount_; ++index) {
+      queuedCovNotifications_[index - 1] = queuedCovNotifications_[index];
+    }
+    --queuedCovNotificationCount_;
+  }
+  queuedCovNotifications_[queuedCovNotificationCount_++] = notification;
+  return true;
+}
+
+bool BacnetClient::takeQueuedCovNotification(BacnetCovNotification& notification) {
+  if (queuedCovNotificationCount_ == 0) {
+    return false;
+  }
+  notification = queuedCovNotifications_[0];
+  for (size_t index = 1; index < queuedCovNotificationCount_; ++index) {
+    queuedCovNotifications_[index - 1] = queuedCovNotifications_[index];
+  }
+  --queuedCovNotificationCount_;
+  return true;
+}
+
+bool BacnetClient::acknowledgeCovNotification(
+  const BacnetCovNotification& notification) {
+  if (!notification.confirmed) {
+    return true;
+  }
+  uint8_t acknowledgement[16] = {};
+  const size_t acknowledgementSize = BacnetProtocol::buildSimpleAckResponse(
+    acknowledgement, sizeof(acknowledgement), notification.invokeId, 0x01U);
+  return acknowledgementSize != 0 &&
+         transport_->send(notification.source, acknowledgement, acknowledgementSize);
+}
+
+bool BacnetClient::endpointEquals(const BacnetIpEndpoint& left,
+                                  const BacnetIpEndpoint& right) {
+  return left.port == right.port && left.address[0] == right.address[0] &&
+         left.address[1] == right.address[1] && left.address[2] == right.address[2] &&
+         left.address[3] == right.address[3];
 }
 
 bool BacnetClient::pollIAm(BacnetIAmDevice& device) {

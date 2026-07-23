@@ -25,10 +25,10 @@ coverage are still evolving.
 
 The portable BACnet/IP client core is available for ESP32 WiFi, ESP32 Ethernet,
 and native Windows applications. BACnet/IP server support provides a small
-read-only ESP32 demo with Who-Is/I-Am and ReadProperty for its Device and
-Analog Values; it is not a full BACnet server. `API` in the Windows column means the
-native C++ API is available but the productive CLI does not expose that feature
-directly.
+read-only ESP32 profile with Who-Is/I-Am, ReadProperty, Binary Input/Analog
+Input objects, and a bounded COV subset; it is not a full BACnet server. `API`
+in the Windows column means the native C++ API is available but the productive
+CLI does not expose that feature directly.
 
 | Function | ESP32 WiFi | ESP32 Ethernet | Windows |
 | --- | ---: | ---: | ---: |
@@ -37,8 +37,9 @@ directly.
 | ReadProperty | Yes | Yes | Yes |
 | Object List / Property List | Yes | Yes | Yes |
 | Property cache | Yes | Yes | API |
-| SubscribeCOV | Yes | Yes | CLI |
-| Polling fallback | Yes | Yes | API |
+| Client SubscribeCOV / SubscribeCOVProperty | Yes | Yes | CLI |
+| Client polling fallback | Yes | Yes | API |
+| Server COV subscriptions (demo profile) | Yes | Yes | Client only |
 | WriteProperty / Priority | Opt-in | Opt-in | Opt-in CLI |
 | Rich Client Demo | Yes | Yes | No |
 | Native CLI | No | No | Yes |
@@ -55,11 +56,13 @@ shows at most eight rows to bound RAM and UI payloads; per-property failures
 remain visible instead of being reported as successful fallback data. See the
 [Client Guide](docs/client/README.md) for lifecycle and API details.
 
-Repository version `0.35.0` includes the portable server runtime, Device and
-Analog Value profile, and ESP32 server demo.
-Package metadata and the
-currently available installation version are listed in the
-[PlatformIO Registry](https://registry.platformio.org/libraries/vitaly.ruhl/ESP32%20BACnet%20Stack).
+The working-tree package metadata is version `0.37.0`. It includes the portable
+server runtime, read-only Analog Input/Binary Input profile, commandable Binary
+Output and Binary Value priority support, allocation-free server-side SubscribeCOV and
+SubscribeCOVProperty support, and ESP32 server examples. See
+[Change of Value (COV)](docs/cov.md) for the implemented lifecycle, fallback,
+and scope boundaries. Package metadata is in [library.json](library.json); a
+registry listing, when present, can represent a different published revision.
 
 ## BACnet Vendor Identifier
 
@@ -142,6 +145,19 @@ resetting to enter the bootloader, and provide a stable supply for the ESP32
 and Ethernet PHY. See the Ethernet client demo README for exact commands and
 wiring.
 
+BACnet/IP over Wi-Fi is supported. Depending on signal quality, Wi-Fi power
+saving, and simultaneous web-GUI traffic, updates may occasionally show
+additional latency or jitter. Ethernet is recommended when more deterministic
+response times are required. Visible delay does not necessarily indicate a COV
+or BACnet protocol failure.
+
+For the paired COV setup, use the Wi-Fi server
+[`examples/server-esp-to-esp-demo-wifi`](examples/server-esp-to-esp-demo-wifi/README.md),
+the Ethernet demo client
+[`examples/client-esp-to-esp-demo-eth`](examples/client-esp-to-esp-demo-eth/README.md),
+and the focused acceptance runner
+[`examples/hil-cov-espClient-to-espServer-acceptance`](examples/hil-cov-espClient-to-espServer-acceptance/README.md).
+
 ## screenshots
 
 ![Screenshot V0.24.1](docs/screenshots/bnm-V0.24.1.jpg)
@@ -156,7 +172,10 @@ wiring.
 | `examples/common/` | Shared example-only Ethernet and client-demo implementation helpers |
 | `examples/client-object-list-scan-basic/` | Canonical serial-only basic BACnet/IP client example |
 | `examples/hil-wago-client-acceptance/` | Local ESP32/WAGO client acceptance HIL runner |
-| `examples/server-demo/` | Read-only ESP32 WiFi/Ethernet BACnet server demo |
+| `examples/server-demo/` | ESP32 WiFi/Ethernet BACnet server demo with BV320 priority writes |
+| `examples/server-esp-to-esp-demo-wifi/` | Paired Wi-Fi BACnet server COV demo wrapper |
+| `examples/client-esp-to-esp-demo-eth/` | Paired WT32-ETH01 BACnet client COV demo wrapper |
+| `examples/hil-cov-espClient-to-espServer-acceptance/` | Focused ESP-to-ESP COV acceptance runner |
 | `test/` | PlatformIO Unity tests |
 | `docs/` | Project documentation |
 
@@ -195,6 +214,7 @@ Detailed documentation is split by topic:
 - [Important Client Notes](docs/client/important.md)
 - [Client API](docs/client/api.md)
 - [Client Examples](docs/client/examples.md)
+- [Change of Value (COV)](docs/cov.md)
 - [Server Guide](docs/server/README.md)
 - [Planned Server Work](docs/server/planned.md)
 - [Repository Settings](docs/repository-settings.md)
@@ -369,13 +389,10 @@ priority gate without WriteProperty is rejected at compile time.
 ## Property Subscriptions
 
 `BacnetSubscribeOptions` remains source-compatible with polling subscriptions.
-Set `preferCov` to request real BACnet SubscribeCOV. A successful registration
-suppresses fallback polling, renews before its configured lifetime ends, and
-routes matching COV notifications through the existing property cache and
-callback path. Send failures, BACnet Error, Reject, Abort, and registration
-timeouts are logged with the COV tag and switch the subscription to its existing
-polling fallback. No hardware COV interoperability claim is made without a
-separate real-device validation.
+Set `preferCov` to request COV, and use `usePropertyCov` for
+SubscribeCOVProperty. See [Change of Value (COV)](docs/cov.md) for the public
+APIs, confirmation mode, lifetime, renewal, cancellation, retry scope, and
+polling-fallback behavior.
 
 - `ESP_BACNET_ENABLE_WRITE_PROPERTY` (default `0`)
 - `ESP_BACNET_ENABLE_PRIORITY_WRITE` (default `0`, requires write-property flag)
