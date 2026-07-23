@@ -10,6 +10,9 @@ This changelog is a curated overview. The canonical library version is in
 - Added commandable Binary Value BV320 with portable caller-owned 16-slot
   BACnet priority storage, `Priority_Array`, `Relinquish_Default`, ReadProperty,
   WriteProperty, Object_List/Property_List, and effective-value COV behavior.
+- Added BV320 to the paired ESP-to-ESP WiFi server and Ethernet client COV
+  demo, including its live diagnostics and the expected eight active
+  subscriptions.
 
 ## 0.36.0 - 2026-07-22
 

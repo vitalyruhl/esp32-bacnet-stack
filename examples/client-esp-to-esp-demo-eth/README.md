@@ -9,9 +9,11 @@ BACnet defaults. The wrapper keeps paired-demo runtime diagnostics in its own
 
 The inherited client discovers the server object list, subscribes supported
 process values through COV, renews subscriptions, and restores its client
-session after Ethernet reconnects. Existing client GUI cards display the
-remote process values; the **ESP-to-ESP** page adds compact paired-demo status
-and persistent counters.
+session after Ethernet reconnects. The paired profile retains two Analog Input
+and six Binary process-object previews, so it includes `BV320` as Binary Value
+instance `320` and reports `active 8/8` once all subscriptions are active.
+Existing client GUI cards display the remote process values; the **ESP-to-ESP**
+page adds compact paired-demo status and persistent counters.
 
 The **Server Hardware Inputs** card is populated exclusively from this client's
 runtime COV/property cache. It displays the remote AI0 light sensor as a
@@ -22,6 +24,12 @@ subscription, `P` means polling fallback, and `?` means pending or unknown
 subscription state. The button lamp shows only the remote button value (grey
 inactive, green active); it is deliberately independent of the `C`/`P`/`?`
 receive-mode marker.
+
+The **Server Hardware Inputs** card additionally shows BV320's effective
+Present_Value and COV/polling receive mode. The **Remote COV Variables** card
+contains its COV update counter; renewal, timeout recovery, and polling
+fallback are the same shared subscription path used for the other seven
+objects.
 
 ## Build and upload
 

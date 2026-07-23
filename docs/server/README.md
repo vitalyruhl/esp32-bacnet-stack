@@ -60,7 +60,9 @@ Commandable Binary Values use the same caller-owned priority storage without
 an output callback, polarity, reliability, or platform binding. Their compact
 standard profile contains Object Identifier, Object Name, Object Type, Present
 Value, Status Flags, Event State, Out Of Service, Priority Array, Relinquish
-Default, and Property List. BV320 is the shared demo instance.
+Default, and Property List. The paired
+`server-esp-to-esp-demo-wifi` demo registers BV320 as its shared live-COV
+instance.
 
 The server retains a fixed allocation-free COV subscription table. An
 object-level subscription is one entry that encodes Present_Value and

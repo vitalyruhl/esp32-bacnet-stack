@@ -15,7 +15,7 @@ namespace {
 constexpr char kNvsNamespace[] = "esp2esp_cli";
 constexpr uint32_t kDiagnosticsSchema = 1;
 constexpr size_t kPreviewCount = kBacnetMaxFoundObjectsToDisplay;
-constexpr size_t kRemoteObjectCount = 7;
+constexpr size_t kRemoteObjectCount = 8;
 
 Preferences diagnosticsPreferences;
 uint32_t bootCount = 0;
@@ -257,15 +257,20 @@ void fillClientLiveRuntime(JsonObject& data) {
     findRemotePreview(BacnetObjectType::BinaryInput, 1);
   const BacnetValueObjectPreview* setButton =
     findRemotePreview(BacnetObjectType::BinaryInput, 2);
+  const BacnetValueObjectPreview* bv320 =
+    findRemotePreview(BacnetObjectType::BinaryValue, 320);
 
   setRemoteLightSensor(data, lightSensor);
   setRemoteBinaryInput(data, "serverResetButton", resetButton);
   setRemoteBinaryInput(data, "serverMidButton", midButton);
   setRemoteBinaryInput(data, "serverSetButton", setButton);
+  setRemoteBinaryInput(data, "serverBv320", bv320);
   data["serverLightSensorMode"] = remoteReceiveMode(lightSensor);
   data["serverResetButtonMode"] = remoteReceiveMode(resetButton);
   data["serverMidButtonMode"] = remoteReceiveMode(midButton);
   data["serverSetButtonMode"] = remoteReceiveMode(setButton);
+  data["serverBv320Mode"] = remoteReceiveMode(bv320);
+  data["serverBv320Updates"] = bv320 != nullptr ? bv320->covUpdateCount : 0U;
 
   data["bootCount"] = bootCount;
   data["resetReason"] = lastResetReason;
@@ -350,6 +355,9 @@ void setupClientLiveUi() {
   addRemoteHardwareInput("serverMidButtonMode", "Mid Button receive mode", 31, false);
   addRemoteHardwareInput("serverSetButton", "Set Button (BI2)", 40, true);
   addRemoteHardwareInput("serverSetButtonMode", "Set Button receive mode", 41, false);
+  addRemoteHardwareInput("serverBv320", "BV320 Present_Value", 50, true);
+  addRemoteHardwareInput("serverBv320Mode", "BV320 receive mode", 51, false);
+  addClientLiveText("serverBv320Updates", "BV320 COV updates", 208);
   addClientLiveText("bootCount", "Boot count (NVS)", 10);
   addClientLiveText("resetReason", "Current reset reason", 11);
   addClientLiveText("uptimeSeconds", "Uptime", 12);
