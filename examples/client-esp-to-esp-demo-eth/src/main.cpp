@@ -90,8 +90,7 @@ const char* covStateText(const BacnetValueObjectPreview& preview) {
   return "unknown";
 }
 
-void appendStatusFlags(char* buffer, size_t capacity,
-                       const BacnetValueObjectPreview& preview) {
+void appendStatusFlags(char* buffer, size_t capacity, const BacnetValueObjectPreview& preview) {
   if (preview.statusFlagsStatus != BacnetPropertyReadStatus::Ack ||
       preview.statusFlags.type != BacnetValueType::BitString) {
     std::snprintf(buffer, capacity, "unavailable");
@@ -330,14 +329,12 @@ void addRemoteHardwareInput(const char* key,
 
 void setupClientLiveUi() {
   ConfigManager.getRuntime().addRuntimeProvider("esp2espClient", fillClientLiveRuntime, 5);
-  auto diagnostics = ConfigManager.liveGroup("esp2espClient")
-                       .page("ESP-to-ESP", 5)
-                       .card("Diagnostics");
-  diagnostics.value("loopTime", []() { return loopTimeMs; })
-    .label("Loop time")
-    .unit("ms")
-    .precision(3)
-    .order(10);
+
+  ConfigManager.addLivePage("ESP-to-ESP", 90);
+  ConfigManager.addLiveCard("ESP-to-ESP", "Server Hardware Inputs", 10);
+  ConfigManager.addLiveCard("ESP-to-ESP", "Remote COV Variables", 20);
+  ConfigManager.addLiveCard("ESP-to-ESP", "Diagnostics", 90);
+
   for (size_t index = 0; index < kRemoteObjectCount; ++index) {
     char key[16] = {};
     char label[24] = {};
@@ -364,6 +361,15 @@ void setupClientLiveUi() {
   addClientLiveText("covSubscribeAttempts", "COV subscribe/renew attempts", 18);
   addClientLiveText("covSendFailures", "COV local send failures", 19);
   addClientLiveText("covTimeouts", "COV timeouts", 20);
+
+  auto diagnostics = ConfigManager.liveGroup("esp2espClient")
+                       .page("ESP-to-ESP", 90)
+                       .card("Diagnostics", 90);
+  diagnostics.value("loopTime", []() { return loopTimeMs; })
+    .label("Loop time")
+    .unit("ms")
+    .precision(3)
+    .order(10);
 }
 
 void updateClientDiagnostics() {
