@@ -108,10 +108,57 @@ bool testRequestAndResponses() {
   priorityOptions.arrayIndex = 3;
   priorityOptions.priority = 16;
   if (!expect(BacnetProtocol::buildWritePropertyRequest(indexed, sizeof(indexed), indexedRequest.object, indexedRequest.property, value, priorityOptions, 9) == indexedSize + 2 && indexed[indexedSize] == 0x49 && indexed[indexedSize + 1] == 0x10, "array index plus priority")) return false;
+  BacnetValue relinquishDefaultValue;
+  relinquishDefaultValue.type = BacnetValueType::Enumerated;
+  relinquishDefaultValue.unsignedValue = 1;
+  uint8_t relinquishDefaultPacket[64] = {};
+  const BacnetPropertyRequest relinquishDefaultRequest{
+    request.object, BacnetPropertyId::RelinquishDefault};
+  const size_t relinquishDefaultSize = BacnetProtocol::buildWritePropertyRequest(
+    relinquishDefaultPacket, sizeof(relinquishDefaultPacket),
+    relinquishDefaultRequest, relinquishDefaultValue, 9);
+  BacnetWritePropertyOptions internalNoPriority;
+  internalNoPriority.hasPriority = true;
+  internalNoPriority.priority = 0;
+  uint8_t internalNoPriorityPacket[64] = {};
+  if (!expectBytes(
+        internalNoPriorityPacket,
+        BacnetProtocol::buildWritePropertyRequest(
+          internalNoPriorityPacket, sizeof(internalNoPriorityPacket), request.object,
+          BacnetPropertyId::RelinquishDefault, relinquishDefaultValue,
+          internalNoPriority, 9),
+        relinquishDefaultPacket, relinquishDefaultSize,
+        "priority zero omits tag for relinquish default")) return false;
+  if (!expect(BacnetProtocol::buildWritePropertyRequest(
+                priorityPacket, sizeof(priorityPacket), request.object,
+                BacnetPropertyId::PresentValue, value, internalNoPriority, 9) == 0,
+              "priority zero rejected for present value")) return false;
+  internalNoPriority.priority = 17;
+  if (!expect(BacnetProtocol::buildWritePropertyRequest(
+                priorityPacket, sizeof(priorityPacket), request.object,
+                BacnetPropertyId::RelinquishDefault, relinquishDefaultValue,
+                internalNoPriority, 9) == 0,
+              "priority above 16 rejected")) return false;
+  priorityOptions.arrayIndex = kBacnetNoArrayIndex;
   priorityOptions.priority = 0;
-  if (!expect(BacnetProtocol::buildWritePropertyRequest(priorityPacket, sizeof(priorityPacket), request.object, request.property, value, priorityOptions, 9) == 0, "priority zero rejected")) return false;
+  if (!expect(client.sendWriteProperty(BacnetIpEndpoint(192, 0, 2, 1, 47808), request.object, request.property, value, priorityOptions, 10) == BacnetWritePropertyPollStatus::InvalidArgument && transport.sendCount == 1, "client priority zero rejects without send")) return false;
   priorityOptions.priority = 17;
-  if (!expect(client.sendWriteProperty(BacnetIpEndpoint(192, 0, 2, 1, 47808), request.object, request.property, value, priorityOptions, 9) == BacnetWritePropertyPollStatus::Disabled && transport.sendCount == 1, "disabled priority gate rejects without send")) return false;
+  if (!expect(client.sendWriteProperty(BacnetIpEndpoint(192, 0, 2, 1, 47808), request.object, request.property, value, priorityOptions, 11) == BacnetWritePropertyPollStatus::InvalidArgument && transport.sendCount == 1, "client priority above 16 rejects without send")) return false;
+  BacnetValue nullValue;
+  nullValue.type = BacnetValueType::Null;
+  priorityOptions.priority = 8;
+  const size_t nullPrioritySize = BacnetProtocol::buildWritePropertyRequest(
+    priorityPacket, sizeof(priorityPacket), request.object,
+    BacnetPropertyId::PresentValue, nullValue, priorityOptions, 12);
+  BacnetWritePropertyRequestHeader nullPriorityRequest;
+  if (!expect(nullPrioritySize != 0 &&
+              BacnetProtocol::parseWritePropertyRequest(
+                priorityPacket, nullPrioritySize, nullPriorityRequest) ==
+                  BacnetWritePropertyRequestParseStatus::WriteProperty &&
+              nullPriorityRequest.hasPriority &&
+              nullPriorityRequest.priority == 8 &&
+              nullPriorityRequest.value.type == BacnetValueType::Null,
+              "null relinquish with priority 8")) return false;
   const uint8_t ack[] = {0x81,0x0A,0x00,0x0A,0x01,0x00,0x20,0x09,0x0F,0x0F};
   std::memcpy(transport.response, ack, sizeof(ack)); transport.responseSize = sizeof(ack);
   if (!expect(client.pollWriteProperty(9) == BacnetWritePropertyPollStatus::Ack, "write ack")) return false;

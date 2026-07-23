@@ -2267,9 +2267,12 @@ size_t BacnetProtocol::buildReadPropertyRequest(uint8_t* buffer,
 
 size_t BacnetProtocol::buildWritePropertyRequest(
   uint8_t* buffer, size_t bufferSize, BacnetObjectId object, BacnetPropertyId property, const BacnetValue& value, const BacnetWritePropertyOptions& options, uint8_t invokeId) {
+  const bool encodePriority = options.hasPriority && options.priority != 0U;
   if (buffer == nullptr || bufferSize < 24 || object.type > 1023 ||
       object.instance > kObjectInstanceMask ||
-      (options.hasPriority && options.priority > 16)) {
+      (options.hasPriority && options.priority > 16) ||
+      (options.hasPriority && options.priority == 0U &&
+       property == BacnetPropertyId::PresentValue)) {
     return 0;
   }
   size_t offset = 0;
@@ -2300,7 +2303,7 @@ size_t BacnetProtocol::buildWritePropertyRequest(
   }
   offset += valueLength;
   buffer[offset++] = 0x3F;
-  if (options.hasPriority) {
+  if (encodePriority) {
     if (offset + 2 > bufferSize) {
       return 0;
     }

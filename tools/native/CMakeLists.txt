@@ -102,8 +102,10 @@ target_link_libraries(bacnet_client_priority_enabled PUBLIC bacnet_portable)
 
 add_executable(bacnet_write_property_tests test/write_property_tests.cpp)
 target_compile_features(bacnet_write_property_tests PRIVATE cxx_std_17)
-target_compile_definitions(bacnet_write_property_tests PRIVATE ESP_BACNET_ENABLE_WRITE_PROPERTY=1)
-target_link_libraries(bacnet_write_property_tests PRIVATE bacnet_client_write_enabled)
+target_compile_definitions(bacnet_write_property_tests PRIVATE
+  ESP_BACNET_ENABLE_WRITE_PROPERTY=1
+  ESP_BACNET_ENABLE_PRIORITY_WRITE=1)
+target_link_libraries(bacnet_write_property_tests PRIVATE bacnet_client_priority_enabled)
 
 add_executable(bacnet_write_property_disabled_tests
   test/write_property_disabled_tests.cpp

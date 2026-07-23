@@ -1221,11 +1221,22 @@ bool testCommandableBinaryValue() {
       transport.lastSentLength < 13 || transport.lastSent[12] != 37) {
     return false;
   }
+  const size_t zeroPrioritySize = BacnetProtocol::buildWritePropertyRequest(
+    invalidFrame, sizeof(invalidFrame), object, BacnetPropertyId::PresentValue, active, invalidPriority, 47);
+  if (zeroPrioritySize == 0) {
+    return false;
+  }
+  invalidFrame[zeroPrioritySize - 1U] = 0;
+  transport.queue(invalidFrame, zeroPrioritySize, source);
+  if (server.poll() != BacnetServerPollResult::WritePropertyErrorSent ||
+      transport.lastSentLength < 13 || transport.lastSent[12] != 37) {
+    return false;
+  }
   BacnetValue invalidType;
   invalidType.type = BacnetValueType::Real;
   invalidType.realValue = 1.0F;
-  return writeOutputError(transport, server, source, object, BacnetPropertyId::PresentValue, invalidType, priority16, 47, 9) &&
-         writeOutputError(transport, server, source, object, BacnetPropertyId::PriorityArray, active, priority16, 48, 40);
+  return writeOutputError(transport, server, source, object, BacnetPropertyId::PresentValue, invalidType, priority16, 48, 9) &&
+         writeOutputError(transport, server, source, object, BacnetPropertyId::PriorityArray, active, priority16, 49, 40);
 }
 
 bool testWritePriorityDefaultsAndEffectiveOutput() {
