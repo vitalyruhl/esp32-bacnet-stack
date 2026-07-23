@@ -161,6 +161,15 @@ void setupLiveDiagnosticsUi() {
   bv320Live.boolValue("bv320Value", []() { return binaryValues[0].priority.effectiveValue(); })
     .label("BV320 effective Present_Value")
     .order(10);
+  ConfigManager.getRuntime().updateRuntimeMeta(
+    "esp2espServer", "bv320Value", [](RuntimeFieldMeta& meta) {
+      meta.hasAlarm = false;
+      meta.boolAlarmValue = false;
+      meta.alarmWhenTrue = false;
+      meta.style.rule("stateDotOnTrue").set("background", "#22c55e").set("border", "none");
+      meta.style.rule("stateDotOnFalse").set("background", "#9ca3af").set("border", "none");
+      meta.style.rule("stateDotOnAlarm").set("background", "#eab308").set("border", "none");
+    });
   bv320Live.value("bv320Priority", []() { return binaryValues[0].priority.effectivePriority(); })
     .label("BV320 effective priority (0 = Relinquish_Default)")
     .order(20);

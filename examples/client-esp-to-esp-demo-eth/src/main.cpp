@@ -358,10 +358,11 @@ void relinquishBv320P8AndP16() {
     return;
   }
 
+  bv320CommandStatus = "P8 relinquished; releasing P16";
   const BacnetDeviceSessionWriteStatus p16Status =
     object.relinquishPresentValue(16, kBacnetScanReadTimeoutMs);
   if (p16Status == BacnetDeviceSessionWriteStatus::Ack) {
-    bv320CommandStatus = "P8 and P16 relinquished";
+    bv320CommandStatus = "P8 + P16 relinquished";
   } else {
     bv320CommandStatus = "P8 relinquished; P16 ";
     bv320CommandStatus += bv320WriteStatusText(p16Status);
