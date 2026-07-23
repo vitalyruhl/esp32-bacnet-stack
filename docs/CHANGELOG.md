@@ -3,6 +3,14 @@
 This changelog is a curated overview. The canonical library version is in
 `library.json`.
 
+## 0.37.0 - Unreleased
+
+### Added
+
+- Added commandable Binary Value BV320 with portable caller-owned 16-slot
+  BACnet priority storage, `Priority_Array`, `Relinquish_Default`, ReadProperty,
+  WriteProperty, Object_List/Property_List, and effective-value COV behavior.
+
 ## 0.36.0 - 2026-07-22
 
 ### Added

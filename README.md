@@ -56,9 +56,9 @@ shows at most eight rows to bound RAM and UI payloads; per-property failures
 remain visible instead of being reported as successful fallback data. See the
 [Client Guide](docs/client/README.md) for lifecycle and API details.
 
-The working-tree package metadata is version `0.36.0`. It includes the portable
+The working-tree package metadata is version `0.37.0`. It includes the portable
 server runtime, read-only Analog Input/Binary Input profile, commandable Binary
-Output priority support, allocation-free server-side SubscribeCOV and
+Output and Binary Value priority support, allocation-free server-side SubscribeCOV and
 SubscribeCOVProperty support, and ESP32 server examples. See
 [Change of Value (COV)](docs/cov.md) for the implemented lifecycle, fallback,
 and scope boundaries. Package metadata is in [library.json](library.json); a
@@ -172,7 +172,7 @@ and the focused acceptance runner
 | `examples/common/` | Shared example-only Ethernet and client-demo implementation helpers |
 | `examples/client-object-list-scan-basic/` | Canonical serial-only basic BACnet/IP client example |
 | `examples/hil-wago-client-acceptance/` | Local ESP32/WAGO client acceptance HIL runner |
-| `examples/server-demo/` | Read-only ESP32 WiFi/Ethernet BACnet server demo |
+| `examples/server-demo/` | ESP32 WiFi/Ethernet BACnet server demo with BV320 priority writes |
 | `examples/server-esp-to-esp-demo-wifi/` | Paired Wi-Fi BACnet server COV demo wrapper |
 | `examples/client-esp-to-esp-demo-eth/` | Paired WT32-ETH01 BACnet client COV demo wrapper |
 | `examples/hil-cov-espClient-to-espServer-acceptance/` | Focused ESP-to-ESP COV acceptance runner |
