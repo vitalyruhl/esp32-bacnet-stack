@@ -25,6 +25,18 @@ active Present_Value COV-subscription count alongside local BACnet process
 objects, COV peer state, and persistent restart/network diagnostics. `BV320`
 accepts WriteProperty priorities `1..16`; writing BACnet `NULL` relinquishes
 the selected slot and can expose the next priority or `Relinquish_Default`.
+
+AI0 additionally demonstrates the portable #127 binding path. The existing
+ESP I/O layer samples the LDR and caches its raw `0..4095` value; the wrapper
+then supplies that numeric value through `bindInput(...)` and applies the
+portable `0..100 %` linear scale. No ADC access is moved into the BACnet core.
+
+BO0 additionally has caller-owned callback storage. Its serial trace prefixes
+each output application and callback with `[HIL-BO <sequence>]`; for an
+effective BACnet write the order is `output`, `priority`, `effective`, and
+`present-value`. A successful `NULL` release adds `relinquish` last. Hidden
+priority-slot changes and releases log their priority/relinquish events but do
+not produce an output or Present_Value event.
 For the COV protocol scope, see
 [Change of Value (COV)](../../docs/cov.md); for the paired acceptance scenario,
 see the [COV HIL runner](../hil-cov-espClient-to-espServer-acceptance/README.md).

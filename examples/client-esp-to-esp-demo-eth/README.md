@@ -31,6 +31,14 @@ contains its COV update counter; renewal, timeout recovery, and polling
 fallback are the same shared subscription path used for the other seven
 objects.
 
+The **BO0 Binding HIL** card provides one deliberately manual command. **RUN
+BO0 PRIORITY / RELINQUISH** sends: P16 `INACTIVE` baseline, P8 `ACTIVE`
+effective override, P16 `ACTIVE` hidden-slot update, BACnet `NULL` for P16,
+then BACnet `NULL` for the winning P8 slot. Every request logs its ACK/error to
+serial. The card records BO0 COV updates from the normal subscription cache;
+the sequence expects exactly two effective-value COV changes, while the hidden
+write and hidden release must not add one. Do not run it as an automatic loop.
+
 ## Build and upload
 
 ```sh
@@ -45,6 +53,9 @@ serial console; `192.168.2.127` is the current laboratory configuration. See
 [Change of Value (COV)](../../docs/cov.md) and the paired
 [COV HIL runner](../hil-cov-espClient-to-espServer-acceptance/README.md) for
 the protocol and acceptance scope.
+
+If COM6 remains in download mode after flashing, reset it manually before the
+client can establish Ethernet and renew its COV subscriptions.
 
 ## Quiet diagnostic build
 
