@@ -8,6 +8,7 @@
 #include "portable/BacnetProtocol.h"
 #include "portable/BacnetRuntime.h"
 #include "portable/BacnetCommandPriority.h"
+#include "portable/BacnetLinearScale.h"
 
 struct BacnetServerDevice {
   // Required BACnet Device identity and profile values.
@@ -35,6 +36,72 @@ using BacnetServerBinaryOutputApply = void (*)(void* context,
                                                bool presentValue,
                                                bool outOfService);
 using BacnetServerPropertyProvider = bool (*)(const void* context, BacnetValue& value);
+
+enum class BacnetChangeOrigin : uint8_t {
+  Local,
+  BacnetWriteProperty,
+  RelinquishDefault,
+};
+
+struct BacnetPresentValueChange {
+  BacnetObjectId object;
+  bool oldValue = false;
+  bool newValue = false;
+  BacnetChangeOrigin origin = BacnetChangeOrigin::Local;
+};
+
+struct BacnetPriorityValueChange {
+  BacnetObjectId object;
+  uint8_t priority = 0;
+  bool oldOccupied = false;
+  bool oldValue = false;
+  bool newOccupied = false;
+  bool newValue = false;
+  BacnetChangeOrigin origin = BacnetChangeOrigin::Local;
+};
+
+struct BacnetEffectivePriorityChange {
+  BacnetObjectId object;
+  uint8_t oldPriority = 0;
+  uint8_t newPriority = 0;
+  bool oldValue = false;
+  bool newValue = false;
+  BacnetChangeOrigin origin = BacnetChangeOrigin::Local;
+};
+
+struct BacnetRelinquishChange {
+  BacnetObjectId object;
+  uint8_t releasedPriority = 0;
+  bool oldEffectiveValue = false;
+  bool newEffectiveValue = false;
+  uint8_t newEffectivePriority = 0;
+  bool relinquishDefaultEffective = false;
+  BacnetChangeOrigin origin = BacnetChangeOrigin::Local;
+};
+
+using BacnetPresentValueChangeCallback = void (*)(void* context,
+                                                  const BacnetPresentValueChange& change);
+using BacnetPriorityValueChangeCallback = void (*)(void* context,
+                                                   const BacnetPriorityValueChange& change);
+using BacnetEffectivePriorityChangeCallback = void (*)(
+  void* context,
+  const BacnetEffectivePriorityChange& change);
+using BacnetRelinquishChangeCallback = void (*)(void* context,
+                                                const BacnetRelinquishChange& change);
+
+// Optional caller-owned storage. A Binary Output only holds one pointer when
+// callbacks are not used; this avoids reserving listener slots in compact
+// output profiles. Contexts and this storage must outlive the bound object.
+struct BacnetBinaryOutputCallbackStorage {
+  BacnetPresentValueChangeCallback presentValueChange = nullptr;
+  void* presentValueContext = nullptr;
+  BacnetPriorityValueChangeCallback priorityValueChange[BacnetCommandPriority<bool>::kSlotCount] = {};
+  void* priorityValueContext[BacnetCommandPriority<bool>::kSlotCount] = {};
+  BacnetEffectivePriorityChangeCallback effectivePriorityChange = nullptr;
+  void* effectivePriorityContext = nullptr;
+  BacnetRelinquishChangeCallback relinquishChange = nullptr;
+  void* relinquishContext = nullptr;
+};
 
 // Caller-owned optional property descriptor. Register only properties that an
 // object actually supports; the server neither owns nor allocates descriptors
@@ -71,6 +138,8 @@ struct BacnetServerAnalogInput {
   bool outOfService = false;
   BacnetServerAnalogValueProvider presentValueProvider = nullptr;
   void* presentValueContext = nullptr;
+  BacnetLinearScale inputScale;
+  bool hasInputScale = false;
 };
 
 // Caller-owned Binary Input configuration. Present_Value is encoded as the
@@ -99,6 +168,14 @@ struct BacnetServerBinaryOutput {
   // BACnet WriteProperty requests never consult these fields.
   uint8_t localWritePriority = 16;
   bool hasLocalWritePriority = false;
+  BacnetBinaryOutputCallbackStorage* callbackStorage = nullptr;
+  bool callbackInProgress = false;
+
+  bool applyPriorityValue(bool value,
+                          uint8_t priorityValue,
+                          bool relinquish,
+                          BacnetChangeOrigin origin);
+  bool setRelinquishDefaultValue(bool value, BacnetChangeOrigin origin);
 };
 
 // Caller-owned commandable Binary Value. It uses the same portable priority
@@ -229,6 +306,9 @@ public:
   BacnetAnalogInput();
   BacnetObjectConfigurationStatus configure(uint32_t instance, const char* objectName);
   BacnetObjectConfigurationStatus bindPresentValue(const float* value);
+  BacnetObjectConfigurationStatus bindInput(BacnetServerAnalogValueProvider provider,
+                                            void* context);
+  BacnetObjectConfigurationStatus setInputScale(const BacnetLinearScale& scale);
   void setUnits(uint32_t engineeringUnits);
   BacnetObjectConfigurationStatus addProperty(BacnetPropertyId property, const char* value);
   BacnetObjectConfigurationStatus addProperty(BacnetPropertyId property, float value);
@@ -298,6 +378,15 @@ public:
   bool writeValue(bool value, uint8_t priority);
   bool relinquish(uint8_t priority);
   void attachOutput(BacnetServerBinaryOutputApply apply, void* context);
+  void attachCallbacks(BacnetBinaryOutputCallbackStorage& storage);
+  bool onPresentValueChange(BacnetPresentValueChangeCallback callback,
+                            void* context = nullptr);
+  bool onPriorityValueChange(uint8_t priority,
+                             BacnetPriorityValueChangeCallback callback,
+                             void* context = nullptr);
+  bool onEffectivePriorityChange(BacnetEffectivePriorityChangeCallback callback,
+                                 void* context = nullptr);
+  bool onRelinquish(BacnetRelinquishChangeCallback callback, void* context = nullptr);
   BacnetObjectConfigurationStatus addProperty(BacnetPropertyId property, const char* value);
   BacnetObjectConfigurationError configurationError() const;
   BacnetObjectId objectId() const override;

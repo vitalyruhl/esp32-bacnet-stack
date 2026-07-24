@@ -64,6 +64,48 @@ Default, and Property List. The paired
 `server-esp-to-esp-demo-wifi` demo registers BV320 as its shared live-COV
 instance.
 
+## Portable bindings and callbacks
+
+`BacnetAnalogInput::bindPresentValue()` remains the small binding for an
+application-owned engineering value. `bindInput()` instead accepts a portable
+function pointer and caller context for an actively read raw value. An optional
+`BacnetLinearScale` maps that raw value to engineering units, clamps values
+outside the raw range, and supports reversed ranges without adding a BACnet
+property. Calling `bindPresentValue()` after configuring raw input switches
+back to the direct engineering-value path and clears the previous raw-input
+scale, so the bound variable is never interpreted as a raw input:
+
+```cpp
+BacnetLinearScale scale{0.0F, 4095.0F, 0.0F, 100.0F};
+analogInput.bindInput(readRawValue, &sensorContext);
+analogInput.setInputScale(scale);
+analogInput.setUnits(BacnetEngineeringUnits::Percent);
+```
+
+Commandable Binary Outputs can use caller-owned callback storage when local
+application code needs synchronous change notification. The storage and every
+callback context must outlive the output. Outputs without callbacks retain only
+one null storage pointer and allocate no listener list.
+
+```cpp
+BacnetBinaryOutputCallbackStorage callbacks;
+output.attachCallbacks(callbacks);
+output.onPresentValueChange(onPresentValue, &application);
+output.onPriorityValueChange(8, onPrioritySlot, &application);
+output.onRelinquish(onRelinquish, &application);
+```
+
+For a successful command, the object validates and commits the priority slot,
+calculates the effective value, applies its existing output binding only when
+that value changes, then invokes priority-slot, effective-priority,
+present-value, and relinquish callbacks in that order when applicable. A
+successful NULL release always invokes the relinquish callback, including a
+non-effective slot. Output bindings and callbacks are synchronous, run from
+normal server or local code rather than an ISR, must return quickly, and cannot
+mutate the same output recursively. They do not send BACnet traffic or force
+COV notifications; the existing polling snapshot remains the sole COV change
+detector.
+
 The server retains a fixed allocation-free COV subscription table. An
 object-level subscription is one entry that encodes Present_Value and
 Status_Flags together; a property subscription encodes only its requested

@@ -3,6 +3,13 @@
 This changelog is a curated overview. The canonical library version is in
 `library.json`.
 
+## 0.38.0 - Unreleased
+
+### Added
+
+- Added the portable binding, linear-scaling, and synchronous change-callback
+  foundation for server objects.
+
 ## 0.37.0 - Unreleased
 
 ### Added
