@@ -68,6 +68,10 @@ target_compile_features(bacnet_server_client_loopback_tests PRIVATE cxx_std_17)
 target_link_libraries(bacnet_server_client_loopback_tests PRIVATE
   bacnet_client bacnet_server bacnet_windows)
 
+add_executable(bacnet_binding_callback_tests test/binding_callback_tests.cpp)
+target_compile_features(bacnet_binding_callback_tests PRIVATE cxx_std_17)
+target_link_libraries(bacnet_binding_callback_tests PRIVATE bacnet_server)
+
 add_executable(bacnet_cli_support_tests test/cli_support_tests.cpp)
 target_compile_features(bacnet_cli_support_tests PRIVATE cxx_std_17)
 target_link_libraries(bacnet_cli_support_tests PRIVATE bacnet_cli_common)
@@ -185,6 +189,7 @@ if(BUILD_TESTING)
   add_test(NAME bacnet_windows_tests COMMAND bacnet_windows_tests)
   add_test(NAME bacnet_server_client_loopback_tests
     COMMAND bacnet_server_client_loopback_tests)
+  add_test(NAME bacnet_binding_callback_tests COMMAND bacnet_binding_callback_tests)
   add_test(NAME bacnet_cli_support_tests COMMAND bacnet_cli_support_tests)
   add_test(NAME bacnet_subscribe_cov_protocol_tests
     COMMAND bacnet_subscribe_cov_protocol_tests)

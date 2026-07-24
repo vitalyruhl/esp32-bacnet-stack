@@ -423,6 +423,30 @@ BacnetObjectConfigurationStatus BacnetAnalogInput::bindPresentValue(
   }
   presentValueProvider = readBoundFloat;
   presentValueContext = const_cast<float*>(value);
+  hasInputScale = false;
+  return BacnetObjectConfigurationStatus::Ok;
+}
+
+BacnetObjectConfigurationStatus BacnetAnalogInput::bindInput(
+  BacnetServerAnalogValueProvider provider,
+  void* context) {
+  if (provider == nullptr) {
+    return recordConfigurationStatus(BacnetObjectConfigurationStatus::InvalidArgument,
+                                     BacnetPropertyId::PresentValue);
+  }
+  presentValueProvider = provider;
+  presentValueContext = context;
+  return BacnetObjectConfigurationStatus::Ok;
+}
+
+BacnetObjectConfigurationStatus BacnetAnalogInput::setInputScale(
+  const BacnetLinearScale& scale) {
+  if (!scale.isValid()) {
+    return recordConfigurationStatus(BacnetObjectConfigurationStatus::InvalidArgument,
+                                     BacnetPropertyId::PresentValue);
+  }
+  inputScale = scale;
+  hasInputScale = true;
   return BacnetObjectConfigurationStatus::Ok;
 }
 
@@ -631,6 +655,109 @@ bool BacnetBinaryInput::supportsProperty(BacnetPropertyId property,
            type == BacnetObjectPropertyValueType::BitStringReference));
 }
 
+bool BacnetServerBinaryOutput::applyPriorityValue(bool value,
+                                                  uint8_t priorityValue,
+                                                  bool relinquish,
+                                                  BacnetChangeOrigin origin) {
+  if (callbackInProgress || priorityValue == 0 ||
+      priorityValue > BacnetCommandPriority<bool>::kSlotCount) {
+    return false;
+  }
+
+  const size_t index = static_cast<size_t>(priorityValue - 1U);
+  const bool oldOccupied = priority.occupied[index];
+  const bool oldSlotValue = priority.slots[index];
+  const bool oldEffectiveValue = priority.effectiveValue();
+  const uint8_t oldEffectivePriority = priority.effectivePriority();
+  if (!priority.write(priorityValue, relinquish, value)) {
+    return false;
+  }
+
+  const bool newEffectiveValue = priority.effectiveValue();
+  const uint8_t newEffectivePriority = priority.effectivePriority();
+  const bool slotChanged = oldOccupied != priority.occupied[index] ||
+                           (oldOccupied && priority.occupied[index] &&
+                            oldSlotValue != priority.slots[index]);
+  if (apply != nullptr && oldEffectiveValue != newEffectiveValue) {
+    apply(applyContext, newEffectiveValue, outOfService);
+  }
+
+  if (callbackStorage == nullptr) {
+    return true;
+  }
+
+  callbackInProgress = true;
+  const BacnetObjectId object{static_cast<uint16_t>(BacnetObjectType::BinaryOutput), instance};
+  if (slotChanged && callbackStorage->priorityValueChange[index] != nullptr) {
+    callbackStorage->priorityValueChange[index](
+      callbackStorage->priorityValueContext[index],
+      BacnetPriorityValueChange{object,
+                                priorityValue,
+                                oldOccupied,
+                                oldSlotValue,
+                                priority.occupied[index],
+                                priority.slots[index],
+                                origin});
+  }
+  if (oldEffectivePriority != newEffectivePriority &&
+      callbackStorage->effectivePriorityChange != nullptr) {
+    callbackStorage->effectivePriorityChange(
+      callbackStorage->effectivePriorityContext,
+      BacnetEffectivePriorityChange{object,
+                                    oldEffectivePriority,
+                                    newEffectivePriority,
+                                    oldEffectiveValue,
+                                    newEffectiveValue,
+                                    origin});
+  }
+  if (oldEffectiveValue != newEffectiveValue &&
+      callbackStorage->presentValueChange != nullptr) {
+    callbackStorage->presentValueChange(
+      callbackStorage->presentValueContext,
+      BacnetPresentValueChange{object, oldEffectiveValue, newEffectiveValue, origin});
+  }
+  if (relinquish && callbackStorage->relinquishChange != nullptr) {
+    callbackStorage->relinquishChange(
+      callbackStorage->relinquishContext,
+      BacnetRelinquishChange{object,
+                             priorityValue,
+                             oldEffectiveValue,
+                             newEffectiveValue,
+                             newEffectivePriority,
+                             newEffectivePriority == 0,
+                             origin});
+  }
+  callbackInProgress = false;
+  return true;
+}
+
+bool BacnetServerBinaryOutput::setRelinquishDefaultValue(bool value,
+                                                         BacnetChangeOrigin origin) {
+  if (callbackInProgress) {
+    return false;
+  }
+  const bool oldEffectiveValue = priority.effectiveValue();
+  priority.relinquishDefault = value;
+  const bool newEffectiveValue = priority.effectiveValue();
+  if (apply != nullptr && oldEffectiveValue != newEffectiveValue) {
+    apply(applyContext, newEffectiveValue, outOfService);
+  }
+  if (oldEffectiveValue == newEffectiveValue || callbackStorage == nullptr ||
+      callbackStorage->presentValueChange == nullptr) {
+    return true;
+  }
+  callbackInProgress = true;
+  callbackStorage->presentValueChange(
+    callbackStorage->presentValueContext,
+    BacnetPresentValueChange{
+      BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::BinaryOutput), instance},
+      oldEffectiveValue,
+      newEffectiveValue,
+      origin});
+  callbackInProgress = false;
+  return true;
+}
+
 BacnetBinaryOutput::BacnetBinaryOutput() {
   initializeProperties(properties_, kMaxOptionalProperties);
 }
@@ -647,11 +774,7 @@ BacnetObjectConfigurationStatus BacnetBinaryOutput::configure(uint32_t instanceV
 }
 
 void BacnetBinaryOutput::setRelinquishDefault(bool value) {
-  const bool previousEffectiveValue = priority.effectiveValue();
-  priority.relinquishDefault = value;
-  if (apply != nullptr && previousEffectiveValue != priority.effectiveValue()) {
-    apply(applyContext, priority.effectiveValue(), outOfService);
-  }
+  static_cast<void>(setRelinquishDefaultValue(value, BacnetChangeOrigin::RelinquishDefault));
 }
 
 bool BacnetBinaryOutput::setLocalWritePriority(uint8_t value) {
@@ -670,19 +793,59 @@ void BacnetBinaryOutput::bindServerLocalWritePriority(const uint8_t* priorityVal
 bool BacnetBinaryOutput::applyLocalWrite(bool value,
                                          uint8_t priorityValue,
                                          bool relinquishValue) {
-  if (priorityValue > BacnetCommandPriority<bool>::kSlotCount ||
-      (priorityValue == 0 && relinquishValue)) {
-    return false;
-  }
-  const bool previousEffectiveValue = priority.effectiveValue();
   if (priorityValue == 0) {
-    priority.relinquishDefault = value;
-  } else if (!priority.write(priorityValue, relinquishValue, value)) {
+    if (relinquishValue) {
+      return false;
+    }
+    return setRelinquishDefaultValue(value, BacnetChangeOrigin::RelinquishDefault);
+  }
+  return applyPriorityValue(value,
+                            priorityValue,
+                            relinquishValue,
+                            BacnetChangeOrigin::Local);
+}
+
+void BacnetBinaryOutput::attachOutput(BacnetServerBinaryOutputApply outputApply,
+                                      void* context) {
+  apply = outputApply;
+  applyContext = context;
+}
+
+void BacnetBinaryOutput::attachCallbacks(BacnetBinaryOutputCallbackStorage& storage) {
+  callbackStorage = &storage;
+}
+
+bool BacnetBinaryOutput::onPresentValueChange(BacnetPresentValueChangeCallback callback,
+                                              void* context) {
+  if (callbackStorage == nullptr) {
     return false;
   }
-  if (apply != nullptr && previousEffectiveValue != priority.effectiveValue()) {
-    apply(applyContext, priority.effectiveValue(), outOfService);
+  callbackStorage->presentValueChange = callback;
+  callbackStorage->presentValueContext = context;
+  return true;
+}
+
+bool BacnetBinaryOutput::onPriorityValueChange(uint8_t priorityValue,
+                                               BacnetPriorityValueChangeCallback callback,
+                                               void* context) {
+  if (callbackStorage == nullptr || priorityValue == 0 ||
+      priorityValue > BacnetCommandPriority<bool>::kSlotCount) {
+    return false;
   }
+  const size_t index = static_cast<size_t>(priorityValue - 1U);
+  callbackStorage->priorityValueChange[index] = callback;
+  callbackStorage->priorityValueContext[index] = context;
+  return true;
+}
+
+bool BacnetBinaryOutput::onEffectivePriorityChange(
+  BacnetEffectivePriorityChangeCallback callback,
+  void* context) {
+  if (callbackStorage == nullptr) {
+    return false;
+  }
+  callbackStorage->effectivePriorityChange = callback;
+  callbackStorage->effectivePriorityContext = context;
   return true;
 }
 
@@ -703,10 +866,14 @@ bool BacnetBinaryOutput::relinquish(uint8_t priorityValue) {
   return priorityValue != 0 && applyLocalWrite(false, priorityValue, true);
 }
 
-void BacnetBinaryOutput::attachOutput(BacnetServerBinaryOutputApply outputApply,
+bool BacnetBinaryOutput::onRelinquish(BacnetRelinquishChangeCallback callback,
                                       void* context) {
-  apply = outputApply;
-  applyContext = context;
+  if (callbackStorage == nullptr) {
+    return false;
+  }
+  callbackStorage->relinquishChange = callback;
+  callbackStorage->relinquishContext = context;
+  return true;
 }
 
 BacnetObjectConfigurationStatus BacnetBinaryOutput::addProperty(
@@ -1450,16 +1617,19 @@ BacnetServerPollResult BacnetServer::handleWriteProperty(
       errorClass = 2;
       errorCode = 9; // invalid-data-type
     } else {
-      const bool previousEffectiveValue = commandPriority->effectiveValue();
-      const bool writeSucceeded = commandPriority->write(priority,
-                                                         relinquish,
-                                                         request.value.unsignedValue == 1U);
+      const bool writeSucceeded = output != nullptr
+                                    ? output->applyPriorityValue(
+                                        request.value.unsignedValue == 1U,
+                                        priority,
+                                        relinquish,
+                                        BacnetChangeOrigin::BacnetWriteProperty)
+                                    : commandPriority->write(
+                                        priority,
+                                        relinquish,
+                                        request.value.unsignedValue == 1U);
       if (!writeSucceeded) {
         errorClass = 2;
         errorCode = 37;
-      } else if (output != nullptr && output->apply != nullptr &&
-                 previousEffectiveValue != commandPriority->effectiveValue()) {
-        output->apply(output->applyContext, commandPriority->effectiveValue(), output->outOfService);
       }
     }
   } else if (request.request.property == BacnetPropertyId::OutOfService) {
@@ -2054,6 +2224,10 @@ bool BacnetServer::readAnalogInputProperty(
       value.realValue = analogInput.presentValueProvider == nullptr
                           ? analogInput.presentValue
                           : analogInput.presentValueProvider(analogInput.presentValueContext);
+      if (analogInput.hasInputScale &&
+          !analogInput.inputScale.apply(value.realValue, value.realValue)) {
+        return false;
+      }
       return true;
     case BacnetPropertyId::StatusFlags:
       value.type = BacnetValueType::BitString;

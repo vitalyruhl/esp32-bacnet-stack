@@ -56,7 +56,7 @@ shows at most eight rows to bound RAM and UI payloads; per-property failures
 remain visible instead of being reported as successful fallback data. See the
 [Client Guide](docs/client/README.md) for lifecycle and API details.
 
-The working-tree package metadata is version `0.37.0`. It includes the portable
+The working-tree package metadata is version `0.38.0`. It includes the portable
 server runtime, read-only Analog Input/Binary Input profile, commandable Binary
 Output and Binary Value priority support, allocation-free server-side SubscribeCOV and
 SubscribeCOVProperty support, and ESP32 server examples. See
