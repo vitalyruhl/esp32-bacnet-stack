@@ -9,6 +9,23 @@
 
 namespace {
 
+class CallbackInProgressGuard {
+public:
+  explicit CallbackInProgressGuard(bool& inProgress) : inProgress_(inProgress) {
+    inProgress_ = true;
+  }
+
+  ~CallbackInProgressGuard() {
+    inProgress_ = false;
+  }
+
+  CallbackInProgressGuard(const CallbackInProgressGuard&) = delete;
+  CallbackInProgressGuard& operator=(const CallbackInProgressGuard&) = delete;
+
+private:
+  bool& inProgress_;
+};
+
 constexpr BacnetPropertyId kDeviceProperties[] = {
   BacnetPropertyId::ObjectIdentifier,
   BacnetPropertyId::ObjectName,
@@ -673,6 +690,8 @@ bool BacnetServerBinaryOutput::applyPriorityValue(bool value,
     return false;
   }
 
+  CallbackInProgressGuard callbackGuard(callbackInProgress);
+
   const bool newEffectiveValue = priority.effectiveValue();
   const uint8_t newEffectivePriority = priority.effectivePriority();
   const bool slotChanged = oldOccupied != priority.occupied[index] ||
@@ -686,7 +705,6 @@ bool BacnetServerBinaryOutput::applyPriorityValue(bool value,
     return true;
   }
 
-  callbackInProgress = true;
   const BacnetObjectId object{static_cast<uint16_t>(BacnetObjectType::BinaryOutput), instance};
   if (slotChanged && callbackStorage->priorityValueChange[index] != nullptr) {
     callbackStorage->priorityValueChange[index](
@@ -727,7 +745,6 @@ bool BacnetServerBinaryOutput::applyPriorityValue(bool value,
                              newEffectivePriority == 0,
                              origin});
   }
-  callbackInProgress = false;
   return true;
 }
 
@@ -738,6 +755,7 @@ bool BacnetServerBinaryOutput::setRelinquishDefaultValue(bool value,
   }
   const bool oldEffectiveValue = priority.effectiveValue();
   priority.relinquishDefault = value;
+  CallbackInProgressGuard callbackGuard(callbackInProgress);
   const bool newEffectiveValue = priority.effectiveValue();
   if (apply != nullptr && oldEffectiveValue != newEffectiveValue) {
     apply(applyContext, newEffectiveValue, outOfService);
@@ -746,7 +764,6 @@ bool BacnetServerBinaryOutput::setRelinquishDefaultValue(bool value,
       callbackStorage->presentValueChange == nullptr) {
     return true;
   }
-  callbackInProgress = true;
   callbackStorage->presentValueChange(
     callbackStorage->presentValueContext,
     BacnetPresentValueChange{
@@ -754,7 +771,6 @@ bool BacnetServerBinaryOutput::setRelinquishDefaultValue(bool value,
       oldEffectiveValue,
       newEffectiveValue,
       origin});
-  callbackInProgress = false;
   return true;
 }
 
