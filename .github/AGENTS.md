@@ -21,6 +21,7 @@ The root `AGENTS.md` owns universal safety, language, and loading rules.
 - Treat `workflow.begin`, `.begin`, `.beginn`, `workflow.checkpoint`,
   `.checkpoint`, `workflow.docs`, `workflow.audit`, `.audit`, `workflow.ship`,
   `workflow.ready`, `.ready`, `workflow.toMain`, `.toMain`,
+  `workflow.toServer`, `.toServer`,
   `workflow.cleanBranches`, `.cleanBranches`, and `workflow.end` as workflow
   shortcuts unless clearly quoted literals or paths.
 - Use `rg --hidden` or an equivalent hidden-path search for governance audits;
@@ -37,6 +38,11 @@ The root `AGENTS.md` owns universal safety, language, and loading rules.
   confirmation.
 - Keep one side branch active. Before multi-file or risky work, ensure the
   baseline is clean, committed, or intentionally dirty by user request.
+- `main` and `server` are permanent integration branches and must never be
+  deleted or renamed by cleanup or final synchronization. Client, shared,
+  repository, and general work normally integrates into `main`; server-specific
+  work normally integrates into `server`. Integrate `server` into `main` only
+  through an explicit release/integration request.
 - Use configured CI only; do not invent CI. Upload and serial monitor require
   explicit request. Container or image builds are out of scope unless configured
   or explicitly requested.

@@ -20,7 +20,7 @@ version_source: library.json
 github_project: ESP32 BACnet Stack (#6)
 default_env: usb
 ota_env: ota
-release_example: release/v0.1.0
+release_example: release/v<version>
 ```
 
 ## Paths
@@ -41,7 +41,8 @@ release_example: release/v0.1.0
 - tools: `tools/`
 - serena: `.serena/`; memories never override repo files, user instructions,
   `.github/AGENTS.md`, or this profile
-- wokwi: example-specific `Wokwi/` folders when present
+- wokwi: example-specific `Wokwi/` folders and shared fixtures under
+  `tests/fixtures/wokwi/` when present
 
 ## Validation
 
@@ -96,4 +97,9 @@ release_example: release/v0.1.0
 
 - Use GitHub Project `ESP32 BACnet Stack` (#6) only when tracked workflow or
   project coordination is explicitly in scope.
-- Release branches are optional before first release.
+- The repository has released versions. Release branches are optional runnable
+  snapshots and are created or updated only on explicit request.
+- `main` and `server` are permanent integration branches. Client, shared,
+  repository, and general work normally integrates into `main`; server-specific
+  work normally integrates into `server`. Integrate `server` into `main` only
+  through an explicit release/integration request.

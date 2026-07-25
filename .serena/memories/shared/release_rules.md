@@ -22,8 +22,8 @@
 
 ## Release / Integration Reminder
 
-- `main` is the default integration branch and should receive changes through PRs by default.
-- `release/*` branches are optional before the first release and must not be created or updated unless explicitly requested.
+- `main` and `server` are permanent integration branches. Client, shared, repository, and general work normally integrates into `main`; server-specific work normally integrates into `server`. Integrate `server` into `main` only through an explicit release/integration request.
+- `release/*` branches are optional runnable snapshots in an already released repository and must not be created or updated unless explicitly requested.
 - Never stage, commit, push, merge, create/update release branches, or clean branches unless explicitly requested or covered by a named governed workflow.
 - User-visible, release-relevant, dependency, build, or version changes require a changelog/documentation impact decision.
 
