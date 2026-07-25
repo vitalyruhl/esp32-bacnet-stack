@@ -187,7 +187,7 @@ target_compile_definitions(bacnet_write_hil_tests PRIVATE
 target_include_directories(bacnet_write_hil_tests PRIVATE
   ${ESP_BACNET_ROOT}/src
   ${ESP_BACNET_ROOT}/tests/hil/windows/bacnet-write-hil
-  ${ESP_BACNET_ROOT}/examples/common)
+  ${ESP_BACNET_ROOT}/tests/hil/esp32/shared)
 target_link_libraries(bacnet_write_hil_tests PRIVATE bacnet_portable)
 
 if(BUILD_TESTING)
@@ -216,7 +216,7 @@ if(BUILD_TESTING)
         COMMAND ${BACNET_POWERSHELL_EXECUTABLE}
           -NoProfile
           -ExecutionPolicy Bypass
-          -File ${ESP_BACNET_ROOT}/tools/check-client-demo-parity.ps1)
+          -File ${ESP_BACNET_ROOT}/tools/quality/check-client-demo-parity.ps1)
     endif()
   endif()
   add_test(NAME bacnet_write_hil_tests COMMAND bacnet_write_hil_tests)

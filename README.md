@@ -329,7 +329,7 @@ to restrict the run to one interface, and optionally provide `--broadcast`.
 Build the productive Windows binaries with:
 
 ```cmd
-tools\compile-windows-binaries.cmd Release
+tools\build\windows\compile-windows-binaries.cmd Release
 ```
 
 ```powershell

@@ -29,7 +29,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y cppcheck
 
       - name: Run cppcheck governance gate
-        run: pwsh -NoProfile -ExecutionPolicy Bypass -File tools/run-cppcheck.ps1
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File tools/quality/run-cppcheck.ps1
 
       - name: Pack and validate PlatformIO package content
         run: |

@@ -22,7 +22,7 @@ repos:
           - -ExecutionPolicy
           - Bypass
           - -File
-          - tools/run-clang-format.ps1
+          - tools/quality/run-clang-format.ps1
       - id: cppcheck
         name: cppcheck
         entry: pwsh
@@ -35,4 +35,4 @@ repos:
           - -ExecutionPolicy
           - Bypass
           - -File
-          - tools/run-cppcheck.ps1
+          - tools/quality/run-cppcheck.ps1

@@ -1,6 +1,6 @@
 $ErrorActionPreference = "Stop"
 
-$repoRoot = Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\..")
+$repoRoot = Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\..\..")
 $repoRootPath = $repoRoot.Path
 
 $memoryDir = Join-Path $repoRootPath ".serena\memories\shared"

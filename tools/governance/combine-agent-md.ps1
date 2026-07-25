@@ -1,7 +1,7 @@
 
 $ErrorActionPreference = "Stop"
 
-$repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
+$repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\..")).Path
 $outputDir = Join-Path $repoRoot ".Temp"
 $outputPath = Join-Path $outputDir "all-agents-combined.md"
 
@@ -88,7 +88,7 @@ New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
 $content = New-Object System.Text.StringBuilder
 [void]$content.AppendLine("# Combined Agent Governance")
 [void]$content.AppendLine()
-[void]$content.AppendLine("Generated file. Do not edit; run tools/combine.agent.md.ps1 to regenerate it.")
+[void]$content.AppendLine("Generated file. Do not edit; run tools/governance/combine-agent-md.ps1 to regenerate it.")
 [void]$content.AppendLine("Sources are repository-relative paths in the manifest below.")
 [void]$content.AppendLine()
 [void]$content.AppendLine("## Summary")

@@ -5,7 +5,7 @@ param()
 
 $ErrorActionPreference = 'Stop'
 
-$repositoryRoot = Split-Path -Parent $PSScriptRoot
+$repositoryRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\\..")).Path
 $wifiIni = Join-Path $repositoryRoot 'examples/esp32/client/rich-client/wifi/platformio.ini'
 $ethernetIni = Join-Path $repositoryRoot 'examples/esp32/client/rich-client/ethernet/platformio.ini'
 $demoMain = Join-Path $repositoryRoot 'examples/esp32/shared/client-demo/src/main.cpp'

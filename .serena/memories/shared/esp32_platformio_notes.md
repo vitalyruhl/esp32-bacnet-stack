@@ -5,8 +5,8 @@
   and add `-std=gnu++17`.
 - The root environment is `usb`, using `platform = espressif32`,
   `board = nodemcu-32s`, and `framework = arduino`.
-- The full client demo has separate `examples/client-demo-wifi` and
-  `examples/client-demo-ETH` projects backed by shared example-only sources.
+- The full client demo has separate `examples/esp32/client/rich-client/wifi` and
+  `examples/esp32/client/rich-client/ethernet` projects backed by shared example-only sources.
 - The basic client, WAGO HIL runner, and server demo provide `usb` and
   WT32-ETH01 `eth` environments.
 - Core library metadata currently has no ESP32 Configuration Manager dependency

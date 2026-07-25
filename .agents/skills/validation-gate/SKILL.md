@@ -11,7 +11,7 @@ if none exists, report that and use required local validation. Run relevant test
 when affected. Root builds, affected examples, affected tests, and relevant OTA
 work use profile commands. Upload and monitor require explicit request.
 When full pre-commit is required, run:
-`pwsh -NoProfile -ExecutionPolicy Bypass -File tools/run-precommit-full.ps1`
+`pwsh -NoProfile -ExecutionPolicy Bypass -File tools/quality/run-precommit-full.ps1`
 
 Governance-only changes require a consistency check of routing, shortcuts,
 branch/Git/PR rules, tools, Serena, validation, version, session close,

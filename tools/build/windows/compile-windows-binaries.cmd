@@ -11,7 +11,7 @@ if errorlevel 1 (
   echo cmake was not found on PATH.
   exit /b 1
 )
-set "ROOT=%~dp0.."
+set "ROOT=%~dp0..\..\.."
 for %%I in ("%ROOT%") do set "ROOT=%%~fI"
 set "BUILD=%ROOT%\build\native-windows"
 cmake -S "%ROOT%\tools\build\cmake" -B "%BUILD%"

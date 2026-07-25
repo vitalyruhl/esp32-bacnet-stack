@@ -36,7 +36,7 @@ jobs:
 
       - name: Run focused cppcheck
         run: >
-          pwsh -NoProfile -ExecutionPolicy Bypass -File tools/run-cppcheck.ps1
+          pwsh -NoProfile -ExecutionPolicy Bypass -File tools/quality/run-cppcheck.ps1
           src/core/server/BacnetServer.cpp src/core/protocol/BacnetProtocol.cpp
 
       - name: Check whitespace

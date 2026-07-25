@@ -3,7 +3,7 @@ param(
     [string[]]$Arguments
 )
 
-$repoRoot = Split-Path -Parent $PSScriptRoot
+$repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\\..")).Path
 
 Push-Location $repoRoot
 try {

@@ -59,8 +59,8 @@ ESP32, PlatformIO, Arduino, and C++17.
 - WAGO HIL Ethernet build:
   `pio run -d tests/hil/esp32/wago-client-acceptance -e eth`
 - Server demo builds: `pio run -d examples/esp32/server/bacnet-server -e usb -e eth`
-- Full local governance gate: `pwsh -NoProfile -ExecutionPolicy Bypass -File tools/run-precommit-full.ps1`
-- Direct static analysis gate: `pwsh -NoProfile -ExecutionPolicy Bypass -File tools/run-cppcheck.ps1`
+- Full local governance gate: `pwsh -NoProfile -ExecutionPolicy Bypass -File tools/quality/run-precommit-full.ps1`
+- Direct static analysis gate: `pwsh -NoProfile -ExecutionPolicy Bypass -File tools/quality/run-cppcheck.ps1`
 
 ### Cppcheck policy
 

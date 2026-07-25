@@ -3,7 +3,7 @@ param(
     [string[]]$Files
 )
 
-$repoRoot = Split-Path -Parent $PSScriptRoot
+$repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\\..")).Path
 
 $cppcheckCandidates = @(
     'C:\Program Files\Cppcheck\cppcheck.exe',

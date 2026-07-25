@@ -36,16 +36,16 @@ instead of deriving issue numbers from the project item list.
 Generate and print the markdown snapshot summary without writing a file.
 
 .EXAMPLE
-.\tools\serena\export-gh-project-to-serena.ps1 -DryRun
+.\tools\repository\export-gh-project-to-temp.ps1 -DryRun
 
 .EXAMPLE
-.\tools\serena\export-gh-project-to-serena.ps1
+.\tools\repository\export-gh-project-to-temp.ps1
 
 .EXAMPLE
-.\tools\serena\export-gh-project-to-serena.ps1 -IssueNumbers 10,11,12 -DryRun
+.\tools\repository\export-gh-project-to-temp.ps1 -IssueNumbers 10,11,12 -DryRun
 
 .EXAMPLE
-.\tools\serena\export-gh-project-to-serena.ps1 -ProjectNumber 6 -Owner vitalyruhl -OutputPath .Temp/gh-project.md
+.\tools\repository\export-gh-project-to-temp.ps1 -ProjectNumber 6 -Owner vitalyruhl -OutputPath .Temp/gh-project.md
 #>
 
 [CmdletBinding()]
