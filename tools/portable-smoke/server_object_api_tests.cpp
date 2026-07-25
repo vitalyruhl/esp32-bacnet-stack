@@ -156,12 +156,47 @@ bool testCommandableOutputFacade() {
          output.priority.effectiveValue();
 }
 
+bool testMultiStateValueConfigurationAndStateTextArrays() {
+  constexpr const char* stateText[] = {"Off", "Auto", "On"};
+  BacnetServerMultiStateValue values[] = {
+    {2020, "Operating Mode", 2, 3, stateText, false},
+  };
+  TestTransport transport;
+  BacnetServer server(transport);
+  if (!server.setMultiStateValues(values, 1) || server.multiStateValueCount() != 1) {
+    return false;
+  }
+
+  uint8_t response[128] = {};
+  const BacnetReadPropertyRequestHeader request{
+    7,
+    BacnetPropertyRequest{
+      BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::MultiStateValue), 2020},
+      BacnetPropertyId::StateText,
+      2,
+    },
+  };
+  const size_t responseSize = BacnetProtocol::buildReadPropertyCharacterStringListAck(
+    response, sizeof(response), request, stateText, 3);
+  BacnetValue state;
+  if (responseSize == 0 ||
+      !BacnetProtocol::parseReadPropertyAck(response, responseSize, 7, request.request, state) ||
+      state.type != BacnetValueType::CharacterString || std::strcmp(state.text, "Auto") != 0) {
+    return false;
+  }
+
+  BacnetServerMultiStateValue invalid[] = {
+    {2021, "Invalid", 0, 0, stateText, false},
+  };
+  return !server.setMultiStateValues(invalid, 1) && server.multiStateValueCount() == 1;
+}
+
 } // namespace
 
 int main() {
   return testAnalogInputConfiguration() && testConfigurationErrorsBlockRegistration() &&
            testIndividualAndArrayRegistration() &&
-           testCommandableOutputFacade()
+           testCommandableOutputFacade() && testMultiStateValueConfigurationAndStateTextArrays()
            ? 0
            : 1;
 }

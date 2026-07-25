@@ -187,6 +187,17 @@ struct BacnetServerBinaryValue {
   bool outOfService = false;
 };
 
+// Caller-owned Multi-state Value configuration. State_Text entries are a
+// one-based BACnet array; callers keep the table and text alive while running.
+struct BacnetServerMultiStateValue {
+  uint32_t instance = 0;
+  const char* objectName = nullptr;
+  uint32_t presentValue = 1;
+  uint32_t numberOfStates = 0;
+  const char* const* stateText = nullptr;
+  bool outOfService = false;
+};
+
 // Result returned by the object-centric configuration API. The API never
 // allocates; callers keep configured objects and bound values alive while the
 // server is using them.
@@ -528,6 +539,9 @@ public:
   bool setBinaryValues(BacnetServerBinaryValue* binaryValues,
                        size_t count);
   size_t binaryValueCount() const;
+  bool setMultiStateValues(BacnetServerMultiStateValue* multiStateValues,
+                           size_t count);
+  size_t multiStateValueCount() const;
   static constexpr size_t kMaxObjectCentricAnalogInputs = 8;
   static constexpr size_t kMaxObjectCentricBinaryInputs = 8;
   static constexpr size_t kMaxObjectCentricBinaryOutputs = 8;
@@ -614,17 +628,22 @@ private:
   bool readBinaryValueProperty(const BacnetServerBinaryValue& binaryValue,
                                BacnetPropertyId property,
                                BacnetValue& value) const;
+  static bool readMultiStateValueProperty(const BacnetServerMultiStateValue& multiStateValue,
+                                          BacnetPropertyId property,
+                                          BacnetValue& value);
   const BacnetServerAnalogValue* findAnalogValue(uint32_t instance) const;
   const BacnetServerAnalogInput* findAnalogInput(uint32_t instance) const;
   const BacnetServerBinaryInput* findBinaryInput(uint32_t instance) const;
   BacnetServerBinaryOutput* findBinaryOutput(uint32_t instance) const;
   BacnetServerBinaryValue* findBinaryValue(uint32_t instance) const;
+  const BacnetServerMultiStateValue* findMultiStateValue(uint32_t instance) const;
   const BacnetObjectPropertySource* findObjectPropertySource(
     BacnetObjectId object) const;
   const BacnetServerAnalogInput* analogInputAt(size_t index) const;
   const BacnetServerBinaryInput* binaryInputAt(size_t index) const;
   BacnetServerBinaryOutput* binaryOutputAt(size_t index) const;
   BacnetServerBinaryValue* binaryValueAt(size_t index) const;
+  const BacnetServerMultiStateValue* multiStateValueAt(size_t index) const;
   const BacnetServerPropertyRegistration* findPropertyRegistration(
     BacnetObjectId object,
     BacnetPropertyId property) const;
@@ -670,6 +689,8 @@ private:
   size_t objectCentricBinaryOutputCount_ = 0;
   BacnetServerBinaryValue* binaryValues_ = nullptr; // Caller-owned.
   size_t binaryValueCount_ = 0;
+  BacnetServerMultiStateValue* multiStateValues_ = nullptr; // Caller-owned.
+  size_t multiStateValueCount_ = 0;
   BacnetServerActivityListener activityListener_ = nullptr;
   void* activityListenerContext_ = nullptr;
   BacnetServerCovDiagnosticListener covDiagnosticListener_ = nullptr;

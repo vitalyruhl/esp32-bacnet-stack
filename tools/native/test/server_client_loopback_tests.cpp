@@ -80,6 +80,23 @@ bool readProperty(BacnetClient& client,
   return true;
 }
 
+bool readPropertyError(BacnetClient& client,
+                       BacnetServer& server,
+                       const BacnetIpEndpoint& target,
+                       const BacnetPropertyRequest& request,
+                       uint8_t invokeId) {
+  if (!client.sendReadProperty(target, request, invokeId)) {
+    return false;
+  }
+  BacnetValue value;
+  BacnetReadPropertyPollStatus status = BacnetReadPropertyPollStatus::None;
+  const bool received = pumpServerUntil(server, [&] {
+    status = client.pollReadPropertyStatus(value, invokeId, request);
+    return status != BacnetReadPropertyPollStatus::None;
+  });
+  return received && status == BacnetReadPropertyPollStatus::Error;
+}
+
 bool readProperty(BacnetClient& client,
                   BacnetServer& server,
                   const BacnetIpEndpoint& target,
@@ -112,6 +129,10 @@ void testLoopbackServerClientPath() {
     {200, "Stored Analog Value", 12.5F, 62, false, nullptr, nullptr},
     {201, "Callback Analog Value", 0.0F, 73, false, readCallbackValue, &callbackState},
   };
+  constexpr const char* stateText[] = {"Off", "Auto", "On"};
+  BacnetServerMultiStateValue multiStateValues[] = {
+    {2020, "Loopback Operating Mode", 2, 3, stateText, false},
+  };
   const BacnetServerDevice device{
     kDeviceInstance,
     kVendorId,
@@ -128,6 +149,8 @@ void testLoopbackServerClientPath() {
     static_cast<uint16_t>(BacnetObjectType::AnalogValue), 200};
   const BacnetObjectId callbackObject{
     static_cast<uint16_t>(BacnetObjectType::AnalogValue), 201};
+  const BacnetObjectId multiStateObject{
+    static_cast<uint16_t>(BacnetObjectType::MultiStateValue), 2020};
 
   if (!expect(runtime.begin(), "Winsock runtime failed") ||
       !expect(serverTransport.setBindAddress(loopback),
@@ -137,6 +160,8 @@ void testLoopbackServerClientPath() {
               "client loopback bind configuration failed") ||
       !expect(server.setAnalogValues(analogValues, 2),
               "server Analog Value configuration failed") ||
+      !expect(server.setMultiStateValues(multiStateValues, 1),
+              "server Multi-state Value configuration failed") ||
       !expect(server.begin(device, kServerPort), "server loopback bind failed") ||
       !expect(client.begin(kClientPort), "client loopback bind failed")) {
     client.end();
@@ -227,10 +252,11 @@ void testLoopbackServerClientPath() {
                       invokeId++,
                       value,
                       0) &&
-           value.type == BacnetValueType::Unsigned && value.unsignedValue == 3,
-         "Device Object List count must contain Device and two Analog Values");
-  const BacnetObjectId expectedObjectList[] = {deviceObject, storedObject, callbackObject};
-  for (size_t index = 0; index < 3; ++index) {
+           value.type == BacnetValueType::Unsigned && value.unsignedValue == 4,
+         "Device Object List count must contain Device, two Analog Values, and MSV2020");
+  const BacnetObjectId expectedObjectList[] = {
+    deviceObject, storedObject, callbackObject, multiStateObject};
+  for (size_t index = 0; index < 4; ++index) {
     expect(readProperty(client,
                         server,
                         loopback,
@@ -312,6 +338,51 @@ void testLoopbackServerClientPath() {
            value.type == BacnetValueType::Real && value.realValue == callbackState.value &&
            callbackState.calls != 0,
          "callback Analog Value Present Value mismatch");
+  expect(readProperty(client,
+                      server,
+                      loopback,
+                      multiStateObject,
+                      BacnetPropertyId::PresentValue,
+                      invokeId++,
+                      value) &&
+           value.type == BacnetValueType::Unsigned && value.unsignedValue == 2,
+         "MSV2020 Present Value mismatch");
+  expect(readProperty(client,
+                      server,
+                      loopback,
+                      multiStateObject,
+                      BacnetPropertyId::NumberOfStates,
+                      invokeId++,
+                      value) &&
+           value.type == BacnetValueType::Unsigned && value.unsignedValue == 3,
+         "MSV2020 Number Of States mismatch");
+  expect(readProperty(client,
+                      server,
+                      loopback,
+                      multiStateObject,
+                      BacnetPropertyId::StateText,
+                      invokeId++,
+                      value,
+                      2) &&
+           value.type == BacnetValueType::CharacterString && std::strcmp(value.text, "Auto") == 0,
+         "MSV2020 State Text array entry mismatch");
+  expect(readProperty(client,
+                      server,
+                      loopback,
+                      multiStateObject,
+                      BacnetPropertyId::PropertyList,
+                      invokeId++,
+                      value,
+                      0) &&
+           value.type == BacnetValueType::Unsigned && value.unsignedValue == 10,
+         "MSV2020 Property List count mismatch");
+  expect(readPropertyError(
+           client,
+           server,
+           loopback,
+           BacnetPropertyRequest{multiStateObject, BacnetPropertyId::StateText, 4},
+           invokeId++),
+         "MSV2020 invalid State Text index must return a BACnet error");
 
   client.end();
   server.end();

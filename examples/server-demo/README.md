@@ -16,6 +16,9 @@ The demo listens on BACnet/IP UDP port `47808` and exposes Device `1682127`:
 - BV320 is a commandable Binary Value with caller-owned priority storage. Its
   initial effective value is `inactive` through `Relinquish_Default`; writes
   use the standard 1 through 16 BACnet priority slots.
+- MSV2020 is a read-only Multi-state Value representing an operating mode. Its
+  Present_Value is `2` (`Auto`), Number_Of_States is `3`, and State_Text is the
+  BACnet array `Off`, `Auto`, `On`; index `0` returns the array count.
 
 ## BACnet server configuration
 

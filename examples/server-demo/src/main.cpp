@@ -39,7 +39,7 @@ constexpr uint16_t kBacnetPort = BacnetServer::kDefaultPort;
 constexpr uint32_t kDemoDeviceInstance = 1682127;
 // ASHRAE-reserved; local test/example use only.
 constexpr uint16_t kDemoVendorId = 555;
-constexpr char kDemoVersion[] = "0.38.0";
+constexpr char kDemoVersion[] = "0.39.0";
 constexpr uint32_t kStoredValueUpdateMs = 250;
 constexpr float kStoredValueOffset = 20.0F;
 constexpr float kStoredValueAmplitude = 10.0F;
@@ -90,6 +90,16 @@ BacnetServerAnalogValue analogValues[] = {
 
 BacnetServerBinaryValue binaryValues[] = {
   {320, "BV320 Commandable Value"},
+};
+
+constexpr const char* kMsv2020StateText[] = {
+  "Off",
+  "Auto",
+  "On",
+};
+
+BacnetServerMultiStateValue multiStateValues[] = {
+  {2020, "MSV2020 Operating Mode", 2, 3, kMsv2020StateText, false},
 };
 
 const BacnetServerDevice kDevice{
@@ -185,6 +195,11 @@ void setup() {
   if (!bacnetServer.setBinaryValues(binaryValues,
                                     sizeof(binaryValues) / sizeof(binaryValues[0]))) {
     Serial.println("[E] BACnet Binary Value configuration failed");
+    return;
+  }
+  if (!bacnetServer.setMultiStateValues(
+        multiStateValues, sizeof(multiStateValues) / sizeof(multiStateValues[0]))) {
+    Serial.println("[E] BACnet Multi-state Value configuration failed");
     return;
   }
   if (!bacnetServer.begin(kDevice, kBacnetPort)) {
