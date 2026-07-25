@@ -1601,7 +1601,7 @@ void BacnetDeviceSession::releasePropertyRead(BacnetPropertyReadJob& job) {
 }
 
 void BacnetDeviceSession::poll(BacnetPropertySubscription& subscription,
-                                uint32_t nowMs) {
+                               uint32_t nowMs) {
   if (nowMs == kUseClientClock) {
     nowMs = client_.nowMs();
   }
@@ -1826,8 +1826,8 @@ void BacnetDeviceSession::pollInFlightSubscription(uint32_t nowMs) {
                                            &rejectReason,
                                            &endpoint_)
         : client_.pollSubscribeCov(subscription.inFlightInvokeId_,
-                                    &rejectReason,
-                                    &endpoint_);
+                                   &rejectReason,
+                                   &endpoint_);
     if (covStatus == BacnetSubscribeCovResponseKind::Ack) {
       const uint32_t renewBefore = subscription.options_.covRenewBeforeSeconds;
       const uint32_t lifetime = subscription.options_.covLifetimeSeconds;
@@ -2030,8 +2030,8 @@ void BacnetDeviceSession::finishSubscriptionPoll(
     for (size_t index = 0; index < covNotification->propertyCount; ++index) {
       const BacnetCovPropertyValue& property = covNotification->properties[index];
       updatePropertyCache(BacnetPropertyRequest{subscription.objectId_,
-                                                 property.property,
-                                                 property.arrayIndex},
+                                                property.property,
+                                                property.arrayIndex},
                           BacnetPropertyReadStatus::Ack,
                           &property.value,
                           nowMs,
