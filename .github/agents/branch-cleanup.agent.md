@@ -11,7 +11,9 @@ disable-model-invocation: false
 # Branch Cleanup
 
 Load `safe-branch-cleanup`. Remove only branches proven integrated and not
-protected. Preserve `main`, release branches, active or unmerged branches,
-explicitly preserved branches, and ambiguous branches. Handle local, remote,
-and stale tracking references; fetch/prune and verify the result. Return compact
-final branch and synchronization state.
+protected. Preserve permanent `main` and `server`, release branches, active or
+unmerged branches, explicitly preserved branches, and ambiguous branches. Delete
+only fully integrated temporary work branches, using the applicable integration
+branch as evidence. Handle local, remote, and stale tracking references;
+fetch/prune and verify the result. Return compact final branch and
+synchronization state.

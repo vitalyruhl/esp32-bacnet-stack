@@ -19,7 +19,7 @@ create, reopen, link, comment on, or add Issue/Project items without explicit
 permission. If no issue is detectable for tracked work, stop and ask whether to
 create, link, or continue untracked.
 
-For `workflow.toMain`, identify associated issues from begin scope, explicit
+For `workflow.toMain` or `workflow.toServer`, identify associated issues from begin scope, explicit
 instructions, branches, commits, PR links/closing keywords, and Project items;
 verify those references before mutation. The normal target is `Done` unless the
 user authorizes a different state. Never close an issue, mark it solved/fixed,

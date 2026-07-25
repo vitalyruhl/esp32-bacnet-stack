@@ -44,14 +44,17 @@ blocker if it cannot run.
 
 ## Reuse
 
-Reuse validation only if it passed clearly in this session, covered the same
-scope, the working tree matches the validated state, and no relevant files
-changed. State: `Validation reused: <command>, passed before checkpoint, no
-relevant changes since.` Never reuse after branch change without proven identical
-tree, merge, rebase, conflict resolution, dependency update, PlatformIO config
-change, generated refresh, or any relevant source/header/example/test/build or
-metadata modification. Failed, partial, skipped, ambiguous, or insufficient
-validation is never reusable.
+Reuse validation across agents or sessions only when all of the following are
+documented: identical commit/source state, clean working tree, exact command and
+successful result, unchanged relevant scope, and continued sufficiency for the
+pending decision. State: `Validation reused: <command>, passed for identical
+commit/source state, clean tree, unchanged relevant scope, and documented result.`
+Changed relevant scope requires a rerun. Never reuse after branch change without
+proven identical tree, merge, rebase, conflict resolution, dependency update,
+PlatformIO config change, generated refresh, or any relevant
+source/header/example/test/build or metadata modification. Reuse never bypasses
+safety, release, package, or hardware requirements. Failed, partial, skipped,
+ambiguous, or insufficient validation is never reusable.
 
 For a GitHub Actions-only workflow dependency update, fresh successful Actions
 checks on the updated workflow may validate that workflow change. Report local
