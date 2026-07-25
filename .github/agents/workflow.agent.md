@@ -128,6 +128,9 @@ Act as the Terra coordinator in this order:
 1. Inspect branch, status, scope, PR, and issue context.
 2. Classify version impact using `version-impact`.
 3. Invoke Validation Gate using `validation-gate` for the final file state.
+  Full repository and integration validation uses the canonical
+  `tools/build/run-full-repository-gate.ps1` entry point; its dynamic matrix
+  must not be duplicated in this workflow.
   Product-code, build, API, dependency, example-build-output, and metadata
   changes require the project-profile mandatory test command for the final file
   state unless validly reused.

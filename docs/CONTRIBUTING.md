@@ -60,7 +60,16 @@ ESP32, PlatformIO, Arduino, and C++17.
   `pio run -d tests/hil/esp32/wago-client-acceptance -e eth`
 - Server demo builds: `pio run -d examples/esp32/server/bacnet-server -e usb -e eth`
 - Full local governance gate: `pwsh -NoProfile -ExecutionPolicy Bypass -File tools/quality/run-precommit-full.ps1`
+- Full reproducible repository gate: `pwsh -NoProfile -ExecutionPolicy Bypass -File tools/build/run-full-repository-gate.ps1`
+- Repeat only failed checks from a prior gate report:
+  `pwsh -NoProfile -ExecutionPolicy Bypass -File tools/build/run-full-repository-gate.ps1 -OnlyFailedFrom C:\Temp\esp32-bacnet-stack-full-gate\<run>\summary.json`
 - Direct static analysis gate: `pwsh -NoProfile -ExecutionPolicy Bypass -File tools/quality/run-cppcheck.ps1`
+
+The full repository gate creates a pristine archive from `HEAD` below `C:\Temp`.
+It therefore uses only versioned fallback configuration and never copies ignored
+local secrets. It runs compile and link checks only; it never uploads firmware
+or starts a serial monitor. Per-check logs and a JSON summary remain in the
+reported `C:\Temp\esp32-bacnet-stack-full-gate\<run>` directory.
 
 ### Cppcheck policy
 

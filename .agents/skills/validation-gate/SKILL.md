@@ -10,8 +10,13 @@ Load the project profile when selecting repository commands. Use enabled CI only
 if none exists, report that and use required local validation. Run relevant tests
 when affected. Root builds, affected examples, affected tests, and relevant OTA
 work use profile commands. Upload and monitor require explicit request.
-When full pre-commit is required, run:
+For the narrow autofix-capable pre-commit component, run:
 `pwsh -NoProfile -ExecutionPolicy Bypass -File tools/quality/run-precommit-full.ps1`
+
+For a full repository or integration gate, use the canonical orchestrator:
+`pwsh -NoProfile -ExecutionPolicy Bypass -File tools/build/run-full-repository-gate.ps1`
+It discovers the current PlatformIO matrix from the repository; do not replace it
+with a copied environment list in governance.
 
 Governance-only changes require a consistency check of routing, shortcuts,
 branch/Git/PR rules, tools, Serena, validation, version, session close,
