@@ -3,6 +3,13 @@
 This changelog is a curated overview. The canonical library version is in
 `library.json`.
 
+## 0.39.1 - Unreleased
+
+### Changed
+
+- Reorganized the repository tree to separate the portable core, platform
+  adapters, examples, tests, fixtures, and development tooling.
+
 ## 0.39.0 - Unreleased
 
 ### Added
