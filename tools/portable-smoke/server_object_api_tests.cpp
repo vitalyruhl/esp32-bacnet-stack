@@ -16,6 +16,20 @@ public:
   void idle() override {}
 };
 
+bool responseContains(const uint8_t* response,
+                      size_t responseSize,
+                      const char* text,
+                      size_t& offset) {
+  const size_t textLength = std::strlen(text);
+  for (; offset + textLength <= responseSize; ++offset) {
+    if (std::memcmp(response + offset, text, textLength) == 0) {
+      offset += textLength;
+      return true;
+    }
+  }
+  return false;
+}
+
 bool testAnalogInputConfiguration() {
   float lightValue = 12.5F;
   BacnetAnalogInput lightSensor;
@@ -158,17 +172,19 @@ bool testCommandableOutputFacade() {
 
 bool testMultiStateValueConfigurationAndStateTextArrays() {
   constexpr const char* stateText[] = {"Off", "Auto", "On"};
+  constexpr const char* alternateStateText[] = {"Stop", "Run"};
   BacnetServerMultiStateValue values[] = {
     {2020, "Operating Mode", 2, 3, stateText, false},
+    {2021, "Pump Mode", 1, 2, alternateStateText, false},
   };
   TestTransport transport;
   BacnetServer server(transport);
-  if (!server.setMultiStateValues(values, 1) || server.multiStateValueCount() != 1) {
+  if (!server.setMultiStateValues(values, 2) || server.multiStateValueCount() != 2) {
     return false;
   }
 
   uint8_t response[128] = {};
-  const BacnetReadPropertyRequestHeader request{
+  const BacnetReadPropertyRequestHeader itemRequest{
     7,
     BacnetPropertyRequest{
       BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::MultiStateValue), 2020},
@@ -177,18 +193,66 @@ bool testMultiStateValueConfigurationAndStateTextArrays() {
     },
   };
   const size_t responseSize = BacnetProtocol::buildReadPropertyCharacterStringListAck(
-    response, sizeof(response), request, stateText, 3);
+    response, sizeof(response), itemRequest, stateText, 3);
   BacnetValue state;
   if (responseSize == 0 ||
-      !BacnetProtocol::parseReadPropertyAck(response, responseSize, 7, request.request, state) ||
+      !BacnetProtocol::parseReadPropertyAck(response, responseSize, 7, itemRequest.request, state) ||
       state.type != BacnetValueType::CharacterString || std::strcmp(state.text, "Auto") != 0) {
     return false;
   }
 
-  BacnetServerMultiStateValue invalid[] = {
+  const BacnetReadPropertyRequestHeader countRequest{
+    8,
+    BacnetPropertyRequest{
+      BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::MultiStateValue), 2020},
+      BacnetPropertyId::StateText,
+      0,
+    },
+  };
+  const size_t countResponseSize = BacnetProtocol::buildReadPropertyCharacterStringListAck(
+    response, sizeof(response), countRequest, stateText, 3);
+  if (countResponseSize == 0 ||
+      !BacnetProtocol::parseReadPropertyAck(
+        response, countResponseSize, 8, countRequest.request, state) ||
+      state.type != BacnetValueType::Unsigned || state.unsignedValue != 3) {
+    return false;
+  }
+
+  const BacnetReadPropertyRequestHeader fullRequest{
+    9,
+    BacnetPropertyRequest{
+      BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::MultiStateValue), 2020},
+      BacnetPropertyId::StateText,
+      kBacnetNoArrayIndex,
+    },
+  };
+  const size_t fullResponseSize = BacnetProtocol::buildReadPropertyCharacterStringListAck(
+    response, sizeof(response), fullRequest, stateText, 3);
+  size_t textOffset = 0;
+  if (fullResponseSize == 0 || !responseContains(response, fullResponseSize, "Off", textOffset) ||
+      !responseContains(response, fullResponseSize, "Auto", textOffset) ||
+      !responseContains(response, fullResponseSize, "On", textOffset)) {
+    return false;
+  }
+
+  BacnetServerMultiStateValue invalidStateCount[] = {
     {2021, "Invalid", 0, 0, stateText, false},
   };
-  return !server.setMultiStateValues(invalid, 1) && server.multiStateValueCount() == 1;
+  BacnetServerMultiStateValue invalidPresentValue[] = {
+    {2022, "Invalid", 4, 3, stateText, false},
+  };
+  constexpr const char* incompleteStateText[] = {"Only one", nullptr};
+  BacnetServerMultiStateValue invalidStateText[] = {
+    {2023, "Invalid", 1, 2, incompleteStateText, false},
+  };
+  BacnetServerMultiStateValue duplicateObjects[] = {
+    {2024, "First", 1, 3, stateText, false},
+    {2024, "Second", 1, 2, alternateStateText, false},
+  };
+  return !server.setMultiStateValues(invalidStateCount, 1) &&
+         !server.setMultiStateValues(invalidPresentValue, 1) &&
+         !server.setMultiStateValues(invalidStateText, 1) &&
+         !server.setMultiStateValues(duplicateObjects, 2) && server.multiStateValueCount() == 2;
 }
 
 } // namespace

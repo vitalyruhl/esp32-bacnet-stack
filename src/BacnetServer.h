@@ -628,9 +628,9 @@ private:
   bool readBinaryValueProperty(const BacnetServerBinaryValue& binaryValue,
                                BacnetPropertyId property,
                                BacnetValue& value) const;
-  static bool readMultiStateValueProperty(const BacnetServerMultiStateValue& multiStateValue,
-                                          BacnetPropertyId property,
-                                          BacnetValue& value);
+  bool readMultiStateValueProperty(const BacnetServerMultiStateValue& multiStateValue,
+                                   BacnetPropertyId property,
+                                   BacnetValue& value) const;
   const BacnetServerAnalogValue* findAnalogValue(uint32_t instance) const;
   const BacnetServerAnalogInput* findAnalogInput(uint32_t instance) const;
   const BacnetServerBinaryInput* findBinaryInput(uint32_t instance) const;

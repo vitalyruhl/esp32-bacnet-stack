@@ -159,6 +159,9 @@ bool isBaseProperty(BacnetObjectId object, BacnetPropertyId property) {
   } else if (object.type == static_cast<uint16_t>(BacnetObjectType::BinaryValue)) {
     properties = kBinaryValueProperties;
     count = kBinaryValuePropertyCount;
+  } else if (object.type == static_cast<uint16_t>(BacnetObjectType::MultiStateValue)) {
+    properties = kMultiStateValueProperties;
+    count = kMultiStateValuePropertyCount;
   }
   for (size_t index = 0; index < count; ++index) {
     if (properties[index] == property)
@@ -187,6 +190,21 @@ bool readBoundBool(void* context) {
 bool validObjectConfiguration(uint32_t instance, const char* objectName) {
   return instance <= 0x003FFFFFUL && objectName != nullptr &&
          std::strlen(objectName) < BacnetValue::kMaxTextLength;
+}
+
+bool validMultiStateValueConfiguration(const BacnetServerMultiStateValue& value) {
+  if (!validObjectConfiguration(value.instance, value.objectName) ||
+      value.numberOfStates == 0 || value.presentValue == 0 ||
+      value.presentValue > value.numberOfStates || value.stateText == nullptr) {
+    return false;
+  }
+  for (size_t state = 0; state < value.numberOfStates; ++state) {
+    if (value.stateText[state] == nullptr ||
+        std::strlen(value.stateText[state]) >= BacnetValue::kMaxTextLength) {
+      return false;
+    }
+  }
+  return true;
 }
 
 bool hasExpectedPropertyType(BacnetPropertyId property,
@@ -1169,18 +1187,8 @@ bool BacnetServer::setMultiStateValues(BacnetServerMultiStateValue* multiStateVa
   }
   for (size_t index = 0; index < count; ++index) {
     const BacnetServerMultiStateValue& value = multiStateValues[index];
-    if (value.instance > 0x003FFFFFUL || value.objectName == nullptr ||
-        std::strlen(value.objectName) >= BacnetValue::kMaxTextLength ||
-        value.numberOfStates == 0 || value.presentValue == 0 ||
-        value.presentValue > value.numberOfStates || value.stateText == nullptr) {
+    if (!validMultiStateValueConfiguration(value))
       return false;
-    }
-    for (size_t state = 0; state < value.numberOfStates; ++state) {
-      if (value.stateText[state] == nullptr ||
-          std::strlen(value.stateText[state]) >= BacnetValue::kMaxTextLength) {
-        return false;
-      }
-    }
     for (size_t previous = 0; previous < index; ++previous) {
       if (multiStateValues[previous].instance == value.instance) {
         return false;
@@ -1567,6 +1575,10 @@ BacnetServerPollResult BacnetServer::handleReadProperty(
       errorClass = 2;
       errorCode = 32;
     }
+  } else if (multiStateValue != nullptr &&
+             !validMultiStateValueConfiguration(*multiStateValue)) {
+    errorClass = 2;
+    errorCode = 37;
   } else if (multiStateValue != nullptr &&
              request.request.property == BacnetPropertyId::StateText) {
     if (request.request.arrayIndex != kBacnetNoArrayIndex &&
@@ -2218,7 +2230,7 @@ bool BacnetServer::readDeviceProperty(BacnetPropertyId property,
       if (multiStateValueCount_ != 0) {
         value.bitStringValue |= 1UL << static_cast<uint16_t>(BacnetObjectType::MultiStateValue);
       }
-      value.bitStringBitCount = 20;
+      value.bitStringBitCount = multiStateValueCount_ == 0 ? 9 : 20;
       return true;
     default:
       return false;
@@ -2525,7 +2537,13 @@ bool BacnetServer::readBinaryValueProperty(
 bool BacnetServer::readMultiStateValueProperty(
   const BacnetServerMultiStateValue& multiStateValue,
   BacnetPropertyId property,
-  BacnetValue& value) {
+  BacnetValue& value) const {
+  const BacnetObjectId object{static_cast<uint16_t>(BacnetObjectType::MultiStateValue),
+                              multiStateValue.instance};
+  if (const BacnetServerPropertyRegistration* registration =
+        findPropertyRegistration(object, property)) {
+    return registration->provider(registration->context, value);
+  }
   value = BacnetValue{};
   switch (property) {
     case BacnetPropertyId::ObjectIdentifier:
