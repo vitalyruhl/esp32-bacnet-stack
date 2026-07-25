@@ -328,7 +328,10 @@ function Test-DocsGate {
         }
     }
 
-    $legacyPattern = '(^|[^A-Za-z0-9_-])(dev-info/|test/|tools/(native|portable-smoke|include-fixtures)/|examples/(client-demo|client-demo-wifi|client-demo-ethernet|server-demo|server-bme280-demo|server-io-example|hil-cov-espClient-to-espServer-acceptance|hil-wago-client-acceptance|common)/)'
+    # Restrict the audit to Markdown path contexts. This avoids treating prose
+    # such as "test/example" as a repository path while still checking code
+    # spans and local Markdown links.
+    $legacyPattern = '(?m)(^|[`\[(])(dev-info/|test/|tools/(native|portable-smoke|include-fixtures)/|examples/(client-demo|client-demo-wifi|client-demo-ethernet|server-demo|server-bme280-demo|server-io-example|hil-cov-espClient-to-espServer-acceptance|hil-wago-client-acceptance|common)/)'
     foreach ($markdownFile in $markdownFiles) {
         $relative = [IO.Path]::GetRelativePath($GateRoot, $markdownFile.FullName).Replace('\', '/')
         if ($relative -eq 'docs/CHANGELOG.md') {
