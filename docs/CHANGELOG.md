@@ -3,6 +3,13 @@
 This changelog is a curated overview. The canonical library version is in
 `library.json`.
 
+## 0.39.0 - Unreleased
+
+### Added
+
+- Added portable MSV2020 support with Present_Value, Number_Of_States, and
+  State_Text array/index ReadProperty handling.
+
 ## 0.38.0 - Unreleased
 
 ### Added

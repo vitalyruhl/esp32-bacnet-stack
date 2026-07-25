@@ -65,6 +65,12 @@ public:
     size_t slotCount,
     BacnetPriorityArrayEntryProvider valueAt,
     const void* context);
+  static size_t buildReadPropertyCharacterStringListAck(
+    uint8_t* buffer,
+    size_t bufferSize,
+    const BacnetReadPropertyRequestHeader& request,
+    const char* const* strings,
+    size_t stringCount);
   static size_t buildWritePropertyAck(uint8_t* buffer,
                                       size_t bufferSize,
                                       uint8_t invokeId);

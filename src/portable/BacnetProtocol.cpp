@@ -1403,6 +1403,70 @@ size_t BacnetProtocol::buildReadPropertyPriorityArrayAck(
   return finishReadPropertyAck(buffer, offset) ? offset : 0;
 }
 
+size_t BacnetProtocol::buildReadPropertyCharacterStringListAck(
+  uint8_t* buffer,
+  size_t bufferSize,
+  const BacnetReadPropertyRequestHeader& request,
+  const char* const* strings,
+  size_t stringCount) {
+  if (request.request.property != BacnetPropertyId::StateText || strings == nullptr ||
+      stringCount == 0) {
+    return 0;
+  }
+  size_t offset = writeReadPropertyAckPrefix(buffer, bufferSize, request);
+  if (offset == 0 || offset + 2 > bufferSize) {
+    return 0;
+  }
+  buffer[offset++] = 0x3EU;
+  const auto append = [&](const BacnetValue& value) {
+    const size_t encoded = encodeApplicationValue(buffer + offset, bufferSize - offset - 1U, value);
+    if (encoded == 0) {
+      return false;
+    }
+    offset += encoded;
+    return true;
+  };
+  if (request.request.arrayIndex == 0U) {
+    BacnetValue count;
+    count.type = BacnetValueType::Unsigned;
+    count.unsignedValue = static_cast<uint32_t>(stringCount);
+    if (!append(count)) {
+      return 0;
+    }
+  } else {
+    const size_t first = request.request.arrayIndex == kBacnetNoArrayIndex
+                           ? 0U
+                           : static_cast<size_t>(request.request.arrayIndex - 1U);
+    const size_t last = request.request.arrayIndex == kBacnetNoArrayIndex
+                          ? stringCount
+                          : first + 1U;
+    if (first >= stringCount) {
+      return 0;
+    }
+    for (size_t index = first; index < last; ++index) {
+      if (strings[index] == nullptr) {
+        return 0;
+      }
+      const size_t length = std::strlen(strings[index]);
+      if (length >= BacnetValue::kMaxTextLength) {
+        return 0;
+      }
+      BacnetValue value;
+      std::memcpy(value.text, strings[index], length + 1U);
+      value.textLength = length;
+      value.type = BacnetValueType::CharacterString;
+      if (!append(value)) {
+        return 0;
+      }
+    }
+  }
+  if (offset >= bufferSize) {
+    return 0;
+  }
+  buffer[offset++] = 0x3FU;
+  return finishReadPropertyAck(buffer, offset) ? offset : 0;
+}
+
 size_t BacnetProtocol::buildReadPropertyObjectListAck(
   uint8_t* buffer, size_t bufferSize, const BacnetReadPropertyRequestHeader& request, const BacnetObjectId* objects, size_t objectCount) {
   return buildReadPropertyObjectListAck(buffer,
