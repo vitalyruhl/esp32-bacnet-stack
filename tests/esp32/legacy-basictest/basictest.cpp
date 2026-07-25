@@ -2382,9 +2382,8 @@ void test_bacnet_subscription_stop_while_in_flight_allows_blocking_read() {
   BacnetValue value;
   const auto status =
     session.readProperty(BacnetObjectType::AnalogValue, 200, BacnetPropertyId::PresentValue, value, 1);
-  TEST_ASSERT_NOT_EQUAL_UINT8(
-    static_cast<uint8_t>(BacnetDeviceSessionReadStatus::Busy),
-    static_cast<uint8_t>(status));
+  TEST_ASSERT_TRUE(
+    static_cast<uint8_t>(status) != static_cast<uint8_t>(BacnetDeviceSessionReadStatus::Busy));
 }
 
 void test_bacnet_subscription_destruction_while_in_flight_releases_session() {
@@ -2409,9 +2408,8 @@ void test_bacnet_subscription_destruction_while_in_flight_releases_session() {
   BacnetValue value;
   const auto status =
     session.readProperty(BacnetObjectType::AnalogValue, 200, BacnetPropertyId::PresentValue, value, 1);
-  TEST_ASSERT_NOT_EQUAL_UINT8(
-    static_cast<uint8_t>(BacnetDeviceSessionReadStatus::Busy),
-    static_cast<uint8_t>(status));
+  TEST_ASSERT_TRUE(
+    static_cast<uint8_t>(status) != static_cast<uint8_t>(BacnetDeviceSessionReadStatus::Busy));
 }
 
 void setup() {
