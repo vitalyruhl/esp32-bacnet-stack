@@ -57,7 +57,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File tools/release/backcheck-global-exa
 Uses library.json version from the registry and default example.
 
 .EXAMPLE
-pwsh -NoProfile -ExecutionPolicy Bypass -File tools/release/backcheck-global-example.ps1 -Version "0.24.2" -Example "examples/client-object-list-scan-basic"
+pwsh -NoProfile -ExecutionPolicy Bypass -File tools/release/backcheck-global-example.ps1 -Version "0.24.2" -Example "examples/esp32/client/basic-object-list-scan"
 
 Forces a published package backcheck for 0.24.2 on the selected example.
 
@@ -67,12 +67,12 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File tools/release/backcheck-global-exa
 Compile-only published package check.
 
 .EXAMPLE
-pwsh -NoProfile -ExecutionPolicy Bypass -File tools/release/backcheck-global-example.ps1 -Version "0.24.2" -Example "examples/hil-wago-client-acceptance" -Upload -UploadPort "COM5"
+pwsh -NoProfile -ExecutionPolicy Bypass -File tools/release/backcheck-global-example.ps1 -Version "0.24.2" -Example "tests/hil/esp32/wago-client-acceptance" -Upload -UploadPort "COM5"
 
 Published package HIL upload.
 
 .EXAMPLE
-pwsh -NoProfile -ExecutionPolicy Bypass -File tools/release/backcheck-global-example.ps1 -Version "0.24.2" -Example "examples/hil-wago-client-acceptance" -Upload -Monitor -UploadPort "COM5" -MonitorBaud 115200
+pwsh -NoProfile -ExecutionPolicy Bypass -File tools/release/backcheck-global-example.ps1 -Version "0.24.2" -Example "tests/hil/esp32/wago-client-acceptance" -Upload -Monitor -UploadPort "COM5" -MonitorBaud 115200
 
 Published package HIL upload and monitor.
 #>
@@ -82,7 +82,7 @@ Param(
   [string] $Version,
   [string] $PackageOwner = "vitaly.ruhl",
   [string] $PackageName = "ESP32 BACnet Stack",
-  [string] $Example = "examples/hil-wago-client-acceptance",
+  [string] $Example = "tests/hil/esp32/wago-client-acceptance",
   [string] $Environment = "usb",
   [switch] $UseLocalPath,
   [string] $LocalLibraryPath,

@@ -15,19 +15,19 @@ repos:
         name: clang-format
         entry: pwsh
         language: system
-        files: ^(src|examples|test)/.*\.(c|cc|cpp|cxx|h|hpp|hh|ino)$
+        files: ^(src|examples|tests/esp32/legacy-basictest)/.*\.(c|cc|cpp|cxx|h|hpp|hh|ino)$
         args:
           - -NoLogo
           - -NoProfile
           - -ExecutionPolicy
           - Bypass
           - -File
-          - tools/run-clang-format.ps1
+          - tools/quality/run-clang-format.ps1
       - id: cppcheck
         name: cppcheck
         entry: pwsh
         language: system
-        files: ^(src|examples|test)/.*\.(c|cc|cpp|cxx|h|hpp|hh)$
+        files: ^(src|examples|tests/esp32/legacy-basictest)/.*\.(c|cc|cpp|cxx|h|hpp|hh)$
         pass_filenames: false
         args:
           - -NoLogo
@@ -35,4 +35,4 @@ repos:
           - -ExecutionPolicy
           - Bypass
           - -File
-          - tools/run-cppcheck.ps1
+          - tools/quality/run-cppcheck.ps1

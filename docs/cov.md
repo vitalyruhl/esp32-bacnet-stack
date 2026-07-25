@@ -141,5 +141,5 @@ The implementation covers the client/session flow and the small read-only
 server profile used by the examples. It is not a substitute for full BACnet
 event reporting, intrinsic reporting, arbitrary-object COV support, or a
 network-wide interoperability certification. See the paired
-[ESP-to-ESP examples](../examples/hil-cov-espClient-to-espServer-acceptance/README.md)
+[ESP-to-ESP examples](../tests/hil/esp32/cov-client-server-acceptance/README.md)
 for the focused hardware acceptance scope.

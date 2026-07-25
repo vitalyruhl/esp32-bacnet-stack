@@ -31,10 +31,10 @@ release_example: release/v<version>
 - headers: `include/` when present
 - internal_libs: `lib/` when present
 - examples: `examples/`
-- client_example_wifi: `examples/client-demo-wifi`
-- client_example_eth: `examples/client-demo-ETH`
-- server_example: `examples/server-demo`
-- tests: `test/` when present
+- client_example_wifi: `examples/esp32/client/rich-client/wifi`
+- client_example_eth: `examples/esp32/client/rich-client/ethernet`
+- server_example: `examples/esp32/server/bacnet-server`
+- tests: `tests/` when present
 - docs: `README.md`, `docs/`
 - changelog: `docs/CHANGELOG.md` when present
 - docs_todo: `docs/TODO.md`, `docs/todo_*.md`
@@ -47,11 +47,11 @@ release_example: release/v<version>
 ## Validation
 
 - root: `pio run -e usb`
-- client_example_wifi: `pio run -d examples/client-demo-wifi -e usb`
-- client_example_eth: `pio run -d examples/client-demo-ETH -e eth`
-- basic_client_example_eth: `pio run -d examples/client-object-list-scan-basic -e eth`
-- hil_client_example_eth: `pio run -d examples/hil-wago-client-acceptance -e eth`
-- server_example: `pio run -d examples/server-demo -e usb -e eth`
+- client_example_wifi: `pio run -d examples/esp32/client/rich-client/wifi -e usb`
+- client_example_eth: `pio run -d examples/esp32/client/rich-client/ethernet -e eth`
+- basic_client_example_eth: `pio run -d examples/esp32/client/basic-object-list-scan -e eth`
+- hil_client_example_eth: `pio run -d tests/hil/esp32/wago-client-acceptance -e eth`
+- server_example: `pio run -d examples/esp32/server/bacnet-server -e usb -e eth`
 - tests: `pio test -e usb --without-uploading --without-testing`
 - ota_when_relevant: `pio run -e ota`
 - upload/monitor: explicit user request only

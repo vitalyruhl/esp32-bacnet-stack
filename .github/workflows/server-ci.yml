@@ -36,14 +36,14 @@ jobs:
 
       - name: Run focused cppcheck
         run: >
-          pwsh -NoProfile -ExecutionPolicy Bypass -File tools/run-cppcheck.ps1
-          src/BacnetServer.cpp src/portable/BacnetProtocol.cpp
+          pwsh -NoProfile -ExecutionPolicy Bypass -File tools/quality/run-cppcheck.ps1
+          src/core/server/BacnetServer.cpp src/core/protocol/BacnetProtocol.cpp
 
       - name: Check whitespace
         run: git diff --check HEAD^ HEAD
 
       - name: Configure portable server build
-        run: cmake -S tools/portable-smoke -B build/server-ci
+        run: cmake -S tools/build/cmake -B build/server-ci
 
       - name: Build portable server targets
         run: cmake --build build/server-ci --target portable_smoke server_analog_value_tests
@@ -52,7 +52,7 @@ jobs:
         run: ctest --test-dir build/server-ci -R "portable_smoke|server_analog_value_tests" --output-on-failure
 
       - name: Build server demo
-        run: pio run -d examples/server-demo -e usb -e eth
+        run: pio run -d examples/esp32/server/bacnet-server -e usb -e eth
 
       - name: Build BME280 server demo
-        run: pio run -d examples/server-bme280-demo -e usb
+        run: pio run -d examples/esp32/server/bme280 -e usb

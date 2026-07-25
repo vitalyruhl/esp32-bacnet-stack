@@ -56,7 +56,7 @@ shows at most eight rows to bound RAM and UI payloads; per-property failures
 remain visible instead of being reported as successful fallback data. See the
 [Client Guide](docs/client/README.md) for lifecycle and API details.
 
-The working-tree package metadata is version `0.39.0`. It includes the portable
+The working-tree package metadata is version `0.39.1`. It includes the portable
 server runtime, read-only Analog Input/Binary Input profile, commandable Binary
 Output and Binary Value priority support, allocation-free server-side SubscribeCOV and
 SubscribeCOVProperty support, and ESP32 server examples. See
@@ -127,9 +127,9 @@ platform integration are isolated in platform adapters.
 
 The richer client demo is split deliberately:
 
-- `examples/client-demo-wifi` preserves the existing ConfigManager-driven WiFi
+- `examples/esp32/client/rich-client/wifi` preserves the existing ConfigManager-driven WiFi
   behavior.
-- `examples/client-demo-ETH` targets the Wireless-Tag WT32-ETH01 V1.4
+- `examples/esp32/client/rich-client/ethernet` targets the Wireless-Tag WT32-ETH01 V1.4
   (WT32-S1/LAN8720) and compiles ConfigManager WiFi support out.
 
 The basic client, WAGO HIL runner, and server demo also provide an `eth`
@@ -152,11 +152,11 @@ response times are required. Visible delay does not necessarily indicate a COV
 or BACnet protocol failure.
 
 For the paired COV setup, use the Wi-Fi server
-[`examples/server-esp-to-esp-demo-wifi`](examples/server-esp-to-esp-demo-wifi/README.md),
+[`examples/esp32/paired/live-cov/server-wifi`](examples/esp32/paired/live-cov/server-wifi/README.md),
 the Ethernet demo client
-[`examples/client-esp-to-esp-demo-eth`](examples/client-esp-to-esp-demo-eth/README.md),
+[`examples/esp32/paired/live-cov/client-ethernet`](examples/esp32/paired/live-cov/client-ethernet/README.md),
 and the focused acceptance runner
-[`examples/hil-cov-espClient-to-espServer-acceptance`](examples/hil-cov-espClient-to-espServer-acceptance/README.md).
+[`tests/hil/esp32/cov-client-server-acceptance`](tests/hil/esp32/cov-client-server-acceptance/README.md).
 
 ## screenshots
 
@@ -167,16 +167,16 @@ and the focused acceptance runner
 | Path | Purpose |
 | --- | --- |
 | `src/` | Library headers and implementation |
-| `examples/client-demo-wifi/` | Optional WiFi rich client demo using the shared BACnet/UI application |
-| `examples/client-demo-ETH/` | Optional WT32-ETH01 V1.4 Ethernet transport variant of the same rich client demo |
-| `examples/common/` | Shared example-only Ethernet and client-demo implementation helpers |
-| `examples/client-object-list-scan-basic/` | Canonical serial-only basic BACnet/IP client example |
-| `examples/hil-wago-client-acceptance/` | Local ESP32/WAGO client acceptance HIL runner |
-| `examples/server-demo/` | ESP32 WiFi/Ethernet BACnet server demo with BV320 priority writes |
-| `examples/server-esp-to-esp-demo-wifi/` | Paired Wi-Fi BACnet server COV demo wrapper |
-| `examples/client-esp-to-esp-demo-eth/` | Paired WT32-ETH01 BACnet client COV demo wrapper |
-| `examples/hil-cov-espClient-to-espServer-acceptance/` | Focused ESP-to-ESP COV acceptance runner |
-| `test/` | PlatformIO Unity tests |
+| `examples/esp32/client/rich-client/wifi/` | Optional WiFi rich client demo using the shared BACnet/UI application |
+| `examples/esp32/client/rich-client/ethernet/` | Optional WT32-ETH01 V1.4 Ethernet transport variant of the same rich client demo |
+| `examples/esp32/shared/` | Shared ESP32 network, client-demo, and I/O-server implementation helpers |
+| `examples/esp32/client/basic-object-list-scan/` | Canonical serial-only basic BACnet/IP client example |
+| `tests/hil/esp32/wago-client-acceptance/` | Local ESP32/WAGO client acceptance HIL runner |
+| `examples/esp32/server/bacnet-server/` | ESP32 WiFi/Ethernet BACnet server demo with BV320 priority writes |
+| `examples/esp32/paired/live-cov/server-wifi/` | Paired Wi-Fi BACnet server COV demo wrapper |
+| `examples/esp32/paired/live-cov/client-ethernet/` | Paired WT32-ETH01 BACnet client COV demo wrapper |
+| `tests/hil/esp32/cov-client-server-acceptance/` | Focused ESP-to-ESP COV acceptance runner |
+| `tests/` | Portable, native, Windows, ESP32, fixture, and HIL tests |
 | `docs/` | Project documentation |
 
 Repository setup notes are tracked in
@@ -280,7 +280,7 @@ pio test -e usb --without-uploading --without-testing
 Portable core compile smoke test:
 
 ```sh
-cmake -S tools/portable-smoke -B build/portable-smoke
+cmake -S tools/build/cmake -B build/portable-smoke
 cmake --build build/portable-smoke
 build/portable-smoke/portable_smoke
 ```
@@ -298,7 +298,7 @@ internal smoke/HIL target and is not an end-user program.
 Requirements: CMake 3.16+, MSVC with C++17 support, and the Windows SDK.
 
 ```powershell
-cmake -S tools/portable-smoke -B build/native-windows
+cmake -S tools/build/cmake -B build/native-windows
 cmake --build build/native-windows --config Debug
 ctest --test-dir build/native-windows -C Debug --output-on-failure
 .\build\native-windows\native\Debug\bacnet-discover-smoke.exe --help
@@ -311,7 +311,7 @@ Winsock runtime and transport only; the transport test uses local UDP loopback
 on `127.0.0.1` and sends no broadcasts.
 
 Small PowerShell examples for the productive native tools are in
-[`tools/native/examples`](tools/native/examples/README.md). They cover
+[`examples/windows/bacnet-cli/scripts`](examples/windows/bacnet-cli/scripts/README.md). They cover
 Who-Is/I-Am discovery, AV/BV/MSV reads, SubscribeCOV, Analog Value listing, and
 an explicitly authorized Binary Value priority-8 toggle followed by a separate
 relinquish step. Edit their documented `settings.ps1` test-environment values
@@ -329,7 +329,7 @@ to restrict the run to one interface, and optionally provide `--broadcast`.
 Build the productive Windows binaries with:
 
 ```cmd
-tools\compile-windows-binaries.cmd Release
+tools\build\windows\compile-windows-binaries.cmd Release
 ```
 
 ```powershell
@@ -402,7 +402,7 @@ Build changed or directly affected examples when needed. See [Client Examples](d
 WT32-ETH01 V1.4 client demo build:
 
 ```sh
-pio run -d examples/client-demo-ETH -e eth
+pio run -d examples/esp32/client/rich-client/ethernet -e eth
 ```
 
 ## Dependency Maintenance

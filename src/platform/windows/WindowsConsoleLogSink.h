@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "BacnetLogger.h"
+#include "support/BacnetLogger.h"
 
 class WindowsConsoleLogSink final : public BacnetLogOutput {
 public:

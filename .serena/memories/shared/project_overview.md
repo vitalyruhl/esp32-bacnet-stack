@@ -13,7 +13,7 @@
   - `src/`: library source plus an export-excluded root build smoke sketch.
   - `examples/`: standalone PlatformIO example applications.
   - `docs/`: user and contributor documentation.
-  - `test/`: PlatformIO Unity tests.
+  - `tests/`: native, ESP32, HIL, portable, fixture, and Windows test assets.
   - `tools/`: repository tooling when present.
 - `README.md` is the public entry point. `.github/AGENTS.md` is canonical agent
   governance.

@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "portable/BacnetRuntime.h"
+#include "core/transport/BacnetRuntime.h"
 
 class WindowsMonotonicClock final : public BacnetMonotonicClock {
 public:

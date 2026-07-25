@@ -27,4 +27,8 @@ Thumbs.db
 .Temp/
 **/.Temp/
 build/
-tools/native/examples/settings.local.ps1
+examples/windows/bacnet-cli/scripts/settings.local.ps1
+
+# The generic build/ rule also matches the source-controlled build tooling.
+!tools/build/
+!tools/build/run-full-repository-gate.ps1

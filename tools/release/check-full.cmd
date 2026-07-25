@@ -13,10 +13,10 @@ echo ============================================================
 echo Start: %DATE% %TIME%
 echo.
 echo Command:
-echo pwsh -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT%" -Version "0.24.2" -Example "examples/hil-wago-client-acceptance" -Upload -Monitor -UploadPort "COM4" -MonitorBaud 115200
+echo pwsh -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT%" -Version "0.24.2" -Example "tests/hil/esp32/wago-client-acceptance" -Upload -Monitor -UploadPort "COM4" -MonitorBaud 115200
 echo.
 
-pwsh -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT%" -Version "0.24.2" -Example "examples/hil-wago-client-acceptance" -Upload -Monitor -UploadPort "COM4" -MonitorBaud 115200
+pwsh -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT%" -Version "0.24.2" -Example "tests/hil/esp32/wago-client-acceptance" -Upload -Monitor -UploadPort "COM4" -MonitorBaud 115200
 set "EXITCODE=%ERRORLEVEL%"
 
 popd >nul
