@@ -14,7 +14,7 @@ if errorlevel 1 (
 set "ROOT=%~dp0.."
 for %%I in ("%ROOT%") do set "ROOT=%%~fI"
 set "BUILD=%ROOT%\build\native-windows"
-cmake -S "%ROOT%\tools\portable-smoke" -B "%BUILD%"
+cmake -S "%ROOT%\tools\build\cmake" -B "%BUILD%"
 if errorlevel 1 exit /b %errorlevel%
 cmake --build "%BUILD%" --config %CONFIG% --target bacnet-discover bacnet-client
 if errorlevel 1 exit /b %errorlevel%

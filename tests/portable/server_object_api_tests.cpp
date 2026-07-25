@@ -9,10 +9,16 @@ namespace {
 
 class TestTransport final : public BacnetDatagramTransport {
 public:
-  bool begin(uint16_t) override { return true; }
+  bool begin(uint16_t) override {
+    return true;
+  }
   void end() override {}
-  bool send(const BacnetIpEndpoint&, const uint8_t*, size_t) override { return true; }
-  size_t receive(uint8_t*, size_t, BacnetIpEndpoint&) override { return 0; }
+  bool send(const BacnetIpEndpoint&, const uint8_t*, size_t) override {
+    return true;
+  }
+  size_t receive(uint8_t*, size_t, BacnetIpEndpoint&) override {
+    return 0;
+  }
   void idle() override {}
 };
 
@@ -259,8 +265,8 @@ bool testMultiStateValueConfigurationAndStateTextArrays() {
 
 int main() {
   return testAnalogInputConfiguration() && testConfigurationErrorsBlockRegistration() &&
-           testIndividualAndArrayRegistration() &&
-           testCommandableOutputFacade() && testMultiStateValueConfigurationAndStateTextArrays()
+             testIndividualAndArrayRegistration() &&
+             testCommandableOutputFacade() && testMultiStateValueConfigurationAndStateTextArrays()
            ? 0
            : 1;
 }

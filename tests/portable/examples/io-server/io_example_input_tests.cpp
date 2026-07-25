@@ -33,11 +33,13 @@ bool testButtonDebouncing() {
   io_example::DebouncedButton button;
   button.begin(true, 0);
   button.update(false, 10, 35);
-  if (!button.stableLevel()) return false;
+  if (!button.stableLevel())
+    return false;
   button.update(true, 20, 35);
   button.update(false, 30, 35);
   button.update(false, 64, 35);
-  if (!button.stableLevel()) return false;
+  if (!button.stableLevel())
+    return false;
   button.update(false, 65, 35);
   return !button.stableLevel();
 }
@@ -55,7 +57,7 @@ bool testLedElectricalMapping() {
 
 int main() {
   return testAdcScaling() && testDs18b20FaultMapping() && testButtonDebouncing() &&
-           testLedElectricalMapping()
+             testLedElectricalMapping()
            ? 0
            : 1;
 }

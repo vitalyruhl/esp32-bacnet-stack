@@ -6,7 +6,7 @@ ESP32, PlatformIO, Arduino, and C++17.
 ## 1. Where things live
 
 - Documentation: `docs/`
-- Tests: `test/`
+- Tests: `tests/`
 - Examples: `examples/`
 - Tools and helper scripts: `tools/`
 - GitHub files: `.github/`

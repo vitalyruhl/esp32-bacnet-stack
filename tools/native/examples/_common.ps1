@@ -131,7 +131,7 @@ function Get-BacnetNativeBinDirectory {
     if (-not [string]::IsNullOrWhiteSpace($ExeDir)) {
         $resolved = [System.IO.Path]::GetFullPath($ExeDir)
         if ((Test-Path -LiteralPath (Join-Path $resolved 'bacnet-discover.exe')) -and (Test-Path -LiteralPath (Join-Path $resolved 'bacnet-client.exe'))) { return $resolved }
-        throw "Native BACnet binaries were not found in: $resolved`nBuild them with:`n  cmake -S tools/portable-smoke -B build/native-windows`n  cmake --build build/native-windows --config Debug`nor pass -ExeDir <path>."
+        throw "Native BACnet binaries were not found in: $resolved`nBuild them with:`n  cmake -S tools/build/cmake -B build/native-windows`n  cmake --build build/native-windows --config Debug`nor pass -ExeDir <path>."
     }
     $candidates = @(
         (Join-Path $PSScriptRoot '..\..\..\build\native-windows\native\Debug'),
@@ -141,7 +141,7 @@ function Get-BacnetNativeBinDirectory {
         $resolved = [System.IO.Path]::GetFullPath($candidate)
         if ((Test-Path -LiteralPath (Join-Path $resolved 'bacnet-discover.exe')) -and (Test-Path -LiteralPath (Join-Path $resolved 'bacnet-client.exe'))) { return $resolved }
     }
-    throw 'Native BACnet binaries were not found. Build them with: cmake -S tools/portable-smoke -B build/native-windows; cmake --build build/native-windows --config Debug; or pass -ExeDir <path>.'
+    throw 'Native BACnet binaries were not found. Build them with: cmake -S tools/build/cmake -B build/native-windows; cmake --build build/native-windows --config Debug; or pass -ExeDir <path>.'
 }
 
 function Get-BacnetNativeExecutable {

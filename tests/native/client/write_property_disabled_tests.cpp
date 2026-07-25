@@ -8,10 +8,17 @@
 
 class FakeTransport final : public BacnetDatagramTransport {
 public:
-  bool begin(uint16_t) override { return true; }
+  bool begin(uint16_t) override {
+    return true;
+  }
   void end() override {}
-  bool send(const BacnetIpEndpoint&, const uint8_t*, size_t) override { ++sendCount; return true; }
-  size_t receive(uint8_t*, size_t, BacnetIpEndpoint&) override { return 0; }
+  bool send(const BacnetIpEndpoint&, const uint8_t*, size_t) override {
+    ++sendCount;
+    return true;
+  }
+  size_t receive(uint8_t*, size_t, BacnetIpEndpoint&) override {
+    return 0;
+  }
   void idle() override {}
   unsigned sendCount = 0;
 };
@@ -25,7 +32,8 @@ int main() {
   const BacnetWritePropertyPollStatus status = client.sendWriteProperty(
     BacnetIpEndpoint(192, 0, 2, 1, 47808),
     BacnetPropertyRequest{BacnetObjectId{2, 1}, BacnetPropertyId::PresentValue},
-    value, 1);
+    value,
+    1);
   if (status != BacnetWritePropertyPollStatus::Disabled || transport.sendCount != 0) {
     std::fputs("[E] disabled write gate sent a datagram or returned wrong status\n", stderr);
     return 1;
@@ -36,13 +44,13 @@ int main() {
   priorityOptions.hasPriority = true;
   priorityOptions.priority = 8;
   if (client.sendWriteProperty(
-        BacnetIpEndpoint(192, 0, 2, 1, 47808), BacnetObjectId{2, 1},
-        BacnetPropertyId::PresentValue, value, priorityOptions, 1) !=
+        BacnetIpEndpoint(192, 0, 2, 1, 47808), BacnetObjectId{2, 1}, BacnetPropertyId::PresentValue, value, priorityOptions, 1) !=
         BacnetWritePropertyPollStatus::Disabled ||
       session.object(BacnetObjectType::AnalogValue, 1).writePresentValue(value, 8) !=
         BacnetDeviceSessionWriteStatus::Disabled ||
       session.object(BacnetObjectType::AnalogValue, 1).relinquishPresentValue(8) !=
-        BacnetDeviceSessionWriteStatus::Disabled || transport.sendCount != 0) {
+        BacnetDeviceSessionWriteStatus::Disabled ||
+      transport.sendCount != 0) {
     std::fputs("[E] disabled priority write gate sent a datagram or returned wrong status\n", stderr);
     return 1;
   }

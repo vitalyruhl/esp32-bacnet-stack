@@ -10,13 +10,17 @@ namespace {
 
 class TestClock final : public BacnetMonotonicClock {
 public:
-  uint32_t nowMs() const override { return now; }
+  uint32_t nowMs() const override {
+    return now;
+  }
   uint32_t now = 0;
 };
 
 class TestTransport final : public BacnetDatagramTransport {
 public:
-  bool begin(uint16_t) override { return true; }
+  bool begin(uint16_t) override {
+    return true;
+  }
   void end() override {}
 
   bool send(const BacnetIpEndpoint& destination,
@@ -246,7 +250,7 @@ bool testSessionValidatesPeerAndProcessBeforeConfirmedAck() {
 
 int main() {
   return testSendFailureBackoffAndRecovery() &&
-           testSessionValidatesPeerAndProcessBeforeConfirmedAck()
+             testSessionValidatesPeerAndProcessBeforeConfirmedAck()
            ? 0
            : 1;
 }

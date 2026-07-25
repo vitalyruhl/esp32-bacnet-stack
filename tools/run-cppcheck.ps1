@@ -33,7 +33,7 @@ if (-not $Files -or $Files.Count -eq 0) {
     $Files = @(
         (Join-Path $repoRoot 'src'),
         (Join-Path $repoRoot 'examples'),
-        (Join-Path $repoRoot 'test')
+        (Join-Path $repoRoot 'tests/esp32/legacy-basictest')
     )
 }
 

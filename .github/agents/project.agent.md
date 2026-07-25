@@ -34,7 +34,7 @@ release_example: release/v0.1.0
 - client_example_wifi: `examples/client-demo-wifi`
 - client_example_eth: `examples/client-demo-ETH`
 - server_example: `examples/server-demo`
-- tests: `test/` when present
+- tests: `tests/` when present
 - docs: `README.md`, `docs/`
 - changelog: `docs/CHANGELOG.md` when present
 - docs_todo: `docs/TODO.md`, `docs/todo_*.md`

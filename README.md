@@ -176,7 +176,7 @@ and the focused acceptance runner
 | `examples/server-esp-to-esp-demo-wifi/` | Paired Wi-Fi BACnet server COV demo wrapper |
 | `examples/client-esp-to-esp-demo-eth/` | Paired WT32-ETH01 BACnet client COV demo wrapper |
 | `examples/hil-cov-espClient-to-espServer-acceptance/` | Focused ESP-to-ESP COV acceptance runner |
-| `test/` | PlatformIO Unity tests |
+| `tests/` | Portable, native, Windows, ESP32, fixture, and HIL tests |
 | `docs/` | Project documentation |
 
 Repository setup notes are tracked in
@@ -280,7 +280,7 @@ pio test -e usb --without-uploading --without-testing
 Portable core compile smoke test:
 
 ```sh
-cmake -S tools/portable-smoke -B build/portable-smoke
+cmake -S tools/build/cmake -B build/portable-smoke
 cmake --build build/portable-smoke
 build/portable-smoke/portable_smoke
 ```
@@ -298,7 +298,7 @@ internal smoke/HIL target and is not an end-user program.
 Requirements: CMake 3.16+, MSVC with C++17 support, and the Windows SDK.
 
 ```powershell
-cmake -S tools/portable-smoke -B build/native-windows
+cmake -S tools/build/cmake -B build/native-windows
 cmake --build build/native-windows --config Debug
 ctest --test-dir build/native-windows -C Debug --output-on-failure
 .\build\native-windows\native\Debug\bacnet-discover-smoke.exe --help

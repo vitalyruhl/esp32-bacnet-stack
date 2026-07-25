@@ -18,13 +18,17 @@ bool expect(bool condition, const char* text) {
 
 class FakeClock final : public BacnetMonotonicClock {
 public:
-  uint32_t nowMs() const override { return now; }
+  uint32_t nowMs() const override {
+    return now;
+  }
   uint32_t now = 0;
 };
 
 class FakeTransport final : public BacnetDatagramTransport {
 public:
-  bool begin(uint16_t) override { return true; }
+  bool begin(uint16_t) override {
+    return true;
+  }
   void end() override {}
   bool send(const BacnetIpEndpoint&, const uint8_t* data, size_t length) override {
     ++sendCount;
@@ -52,7 +56,9 @@ public:
     delayedResponseSize = 0;
     return size;
   }
-  void idle() override { ++clock->now; }
+  void idle() override {
+    ++clock->now;
+  }
   bool queue(const uint8_t* data, size_t size) {
     if (count == 32 || size > sizeof(response[0])) {
       return false;
@@ -84,9 +90,7 @@ public:
   unsigned delayedResponseSendCount = 0;
 };
 
-size_t buildReadAck(uint8_t* buffer, uint8_t invokeId, BacnetObjectId object,
-                    BacnetPropertyId property, uint32_t arrayIndex,
-                    const BacnetValue& value) {
+size_t buildReadAck(uint8_t* buffer, uint8_t invokeId, BacnetObjectId object, BacnetPropertyId property, uint32_t arrayIndex, const BacnetValue& value) {
   uint8_t encoded[64] = {};
   const size_t encodedSize = BacnetProtocol::encodeApplicationValue(
     encoded, sizeof(encoded), value);
@@ -125,8 +129,19 @@ size_t buildReadAck(uint8_t* buffer, uint8_t invokeId, BacnetObjectId object,
 
 size_t buildReadError(uint8_t* buffer, uint8_t invokeId) {
   const uint8_t bytes[] = {
-    0x81, 0x0A, 0x00, 0x0D, 0x01, 0x00, 0x50, invokeId, 0x0C,
-    0x91, 0x02, 0x91, 40,
+    0x81,
+    0x0A,
+    0x00,
+    0x0D,
+    0x01,
+    0x00,
+    0x50,
+    invokeId,
+    0x0C,
+    0x91,
+    0x02,
+    0x91,
+    40,
   };
   std::memcpy(buffer, bytes, sizeof(bytes));
   return sizeof(bytes);
@@ -134,7 +149,16 @@ size_t buildReadError(uint8_t* buffer, uint8_t invokeId) {
 
 size_t buildWriteAck(uint8_t* buffer, uint8_t invokeId) {
   const uint8_t bytes[] = {
-    0x81, 0x0A, 0x00, 0x0A, 0x01, 0x00, 0x20, invokeId, 0x0F, 0x0F,
+    0x81,
+    0x0A,
+    0x00,
+    0x0A,
+    0x01,
+    0x00,
+    0x20,
+    invokeId,
+    0x0F,
+    0x0F,
   };
   std::memcpy(buffer, bytes, sizeof(bytes));
   return sizeof(bytes);
@@ -142,7 +166,16 @@ size_t buildWriteAck(uint8_t* buffer, uint8_t invokeId) {
 
 size_t buildWriteError(uint8_t* buffer, uint8_t invokeId) {
   const uint8_t bytes[] = {
-    0x81, 0x0A, 0x00, 0x0A, 0x01, 0x00, 0x50, invokeId, 0x0F, 0x0F,
+    0x81,
+    0x0A,
+    0x00,
+    0x0A,
+    0x01,
+    0x00,
+    0x50,
+    invokeId,
+    0x0F,
+    0x0F,
   };
   std::memcpy(buffer, bytes, sizeof(bytes));
   return sizeof(bytes);
@@ -150,7 +183,14 @@ size_t buildWriteError(uint8_t* buffer, uint8_t invokeId) {
 
 size_t buildWriteTerminal(uint8_t* buffer, uint8_t apduType, uint8_t invokeId) {
   const uint8_t bytes[] = {
-    0x81, 0x0A, 0x00, 0x08, 0x01, 0x00, apduType, invokeId,
+    0x81,
+    0x0A,
+    0x00,
+    0x08,
+    0x01,
+    0x00,
+    apduType,
+    invokeId,
   };
   std::memcpy(buffer, bytes, sizeof(bytes));
   return sizeof(bytes);
@@ -191,14 +231,11 @@ bool testValueSelection() {
   states.type = BacnetValueType::Unsigned;
   states.unsignedValue = 3;
   uint8_t response[128] = {};
-  const size_t size = buildReadAck(response, 1, multiStateObject.objectId(),
-                                   BacnetPropertyId::NumberOfStates,
-                                   kBacnetNoArrayIndex, states);
+  const size_t size = buildReadAck(response, 1, multiStateObject.objectId(), BacnetPropertyId::NumberOfStates, kBacnetNoArrayIndex, states);
   BacnetValue decoded;
   const BacnetPropertyRequest request{
     multiStateObject.objectId(), BacnetPropertyId::NumberOfStates};
-  if (!expect(BacnetProtocol::parseReadPropertyAck(response, size, 1, request,
-                                                   decoded),
+  if (!expect(BacnetProtocol::parseReadPropertyAck(response, size, 1, request, decoded),
               "number-of-states ACK decoding") ||
       !expect(transport.queue(response, size), "queue number-of-states direct")) {
     return false;
@@ -208,9 +245,7 @@ bool testValueSelection() {
   if (!expect(statesStatus == BacnetDeviceSessionReadStatus::Ack &&
                 decoded.unsignedValue == 3,
               "number-of-states direct read") ||
-      !expect(transport.queue(response, buildReadAck(
-                response, 2, multiStateObject.objectId(),
-                BacnetPropertyId::NumberOfStates, kBacnetNoArrayIndex, states)),
+      !expect(transport.queue(response, buildReadAck(response, 2, multiStateObject.objectId(), BacnetPropertyId::NumberOfStates, kBacnetNoArrayIndex, states)),
               "queue number-of-states selection") ||
       !expect(bacnetWriteHilSelectTemporaryValue(
                 multiStateObject, BacnetObjectType::MultiStateValue, current, 3, selected) &&
@@ -249,9 +284,7 @@ bool testSuccessfulBinaryRun() {
     {BacnetPropertyId::PriorityArray, 16, off},
   };
   for (uint8_t invoke = 1; invoke <= 3; ++invoke) {
-    if (!expect(transport.queue(response, buildReadAck(
-                  response, invoke, object, reads[invoke - 1].property,
-                  reads[invoke - 1].index, reads[invoke - 1].value)),
+    if (!expect(transport.queue(response, buildReadAck(response, invoke, object, reads[invoke - 1].property, reads[invoke - 1].index, reads[invoke - 1].value)),
                 "queue initial read")) {
       return false;
     }
@@ -266,9 +299,7 @@ bool testSuccessfulBinaryRun() {
     {BacnetPropertyId::PriorityArray, 16, off},
   };
   for (uint8_t invoke = 5; invoke <= 7; ++invoke) {
-    if (!expect(transport.queue(response, buildReadAck(
-                  response, invoke, object, activeReads[invoke - 5].property,
-                  activeReads[invoke - 5].index, activeReads[invoke - 5].value)),
+    if (!expect(transport.queue(response, buildReadAck(response, invoke, object, activeReads[invoke - 5].property, activeReads[invoke - 5].index, activeReads[invoke - 5].value)),
                 "queue active read")) {
       return false;
     }
@@ -283,9 +314,7 @@ bool testSuccessfulBinaryRun() {
     {BacnetPropertyId::PresentValue, kBacnetNoArrayIndex, off},
   };
   for (uint8_t invoke = 9; invoke <= 11; ++invoke) {
-    if (!expect(transport.queue(response, buildReadAck(
-                  response, invoke, object, resumedReads[invoke - 9].property,
-                  resumedReads[invoke - 9].index, resumedReads[invoke - 9].value)),
+    if (!expect(transport.queue(response, buildReadAck(response, invoke, object, resumedReads[invoke - 9].property, resumedReads[invoke - 9].index, resumedReads[invoke - 9].value)),
                 "queue resumed read")) {
       return false;
     }
@@ -314,26 +343,18 @@ bool testReadbackFailureRelinquishes() {
   BacnetValue nullValue;
   nullValue.type = BacnetValueType::Null;
   uint8_t response[128] = {};
-  if (!expect(transport.queue(response, buildReadAck(response, 1, object,
-                                                      BacnetPropertyId::PresentValue,
-                                                      kBacnetNoArrayIndex, original)) &&
-                  transport.queue(response, buildReadAck(response, 2, object,
-                                                         BacnetPropertyId::PriorityArray,
-                                                         8, nullValue)) &&
-                  transport.queue(response, buildReadAck(response, 3, object,
-                                                         BacnetPropertyId::PriorityArray,
-                                                         16, original)) &&
-                  transport.queue(response, buildWriteAck(response, 4)),
+  if (!expect(transport.queue(response, buildReadAck(response, 1, object, BacnetPropertyId::PresentValue, kBacnetNoArrayIndex, original)) &&
+                transport.queue(response, buildReadAck(response, 2, object, BacnetPropertyId::PriorityArray, 8, nullValue)) &&
+                transport.queue(response, buildReadAck(response, 3, object, BacnetPropertyId::PriorityArray, 16, original)) &&
+                transport.queue(response, buildWriteAck(response, 4)),
               "queue setup for cleanup test")) {
     return false;
   }
   BacnetValue temporary = original;
   temporary.realValue = 12.5F;
-  if (!expect(transport.queue(response, buildReadAck(response, 5, object,
-                                                      BacnetPropertyId::PresentValue,
-                                                      kBacnetNoArrayIndex, temporary)) &&
-                  transport.queue(response, buildReadError(response, 6)) &&
-                  transport.queue(response, buildWriteAck(response, 7)),
+  if (!expect(transport.queue(response, buildReadAck(response, 5, object, BacnetPropertyId::PresentValue, kBacnetNoArrayIndex, temporary)) &&
+                transport.queue(response, buildReadError(response, 6)) &&
+                transport.queue(response, buildWriteAck(response, 7)),
               "queue readback failure and cleanup ACK")) {
     return false;
   }
@@ -347,8 +368,7 @@ bool testReadbackFailureRelinquishes() {
                 "readback failure relinquishes active priority");
 }
 
-bool queueRunUntilRelinquish(FakeTransport& transport, uint8_t* response,
-                             const BacnetObjectId& object) {
+bool queueRunUntilRelinquish(FakeTransport& transport, uint8_t* response, const BacnetObjectId& object) {
   BacnetValue off;
   off.type = BacnetValueType::Enumerated;
   off.unsignedValue = 0;
@@ -369,9 +389,7 @@ bool queueRunUntilRelinquish(FakeTransport& transport, uint8_t* response,
     {BacnetPropertyId::PriorityArray, 16, off},
   };
   for (uint8_t invokeId = 1; invokeId <= 3; ++invokeId) {
-    if (!transport.queue(response, buildReadAck(
-          response, invokeId, object, reads[invokeId - 1].property,
-          reads[invokeId - 1].index, reads[invokeId - 1].value))) {
+    if (!transport.queue(response, buildReadAck(response, invokeId, object, reads[invokeId - 1].property, reads[invokeId - 1].index, reads[invokeId - 1].value))) {
       return false;
     }
   }
@@ -379,9 +397,7 @@ bool queueRunUntilRelinquish(FakeTransport& transport, uint8_t* response,
     return false;
   }
   for (uint8_t invokeId = 5; invokeId <= 7; ++invokeId) {
-    if (!transport.queue(response, buildReadAck(
-          response, invokeId, object, reads[invokeId - 2].property,
-          reads[invokeId - 2].index, reads[invokeId - 2].value))) {
+    if (!transport.queue(response, buildReadAck(response, invokeId, object, reads[invokeId - 2].property, reads[invokeId - 2].index, reads[invokeId - 2].value))) {
       return false;
     }
   }
@@ -432,18 +448,12 @@ bool testRelinquishFailureCleanup(BacnetDeviceSessionWriteStatus primaryStatus,
 }
 
 bool testRelinquishFailureCleanupStatuses() {
-  return testRelinquishFailureCleanup(BacnetDeviceSessionWriteStatus::Timeout, 0,
-                                      BacnetDeviceSessionWriteStatus::Ack, 0x20, false) &&
-         testRelinquishFailureCleanup(BacnetDeviceSessionWriteStatus::Error, 0x50,
-                                      BacnetDeviceSessionWriteStatus::Ack, 0x20, false) &&
-         testRelinquishFailureCleanup(BacnetDeviceSessionWriteStatus::Reject, 0x60,
-                                      BacnetDeviceSessionWriteStatus::Ack, 0x20, false) &&
-         testRelinquishFailureCleanup(BacnetDeviceSessionWriteStatus::Abort, 0x70,
-                                      BacnetDeviceSessionWriteStatus::Ack, 0x20, false) &&
-         testRelinquishFailureCleanup(BacnetDeviceSessionWriteStatus::Timeout, 0,
-                                      BacnetDeviceSessionWriteStatus::Timeout, 0, true) &&
-         testRelinquishFailureCleanup(BacnetDeviceSessionWriteStatus::Error, 0x50,
-                                      BacnetDeviceSessionWriteStatus::Error, 0x50, true);
+  return testRelinquishFailureCleanup(BacnetDeviceSessionWriteStatus::Timeout, 0, BacnetDeviceSessionWriteStatus::Ack, 0x20, false) &&
+         testRelinquishFailureCleanup(BacnetDeviceSessionWriteStatus::Error, 0x50, BacnetDeviceSessionWriteStatus::Ack, 0x20, false) &&
+         testRelinquishFailureCleanup(BacnetDeviceSessionWriteStatus::Reject, 0x60, BacnetDeviceSessionWriteStatus::Ack, 0x20, false) &&
+         testRelinquishFailureCleanup(BacnetDeviceSessionWriteStatus::Abort, 0x70, BacnetDeviceSessionWriteStatus::Ack, 0x20, false) &&
+         testRelinquishFailureCleanup(BacnetDeviceSessionWriteStatus::Timeout, 0, BacnetDeviceSessionWriteStatus::Timeout, 0, true) &&
+         testRelinquishFailureCleanup(BacnetDeviceSessionWriteStatus::Error, 0x50, BacnetDeviceSessionWriteStatus::Error, 0x50, true);
 }
 
 bool testInvalidConfigurationSendsNothing() {
@@ -461,12 +471,12 @@ bool testInvalidConfigurationSendsNothing() {
                 "invalid HIL configuration sends no datagram");
 }
 
-}  // namespace
+} // namespace
 
 int main() {
   return testValueSelection() && testSuccessfulBinaryRun() &&
-         testReadbackFailureRelinquishes() && testRelinquishFailureCleanupStatuses() &&
-         testInvalidConfigurationSendsNothing()
+             testReadbackFailureRelinquishes() && testRelinquishFailureCleanupStatuses() &&
+             testInvalidConfigurationSendsNothing()
            ? 0
            : 1;
 }

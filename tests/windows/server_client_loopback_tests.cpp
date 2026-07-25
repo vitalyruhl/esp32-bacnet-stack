@@ -76,8 +76,7 @@ bool readProperty(BacnetClient& client,
                   uint8_t invokeId,
                   BacnetValue& value) {
   if (!client.sendReadProperty(target, request, invokeId)) {
-    std::fprintf(stderr, "[E] ReadProperty send failed for property %u\n",
-                 static_cast<unsigned>(request.property));
+    std::fprintf(stderr, "[E] ReadProperty send failed for property %u\n", static_cast<unsigned>(request.property));
     return false;
   }
 
@@ -90,7 +89,8 @@ bool readProperty(BacnetClient& client,
     std::fprintf(stderr,
                  "[E] ReadProperty failed for property %u (received=%s, status=%u)\n",
                  static_cast<unsigned>(request.property),
-                 received ? "yes" : "no", static_cast<unsigned>(status));
+                 received ? "yes" : "no",
+                 static_cast<unsigned>(status));
     return false;
   }
   return true;
@@ -214,8 +214,8 @@ void testLoopbackServerClientPath() {
   BacnetIAmDevice discovered;
   const bool whoIsSent = client.sendWhoIs(loopback);
   const bool iamReceived = whoIsSent && pumpServerUntil(server, [&] {
-    return client.pollIAm(discovered);
-  });
+                             return client.pollIAm(discovered);
+                           });
   expect(whoIsSent, "unicast Who-Is send failed");
   expect(iamReceived, "I-Am was not received on the client source port") &&
     expect(discovered.endpoint.port == kServerPort,
@@ -508,11 +508,10 @@ void testLoopbackServerClientPath() {
              value.unsignedValue == static_cast<uint32_t>(property),
            "MSV2020 Property List entry mismatch");
     const uint32_t arrayIndex = property == BacnetPropertyId::StateText ||
-                                        property == BacnetPropertyId::PropertyList
-                                      ? 0U
-                                      : kBacnetNoArrayIndex;
-    expect(readProperty(client, server, loopback, multiStateObject, property, invokeId++, value,
-                        arrayIndex),
+                                    property == BacnetPropertyId::PropertyList
+                                  ? 0U
+                                  : kBacnetNoArrayIndex;
+    expect(readProperty(client, server, loopback, multiStateObject, property, invokeId++, value, arrayIndex),
            "MSV2020 announced property read failed");
   }
   expect(readProperty(client,

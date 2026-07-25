@@ -19,14 +19,18 @@ bool expect(bool condition, const char* message) {
 
 class FakeClock final : public BacnetMonotonicClock {
 public:
-  uint32_t nowMs() const override { return now; }
+  uint32_t nowMs() const override {
+    return now;
+  }
 
   uint32_t now = 0;
 };
 
 class FakeTransport final : public BacnetDatagramTransport {
 public:
-  bool begin(uint16_t) override { return true; }
+  bool begin(uint16_t) override {
+    return true;
+  }
   void end() override {}
   bool send(const BacnetIpEndpoint&, const uint8_t*, size_t) override {
     ++sendCount;
@@ -114,8 +118,7 @@ void testIncrementalLoadScheduling() {
 
   const uint8_t countValue[] = {0x21, 0x01};
   transport.responseSize = buildReadAck(
-    transport.response, 1, object, BacnetPropertyId::PropertyList, 0,
-    countValue, sizeof(countValue));
+    transport.response, 1, object, BacnetPropertyId::PropertyList, 0, countValue, sizeof(countValue));
   browser.poll(session, clock.now);
   expect(transport.sendCount == 1,
          "processing a completed request must not start another request in the same poll");
@@ -203,8 +206,7 @@ void testBoundedRowsAndSelection() {
   rows[7].status = BacnetPropertyReadStatus::ArrayIndexNotSupported;
 
   browser.applyReadAllResult(
-    BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::AnalogValue), 200}, summary, rows,
-    BacnetDemoPropertyBrowser::kMaxProperties);
+    BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::AnalogValue), 200}, summary, rows, BacnetDemoPropertyBrowser::kMaxProperties);
 
   expect(browser.loaded(), "an acknowledged property list must load the browser");
   expect(browser.rowCount() == BacnetDemoPropertyBrowser::kMaxProperties,
@@ -269,7 +271,9 @@ void testRowsSurvivePropertyListFailure() {
 
   browser.applyReadAllResult(
     BacnetObjectId{static_cast<uint16_t>(BacnetObjectType::MultiStateValue), 2020},
-    summary, rows, 2);
+    summary,
+    rows,
+    2);
 
   expect(browser.loaded(),
          "collected rows must remain displayable when a property-list request fails");
@@ -282,7 +286,7 @@ void testRowsSurvivePropertyListFailure() {
          "the browser must preserve the independent failed-property status");
 }
 
-}  // namespace
+} // namespace
 
 int main() {
   testBoundedRowsAndSelection();

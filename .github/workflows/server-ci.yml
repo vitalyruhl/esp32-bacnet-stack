@@ -43,7 +43,7 @@ jobs:
         run: git diff --check HEAD^ HEAD
 
       - name: Configure portable server build
-        run: cmake -S tools/portable-smoke -B build/server-ci
+        run: cmake -S tools/build/cmake -B build/server-ci
 
       - name: Build portable server targets
         run: cmake --build build/server-ci --target portable_smoke server_analog_value_tests

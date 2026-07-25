@@ -77,7 +77,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Configure native Windows build
-        run: cmake -S tools/portable-smoke -B build/native-windows
+        run: cmake -S tools/build/cmake -B build/native-windows
 
       - name: Build native Windows targets
         run: cmake --build build/native-windows --config Debug

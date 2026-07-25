@@ -61,8 +61,8 @@ REQUIRED_PUBLIC_LIBRARY_FILES = {
 def forbidden_reason(path: str) -> str | None:
     parts = path.split("/")
     filename = parts[-1]
-    if path.startswith("tools/native/test/"):
-        return "native test consumer"
+    if path.startswith("tests/"):
+        return "test consumer"
     if any(
         part in {".git", ".pio", ".pioenvs", ".piolibdeps", ".Temp", ".vscode", ".idea"}
         for part in parts

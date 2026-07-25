@@ -11,7 +11,9 @@ namespace {
 
 class FakeTransport final : public BacnetDatagramTransport {
 public:
-  bool begin(uint16_t) override { return true; }
+  bool begin(uint16_t) override {
+    return true;
+  }
   void end() override {}
   bool send(const BacnetIpEndpoint&, const uint8_t* data, size_t length) override {
     ++sendCount;
@@ -48,13 +50,22 @@ bool expect(bool condition, const char* message) {
 
 void queueWriteAck(FakeTransport& transport, uint8_t invokeId) {
   const uint8_t ack[] = {
-    0x81, 0x0A, 0x00, 0x0A, 0x01, 0x00, 0x20, invokeId, 0x0F, 0x0F,
+    0x81,
+    0x0A,
+    0x00,
+    0x0A,
+    0x01,
+    0x00,
+    0x20,
+    invokeId,
+    0x0F,
+    0x0F,
   };
   std::memcpy(transport.response, ack, sizeof(ack));
   transport.responseSize = sizeof(ack);
 }
 
-}  // namespace
+} // namespace
 
 int main() {
   FakeTransport transport;
@@ -74,13 +85,16 @@ int main() {
 
   if (!expect(client.sendWriteProperty(
                 BacnetIpEndpoint(192, 0, 2, 1, BacnetClient::kDefaultPort),
-                object.objectId(), BacnetPropertyId::PresentValue, value,
-                priorityOptions, 99) == BacnetWritePropertyPollStatus::Disabled &&
-                  object.writePresentValue(value, 8, 1) ==
-                    BacnetDeviceSessionWriteStatus::Disabled &&
-                  object.relinquishPresentValue(8, 1) ==
-                    BacnetDeviceSessionWriteStatus::Disabled &&
-                  transport.sendCount == 0,
+                object.objectId(),
+                BacnetPropertyId::PresentValue,
+                value,
+                priorityOptions,
+                99) == BacnetWritePropertyPollStatus::Disabled &&
+                object.writePresentValue(value, 8, 1) ==
+                  BacnetDeviceSessionWriteStatus::Disabled &&
+                object.relinquishPresentValue(8, 1) ==
+                  BacnetDeviceSessionWriteStatus::Disabled &&
+                transport.sendCount == 0,
               "priority writes are disabled without sending a datagram")) {
     return 1;
   }
@@ -91,17 +105,15 @@ int main() {
   const BacnetPriorityRelinquishResult writable =
     object.relinquishAllPriorities(writableOptions, 1);
   if (!expect(strict.status == BacnetDeviceSessionWriteStatus::Disabled &&
-                  strict.failedPriority == 1 && writable.status ==
-                    BacnetDeviceSessionWriteStatus::Disabled &&
-                  writable.failedPriority == 1 && transport.sendCount == 0,
+                strict.failedPriority == 1 && writable.status == BacnetDeviceSessionWriteStatus::Disabled &&
+                writable.failedPriority == 1 && transport.sendCount == 0,
               "priority resets are disabled without sending a datagram")) {
     return 1;
   }
 
   queueWriteAck(transport, 1);
-  if (!expect(session.writeProperty(object.objectId(), BacnetPropertyId::PresentValue,
-                                    value, 1) == BacnetDeviceSessionWriteStatus::Ack &&
-                  transport.sendCount == 1 && transport.lastPacket[8] == 1,
+  if (!expect(session.writeProperty(object.objectId(), BacnetPropertyId::PresentValue, value, 1) == BacnetDeviceSessionWriteStatus::Ack &&
+                transport.sendCount == 1 && transport.lastPacket[8] == 1,
               "normal write remains enabled and priority rejection used no invoke ID")) {
     return 1;
   }

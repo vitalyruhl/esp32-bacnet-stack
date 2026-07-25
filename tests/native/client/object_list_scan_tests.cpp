@@ -20,14 +20,18 @@ bool expect(bool condition, const char* message) {
 
 class FakeClock final : public BacnetMonotonicClock {
 public:
-  uint32_t nowMs() const override { return now; }
+  uint32_t nowMs() const override {
+    return now;
+  }
 
   uint32_t now = 0;
 };
 
 class FakeTransport final : public BacnetDatagramTransport {
 public:
-  bool begin(uint16_t) override { return true; }
+  bool begin(uint16_t) override {
+    return true;
+  }
   void end() override {}
 
   bool send(const BacnetIpEndpoint&, const uint8_t* data, size_t length) override {
@@ -63,8 +67,19 @@ size_t buildReadError(uint8_t* buffer,
                       uint8_t errorClass,
                       uint8_t errorCode) {
   const uint8_t response[] = {
-    0x81, 0x0A, 0x00, 0x0D, 0x01, 0x00, 0x50, invokeId, 0x0C,
-    0x91, errorClass, 0x91, errorCode,
+    0x81,
+    0x0A,
+    0x00,
+    0x0D,
+    0x01,
+    0x00,
+    0x50,
+    invokeId,
+    0x0C,
+    0x91,
+    errorClass,
+    0x91,
+    errorCode,
   };
   std::memcpy(buffer, response, sizeof(response));
   return sizeof(response);
@@ -168,7 +183,7 @@ void testObjectListScanUnknownObjectDoesNotPopulateFallbackObjects() {
          "unknown-object text must remain visible without an unsupported fallback");
 }
 
-}  // namespace
+} // namespace
 
 int main() {
   testObjectListScanTimeoutDoesNotPopulateFallbackObjects();

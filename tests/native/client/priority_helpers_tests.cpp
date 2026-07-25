@@ -28,14 +28,18 @@ bool expectBytes(const uint8_t* actual,
 
 class FakeClock final : public BacnetMonotonicClock {
 public:
-  uint32_t nowMs() const override { return now; }
+  uint32_t nowMs() const override {
+    return now;
+  }
 
   uint32_t now = 0;
 };
 
 class FakeTransport final : public BacnetDatagramTransport {
 public:
-  bool begin(uint16_t) override { return true; }
+  bool begin(uint16_t) override {
+    return true;
+  }
   void end() override {}
 
   bool send(const BacnetIpEndpoint&, const uint8_t* data, size_t length) override {
@@ -167,8 +171,19 @@ size_t buildReadError(uint8_t* buffer,
                       uint8_t errorClass,
                       uint8_t errorCode) {
   const uint8_t response[] = {
-    0x81, 0x0A, 0x00, 0x0D, 0x01, 0x00, 0x50, invokeId, 0x0C,
-    0x91, errorClass, 0x91, errorCode,
+    0x81,
+    0x0A,
+    0x00,
+    0x0D,
+    0x01,
+    0x00,
+    0x50,
+    invokeId,
+    0x0C,
+    0x91,
+    errorClass,
+    0x91,
+    errorCode,
   };
   std::memcpy(buffer, response, sizeof(response));
   return sizeof(response);
@@ -182,7 +197,16 @@ size_t buildTerminalResponse(uint8_t* buffer, uint8_t apduType, uint8_t invokeId
 
 size_t buildWriteAck(uint8_t* buffer, uint8_t invokeId) {
   const uint8_t response[] = {
-    0x81, 0x0A, 0x00, 0x0A, 0x01, 0x00, 0x20, invokeId, 0x0F, 0x0F,
+    0x81,
+    0x0A,
+    0x00,
+    0x0A,
+    0x01,
+    0x00,
+    0x20,
+    invokeId,
+    0x0F,
+    0x0F,
   };
   std::memcpy(buffer, response, sizeof(response));
   return sizeof(response);
@@ -190,8 +214,19 @@ size_t buildWriteAck(uint8_t* buffer, uint8_t invokeId) {
 
 size_t buildWriteAccessDenied(uint8_t* buffer, uint8_t invokeId) {
   const uint8_t response[] = {
-    0x81, 0x0A, 0x00, 0x0D, 0x01, 0x00, 0x50, invokeId, 0x0F,
-    0x91, 0x02, 0x91, 40,
+    0x81,
+    0x0A,
+    0x00,
+    0x0D,
+    0x01,
+    0x00,
+    0x50,
+    invokeId,
+    0x0F,
+    0x91,
+    0x02,
+    0x91,
+    40,
   };
   std::memcpy(buffer, response, sizeof(response));
   return sizeof(response);
@@ -228,17 +263,15 @@ bool testReadHelpers() {
       !expect(priorityArray.present[7] && priorityArray.present[15],
               "full priority array slot presence") ||
       !expect(priorityArray.slots[7].type == BacnetValueType::Real &&
-              priorityArray.slots[7].realValue == 12.5F,
+                priorityArray.slots[7].realValue == 12.5F,
               "full priority array slot 8") ||
       !expect(priorityArray.slots[15].type == BacnetValueType::Enumerated &&
-              priorityArray.slots[15].unsignedValue == 2,
+                priorityArray.slots[15].unsignedValue == 2,
               "full priority array slot 16")) {
     return false;
   }
 
-  responseSize = buildReadAck(response, 2, objectId,
-                              BacnetPropertyId::PriorityArray, 16,
-                              realValue, sizeof(realValue));
+  responseSize = buildReadAck(response, 2, objectId, BacnetPropertyId::PriorityArray, 16, realValue, sizeof(realValue));
   if (!expect(transport.queueResponse(response, responseSize), "queue indexed priority array ACK") ||
       !expect(object.readPriorityArray(value, 3, 16) == BacnetPropertyReadStatus::Ack,
               "indexed priority array ACK") ||
@@ -248,9 +281,7 @@ bool testReadHelpers() {
   }
 
   const uint8_t countValue[] = {0x21, 0x10};
-  responseSize = buildReadAck(response, 3, objectId,
-                              BacnetPropertyId::PriorityArray, 0,
-                              countValue, sizeof(countValue));
+  responseSize = buildReadAck(response, 3, objectId, BacnetPropertyId::PriorityArray, 0, countValue, sizeof(countValue));
   if (!expect(transport.queueResponse(response, responseSize), "queue priority array count ACK") ||
       !expect(object.readPriorityArray(value, 3, 0) == BacnetPropertyReadStatus::Ack,
               "priority array count ACK") ||
@@ -261,10 +292,7 @@ bool testReadHelpers() {
     return false;
   }
 
-  responseSize = buildReadAck(response, 4, objectId,
-                              BacnetPropertyId::RelinquishDefault,
-                              kBacnetNoArrayIndex,
-                              realValue, sizeof(realValue));
+  responseSize = buildReadAck(response, 4, objectId, BacnetPropertyId::RelinquishDefault, kBacnetNoArrayIndex, realValue, sizeof(realValue));
   if (!expect(transport.queueResponse(response, responseSize), "queue relinquish default ACK") ||
       !expect(object.readRelinquishDefault(value, 3) == BacnetPropertyReadStatus::Ack,
               "relinquish default ACK")) {
@@ -318,8 +346,7 @@ bool testReadHelpers() {
 
   const BacnetPropertyRequest request{
     objectId, BacnetPropertyId::PriorityArray, kBacnetNoArrayIndex};
-  responseSize = buildReadAck(response, 10, objectId, BacnetPropertyId::PriorityArray,
-                              kBacnetNoArrayIndex, realValue, sizeof(realValue));
+  responseSize = buildReadAck(response, 10, objectId, BacnetPropertyId::PriorityArray, kBacnetNoArrayIndex, realValue, sizeof(realValue));
   if (!expect(!BacnetProtocol::parseReadPriorityArrayAck(
                 response, responseSize, 10, request, priorityArray),
               "short priority array rejected")) {
@@ -327,8 +354,7 @@ bool testReadHelpers() {
   }
 
   uint8_t nullValues[17] = {};
-  responseSize = buildReadAck(response, 11, objectId, BacnetPropertyId::PriorityArray,
-                              kBacnetNoArrayIndex, nullValues, sizeof(nullValues));
+  responseSize = buildReadAck(response, 11, objectId, BacnetPropertyId::PriorityArray, kBacnetNoArrayIndex, nullValues, sizeof(nullValues));
   if (!expect(!BacnetProtocol::parseReadPriorityArrayAck(
                 response, responseSize, 11, request, priorityArray),
               "long priority array rejected")) {
@@ -346,8 +372,7 @@ bool testReadHelpers() {
   }
 
   uint8_t malformedValues[17] = {0x45, 0xFF};
-  responseSize = buildReadAck(response, 13, objectId, BacnetPropertyId::PriorityArray,
-                              kBacnetNoArrayIndex, malformedValues, sizeof(malformedValues));
+  responseSize = buildReadAck(response, 13, objectId, BacnetPropertyId::PriorityArray, kBacnetNoArrayIndex, malformedValues, sizeof(malformedValues));
   if (!expect(!BacnetProtocol::parseReadPriorityArrayAck(
                 response, responseSize, 13, request, priorityArray),
               "malformed priority array rejected")) {
@@ -393,13 +418,30 @@ bool testWriteHelpers() {
     return false;
   }
   const uint8_t expectedRelinquish[] = {
-    0x81, 0x0A, 0x00, 0x16, 0x01, 0x04, 0x00, 0x05, 0x02, 0x0F,
-    0x0C, 0x00, 0x80, 0x00, 0x07, 0x19, 0x55, 0x3E, 0x00, 0x3F,
-    0x49, 0x10,
+    0x81,
+    0x0A,
+    0x00,
+    0x16,
+    0x01,
+    0x04,
+    0x00,
+    0x05,
+    0x02,
+    0x0F,
+    0x0C,
+    0x00,
+    0x80,
+    0x00,
+    0x07,
+    0x19,
+    0x55,
+    0x3E,
+    0x00,
+    0x3F,
+    0x49,
+    0x10,
   };
-  return expectBytes(transport.lastPacket, transport.lastPacketSize,
-                     expectedRelinquish, sizeof(expectedRelinquish),
-                     "relinquish null write encoding");
+  return expectBytes(transport.lastPacket, transport.lastPacketSize, expectedRelinquish, sizeof(expectedRelinquish), "relinquish null write encoding");
 }
 
 bool testRelinquishAllPriorities() {
@@ -425,7 +467,7 @@ bool testRelinquishAllPriorities() {
   const BacnetPriorityRelinquishResult result = object.relinquishAllPriorities(3);
   if (!expect(result.succeeded(), "priority reset success") ||
       !expect(result.completedPriorities == 16 && result.skippedPriority == 0 &&
-                  result.failedPriority == 0,
+                result.failedPriority == 0,
               "strict priority reset result") ||
       !expect(transport.sendCount == 16, "priority reset write count")) {
     return false;
@@ -467,10 +509,10 @@ bool testRelinquishAllPriorities() {
   const BacnetPriorityRelinquishResult strictFailure =
     strictObject.relinquishAllPriorities(3);
   if (!expect(strictFailure.status == BacnetDeviceSessionWriteStatus::NotCommandable &&
-                  strictFailure.completedPriorities == 5 &&
-                  strictFailure.skippedPriority == 0 &&
-                  strictFailure.failedPriority == kMinimumOnOffPriority &&
-                  strictTransport.sendCount == 6,
+                strictFailure.completedPriorities == 5 &&
+                strictFailure.skippedPriority == 0 &&
+                strictFailure.failedPriority == kMinimumOnOffPriority &&
+                strictTransport.sendCount == 6,
               "strict reset stops at minimum-on-off priority")) {
     return false;
   }
@@ -498,8 +540,8 @@ bool testRelinquishAllPriorities() {
   const BacnetPriorityRelinquishResult writable =
     writableObject.relinquishAllPriorities(writableOptions, 3);
   if (!expect(writable.succeeded() && writable.completedPriorities == 15 &&
-                  writable.skippedPriority == kMinimumOnOffPriority &&
-                  writable.failedPriority == 0 && writableTransport.sendCount == 15,
+                writable.skippedPriority == kMinimumOnOffPriority &&
+                writable.failedPriority == 0 && writableTransport.sendCount == 15,
               "writable reset skips minimum-on-off priority")) {
     return false;
   }
@@ -507,9 +549,9 @@ bool testRelinquishAllPriorities() {
     1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
   for (size_t index = 0; index < sizeof(expectedWritablePriorities); ++index) {
     if (!expect(writableTransport.sentPacketSizes[index] == 22 &&
-                    writableTransport.sentPackets[index][18] == 0x00 &&
-                    writableTransport.sentPackets[index][20] == 0x49 &&
-                    writableTransport.sentPackets[index][21] == expectedWritablePriorities[index],
+                  writableTransport.sentPackets[index][18] == 0x00 &&
+                  writableTransport.sentPackets[index][20] == 0x49 &&
+                  writableTransport.sentPackets[index][21] == expectedWritablePriorities[index],
                 "writable reset ordering and null encoding")) {
       return false;
     }

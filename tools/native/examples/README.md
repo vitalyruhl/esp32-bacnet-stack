@@ -10,7 +10,7 @@ programs. They do not create BACnet packets or sockets in PowerShell.
 2. Build the native binaries:
 
    ```powershell
-   cmake -S tools/portable-smoke -B build/native-windows
+   cmake -S tools/build/cmake -B build/native-windows
    cmake --build build/native-windows --config Debug
    ```
 
