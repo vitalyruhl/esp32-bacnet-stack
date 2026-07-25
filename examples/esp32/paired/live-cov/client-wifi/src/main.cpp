@@ -3,7 +3,18 @@
 // Reuse the paired live-COV client wrapper with the WiFi transport.
 #include <WiFi.h>
 
+#if __has_include("secret/secrets.h")
+#include "secret/secrets.h"
+#define BACNET_DEMO_HAS_PAIRED_SECRETS 1
+#else
+#define BACNET_DEMO_HAS_PAIRED_SECRETS 0
+#endif
+
+#ifdef APP_NAME
+#define ESP_TO_ESP_CLIENT_APP_NAME APP_NAME
+#else
 #define ESP_TO_ESP_CLIENT_APP_NAME "ESP-to-ESP WiFi BACnet Client"
+#endif
 #define ESP_TO_ESP_CLIENT_NVS_NAMESPACE "esp2esp_cli_wifi"
 #define ESP_TO_ESP_CLIENT_BASE_INCLUDE "../../client-wifi/src/generated_client_base.inc"
 #include "../../client-ethernet/src/main.cpp"

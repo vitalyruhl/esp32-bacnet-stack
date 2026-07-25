@@ -33,28 +33,78 @@
 #define BACNET_DEMO_ENABLE_COV_DIAGNOSTICS 1
 #endif
 
+#ifndef BACNET_DEMO_HAS_WIFI_SECRETS
+#if __has_include("secret/secrets.h")
+#include "secret/secrets.h"
+#define BACNET_DEMO_HAS_WIFI_SECRETS 1
+#else
+#define BACNET_DEMO_HAS_WIFI_SECRETS 0
+#endif
+#endif
+
+#ifndef BACNET_DEMO_FORCE_SECRET_DEFAULTS
+#define BACNET_DEMO_FORCE_SECRET_DEFAULTS 0
+#endif
+
+#if BACNET_DEMO_FORCE_SECRET_DEFAULTS && !BACNET_DEMO_HAS_WIFI_SECRETS
+#error "BACNET_DEMO_FORCE_SECRET_DEFAULTS requires secret/secrets.h"
+#endif
+
+#if BACNET_DEMO_FORCE_SECRET_DEFAULTS && !BACNET_DEMO_USE_ETHERNET &&              \
+  (!defined(MY_WIFI_SSID) || !defined(MY_WIFI_PASSWORD) || !defined(MY_WIFI_IP) || \
+   !defined(MY_USE_DHCP) || !defined(MY_GATEWAY_IP) || !defined(MY_SUBNET_MASK) || \
+   !defined(MY_DNS_IP))
+#error "BACNET_DEMO_FORCE_SECRET_DEFAULTS requires complete MY_WIFI_* network settings"
+#endif
+
 #if BACNET_DEMO_USE_ETHERNET
 #ifndef BACNET_DEMO_ETHERNET_IP
+#ifdef MY_ETHERNET_IP
+#define BACNET_DEMO_ETHERNET_IP MY_ETHERNET_IP
+#else
 #define BACNET_DEMO_ETHERNET_IP "192.168.2.126"
 #endif
+#endif
 #ifndef BACNET_DEMO_ETHERNET_GATEWAY
+#ifdef MY_GATEWAY_IP
+#define BACNET_DEMO_ETHERNET_GATEWAY MY_GATEWAY_IP
+#else
 #define BACNET_DEMO_ETHERNET_GATEWAY "192.168.2.1"
 #endif
+#endif
 #ifndef BACNET_DEMO_ETHERNET_SUBNET
+#ifdef MY_SUBNET_MASK
+#define BACNET_DEMO_ETHERNET_SUBNET MY_SUBNET_MASK
+#else
 #define BACNET_DEMO_ETHERNET_SUBNET "255.255.255.0"
 #endif
+#endif
 #ifndef BACNET_DEMO_ETHERNET_DNS
+#ifdef MY_DNS_IP
+#define BACNET_DEMO_ETHERNET_DNS MY_DNS_IP
+#else
 #define BACNET_DEMO_ETHERNET_DNS BACNET_DEMO_ETHERNET_GATEWAY
 #endif
+#endif
 #ifndef BACNET_DEMO_ETHERNET_DHCP
+#ifdef MY_USE_DHCP
+#define BACNET_DEMO_ETHERNET_DHCP MY_USE_DHCP
+#else
 #define BACNET_DEMO_ETHERNET_DHCP false
 #endif
+#endif
+#endif
+
+#if BACNET_DEMO_FORCE_SECRET_DEFAULTS && BACNET_DEMO_USE_ETHERNET &&               \
+  (!defined(MY_ETHERNET_IP) || !defined(MY_USE_DHCP) || !defined(MY_GATEWAY_IP) || \
+   !defined(MY_SUBNET_MASK) || !defined(MY_DNS_IP))
+#error "BACNET_DEMO_FORCE_SECRET_DEFAULTS requires complete MY_ETHERNET_* network settings"
 #endif
 
 namespace {
 
 constexpr char kAppName[] = "ESP32 BACnet I/O Server";
-constexpr char kVersion[] = "0.36.0";
+constexpr char kVersion[] = "0.40.0";
 constexpr uint16_t kDevelopmentVendorId = 0;
 constexpr uint32_t kDeviceInstanceDefault = 1682127;
 constexpr int kDs18b20DefaultGpio = 18;
@@ -810,15 +860,32 @@ void updateEthernetNetwork() {
 
 void setupNetworkDefaults() {
 #if BACNET_DEMO_USE_ETHERNET
-  if (!ethernetIp.get().isEmpty()) {
+  if (!BACNET_DEMO_FORCE_SECRET_DEFAULTS && !ethernetIp.get().isEmpty()) {
     return;
   }
+#if BACNET_DEMO_FORCE_SECRET_DEFAULTS && BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
+  Serial.println("[I] Applying forced local Ethernet defaults");
+#endif
   ethernetIp.set(BACNET_DEMO_ETHERNET_IP);
   ethernetSubnet.set(BACNET_DEMO_ETHERNET_SUBNET);
   ethernetGateway.set(BACNET_DEMO_ETHERNET_GATEWAY);
   ethernetDns.set(BACNET_DEMO_ETHERNET_DNS);
   ConfigManager.saveAll();
 #else
+#if BACNET_DEMO_FORCE_SECRET_DEFAULTS
+#if BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
+  Serial.println("[I] Applying forced local WiFi defaults");
+#endif
+  coreSettings.wifi.wifiSsid.set(MY_WIFI_SSID);
+  coreSettings.wifi.wifiPassword.set(MY_WIFI_PASSWORD);
+  coreSettings.wifi.staticIp.set(MY_WIFI_IP);
+  coreSettings.wifi.useDhcp.set(MY_USE_DHCP);
+  coreSettings.wifi.gateway.set(MY_GATEWAY_IP);
+  coreSettings.wifi.subnet.set(MY_SUBNET_MASK);
+  coreSettings.wifi.dnsPrimary.set(MY_DNS_IP);
+  ConfigManager.saveAll();
+  return;
+#endif
   if (!coreSettings.wifi.wifiSsid.get().isEmpty()) {
     return;
   }

@@ -50,7 +50,7 @@
 #endif
 
 #ifndef APP_VERSION
-#define APP_VERSION "0.34.0"
+#define APP_VERSION "0.40.0"
 #endif
 #ifndef APP_NAME
 #if BACNET_DEMO_USE_ETHERNET
@@ -84,6 +84,21 @@
 #ifndef MY_USE_DHCP
 #define MY_USE_DHCP false
 #endif
+#endif
+
+#ifndef BACNET_DEMO_FORCE_SECRET_DEFAULTS
+#define BACNET_DEMO_FORCE_SECRET_DEFAULTS 0
+#endif
+
+#if BACNET_DEMO_FORCE_SECRET_DEFAULTS && !BACNET_DEMO_HAS_SECRETS
+#error "BACNET_DEMO_FORCE_SECRET_DEFAULTS requires secret/secrets.h"
+#endif
+
+#if BACNET_DEMO_FORCE_SECRET_DEFAULTS && !BACNET_DEMO_USE_ETHERNET &&              \
+  (!defined(MY_WIFI_SSID) || !defined(MY_WIFI_PASSWORD) || !defined(MY_WIFI_IP) || \
+   !defined(MY_USE_DHCP) || !defined(MY_GATEWAY_IP) || !defined(MY_SUBNET_MASK) || \
+   !defined(MY_DNS_IP))
+#error "BACNET_DEMO_FORCE_SECRET_DEFAULTS requires complete MY_WIFI_* network settings"
 #endif
 
 #ifndef BACNET_DEMO_DEFAULT_COV_LIFETIME_SECONDS
@@ -2077,7 +2092,10 @@ void onWiFiAPMode() {
 
 static void setupNetworkDefaults() {
 #if BACNET_DEMO_USE_ETHERNET
-  if (ethernetIp.get().isEmpty()) {
+  if (BACNET_DEMO_FORCE_SECRET_DEFAULTS || ethernetIp.get().isEmpty()) {
+#if BACNET_DEMO_FORCE_SECRET_DEFAULTS && BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
+    Serial.println("[I] Applying forced local Ethernet defaults");
+#endif
     ethernetIp.set(MY_ETHERNET_IP);
     ethernetSubnet.set(MY_SUBNET_MASK);
     ethernetGateway.set(MY_GATEWAY_IP);
@@ -2094,10 +2112,12 @@ static void setupNetworkDefaults() {
     ConfigManager.setSettingsPassword(password);
   });
 #else
-  if (wifiSettings.wifiSsid.get().isEmpty()) {
+  if (BACNET_DEMO_FORCE_SECRET_DEFAULTS || wifiSettings.wifiSsid.get().isEmpty()) {
 #if BACNET_DEMO_HAS_SECRETS
 #if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
-    Serial.println("[I] WiFi SSID empty, applying local secret defaults");
+    Serial.println(BACNET_DEMO_FORCE_SECRET_DEFAULTS
+                     ? "[I] Applying forced local WiFi defaults"
+                     : "[I] WiFi SSID empty, applying local secret defaults");
 #endif
     wifiSettings.wifiSsid.set(MY_WIFI_SSID);
     wifiSettings.wifiPassword.set(MY_WIFI_PASSWORD);
@@ -2118,11 +2138,13 @@ static void setupNetworkDefaults() {
     wifiSettings.dnsPrimary.set(MY_DNS_IP);
 #endif
     ConfigManager.saveAll();
+#if !BACNET_DEMO_FORCE_SECRET_DEFAULTS
 #if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
     Serial.println("[I] Restarting after applying WiFi defaults");
 #endif
     delay(500);
     ESP.restart();
+#endif
 #else
 #if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
     Serial.println("[W] WiFi SSID empty and secret/secrets.h missing");

@@ -10,8 +10,21 @@
 #define BACNET_DEMO_USE_ETHERNET 0
 #endif
 
+#ifndef BACNET_DEMO_HAS_WIFI_SECRETS
+#if __has_include("secret/secrets.h")
+#include "secret/secrets.h"
+#define BACNET_DEMO_HAS_WIFI_SECRETS 1
+#else
+#define BACNET_DEMO_HAS_WIFI_SECRETS 0
+#endif
+#endif
+
 #ifndef ESP_TO_ESP_SERVER_APP_NAME
+#ifdef APP_NAME
+#define ESP_TO_ESP_SERVER_APP_NAME APP_NAME
+#else
 #define ESP_TO_ESP_SERVER_APP_NAME "ESP-to-ESP BACnet Server"
+#endif
 #endif
 
 #ifndef ESP_TO_ESP_SERVER_NVS_NAMESPACE

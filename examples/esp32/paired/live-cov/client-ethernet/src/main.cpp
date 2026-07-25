@@ -11,11 +11,24 @@
 #include <ETH.h>
 #endif
 
+#ifndef BACNET_DEMO_HAS_PAIRED_SECRETS
+#if __has_include("secret/secrets.h")
+#include "secret/secrets.h"
+#define BACNET_DEMO_HAS_PAIRED_SECRETS 1
+#else
+#define BACNET_DEMO_HAS_PAIRED_SECRETS 0
+#endif
+#endif
+
 #ifndef ESP_TO_ESP_CLIENT_APP_NAME
+#ifdef APP_NAME
+#define ESP_TO_ESP_CLIENT_APP_NAME APP_NAME
+#else
 #define ESP_TO_ESP_CLIENT_APP_NAME "ESP-to-ESP BACnet Client"
 #endif
+#endif
 #ifndef ESP_TO_ESP_CLIENT_APP_VERSION
-#define ESP_TO_ESP_CLIENT_APP_VERSION "0.36.0"
+#define ESP_TO_ESP_CLIENT_APP_VERSION "0.40.0"
 #endif
 #ifndef ESP_TO_ESP_CLIENT_NVS_NAMESPACE
 #define ESP_TO_ESP_CLIENT_NVS_NAMESPACE "esp2esp_cli"
@@ -24,7 +37,19 @@
 #define ESP_TO_ESP_CLIENT_BASE_INCLUDE "generated_client_base.inc"
 #endif
 
+#ifndef BACNET_WHOIS_DESTINATION
+#define BACNET_WHOIS_DESTINATION "192.168.2.255"
+#endif
+#ifndef BACNET_TARGET_ADDRESS
+#define BACNET_TARGET_ADDRESS "192.168.2.126"
+#endif
+#ifndef BACNET_TARGET_DEVICE_INSTANCE
+#define BACNET_TARGET_DEVICE_INSTANCE 1682127
+#endif
+
+#ifndef APP_NAME
 #define APP_NAME ESP_TO_ESP_CLIENT_APP_NAME
+#endif
 #define APP_VERSION ESP_TO_ESP_CLIENT_APP_VERSION
 #include ESP_TO_ESP_CLIENT_BASE_INCLUDE
 
