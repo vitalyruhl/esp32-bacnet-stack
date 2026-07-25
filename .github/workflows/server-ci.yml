@@ -37,7 +37,7 @@ jobs:
       - name: Run focused cppcheck
         run: >
           pwsh -NoProfile -ExecutionPolicy Bypass -File tools/run-cppcheck.ps1
-          src/BacnetServer.cpp src/portable/BacnetProtocol.cpp
+          src/core/server/BacnetServer.cpp src/core/protocol/BacnetProtocol.cpp
 
       - name: Check whitespace
         run: git diff --check HEAD^ HEAD

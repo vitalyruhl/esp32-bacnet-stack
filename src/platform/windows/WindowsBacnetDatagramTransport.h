@@ -5,7 +5,7 @@
 #include <cstdint>
 
 #include "platform/windows/WindowsSocketRuntime.h"
-#include "portable/BacnetRuntime.h"
+#include "core/transport/BacnetRuntime.h"
 
 enum class WindowsBacnetTransportStatus {
   None,

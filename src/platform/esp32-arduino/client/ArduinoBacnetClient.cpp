@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later WITH GCC-exception-2.0
 
-#include "platform/arduino/ArduinoBacnetClient.h"
+#include "platform/esp32-arduino/client/ArduinoBacnetClient.h"
 
 uint32_t ArduinoMonotonicClock::nowMs() const {
   return millis();

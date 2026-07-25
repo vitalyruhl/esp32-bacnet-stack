@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later WITH GCC-exception-2.0
 
 #include "BacnetClient.h"
-#include "BacnetFeatureGates.h"
+#include "support/BacnetFeatureGates.h"
 
 #include <cstring>
 

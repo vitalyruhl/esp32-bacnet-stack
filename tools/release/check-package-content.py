@@ -16,7 +16,7 @@ REQUIRED_FILES = {
     "docs/server/README.md",
     "src/BacnetClient.h",
     "src/BacnetServer.h",
-    "src/BacnetServer.cpp",
+    "src/core/server/BacnetServer.cpp",
     "examples/server-demo/platformio.ini",
     "examples/server-bme280-demo/platformio.ini",
 }
@@ -25,22 +25,33 @@ REQUIRED_PUBLIC_LIBRARY_FILES = {
     "src/ArduinoBacnetClient.h",
     "src/ArduinoBacnetServer.h",
     "src/ArduinoEspBacnet.h",
-    "src/BacnetClient.cpp",
     "src/BacnetClient.h",
-    "src/BacnetDeviceSession.cpp",
     "src/BacnetDeviceSession.h",
     "src/BacnetDisplayText.h",
     "src/BacnetFeatureGates.h",
     "src/BacnetFixedTextBuffer.h",
-    "src/BacnetLogger.cpp",
     "src/BacnetLogger.h",
-    "src/BacnetRemoteObject.cpp",
     "src/BacnetRemoteObject.h",
-    "src/BacnetServer.cpp",
     "src/BacnetServer.h",
     "src/EspBacnet.h",
-    "src/platform/arduino/ArduinoBacnetClient.cpp",
-    "src/platform/arduino/ArduinoBacnetClient.h",
+    "src/core/client/BacnetClient.cpp",
+    "src/core/client/BacnetClient.h",
+    "src/core/client/BacnetDeviceSession.cpp",
+    "src/core/client/BacnetDeviceSession.h",
+    "src/core/client/BacnetRemoteObject.cpp",
+    "src/core/client/BacnetRemoteObject.h",
+    "src/core/objects/BacnetAnalogValueLimits.h",
+    "src/core/objects/BacnetCommandPriority.h",
+    "src/core/objects/BacnetLinearScale.h",
+    "src/core/protocol/BacnetProtocol.cpp",
+    "src/core/protocol/BacnetProtocol.h",
+    "src/core/protocol/BacnetTypes.h",
+    "src/core/server/BacnetServer.cpp",
+    "src/core/server/BacnetServer.h",
+    "src/core/transport/BacnetRuntime.h",
+    "src/platform/esp32-arduino/client/ArduinoBacnetClient.cpp",
+    "src/platform/esp32-arduino/client/ArduinoBacnetClient.h",
+    "src/platform/esp32-arduino/server/ArduinoBacnetServer.h",
     "src/platform/windows/WindowsBacnetDatagramTransport.cpp",
     "src/platform/windows/WindowsBacnetDatagramTransport.h",
     "src/platform/windows/WindowsConsoleLogSink.cpp",
@@ -49,12 +60,18 @@ REQUIRED_PUBLIC_LIBRARY_FILES = {
     "src/platform/windows/WindowsMonotonicClock.h",
     "src/platform/windows/WindowsSocketRuntime.cpp",
     "src/platform/windows/WindowsSocketRuntime.h",
-    "src/portable/BacnetAnalogValueLimits.h",
     "src/portable/BacnetDisplayText.h",
-    "src/portable/BacnetProtocol.cpp",
+    "src/portable/BacnetAnalogValueLimits.h",
+    "src/portable/BacnetCommandPriority.h",
+    "src/portable/BacnetLinearScale.h",
     "src/portable/BacnetProtocol.h",
     "src/portable/BacnetRuntime.h",
     "src/portable/BacnetTypes.h",
+    "src/support/BacnetDisplayText.h",
+    "src/support/BacnetFeatureGates.h",
+    "src/support/BacnetFixedTextBuffer.h",
+    "src/support/BacnetLogger.cpp",
+    "src/support/BacnetLogger.h",
 }
 
 
@@ -72,7 +89,9 @@ def forbidden_reason(path: str) -> str | None:
         return "local secret"
     if filename.endswith(".code-workspace"):
         return "IDE-local file"
-    if path.startswith("build/") or "/build/" in path:
+    if path.startswith("build/") or (
+        "/build/" in path and not path.startswith("tools/build/")
+    ):
         return "build output"
     if path.endswith((".o", ".obj", ".elf", ".bin", ".exe", ".a", ".lib")):
         return "compiled artifact"

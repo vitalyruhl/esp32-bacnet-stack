@@ -2,4 +2,6 @@
 
 #pragma once
 
-#include "support/BacnetFeatureGates.h"
+#include <Arduino.h>
+
+#include "core/server/BacnetServer.h"

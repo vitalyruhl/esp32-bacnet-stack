@@ -2,8 +2,8 @@
 
 #include "BacnetDeviceSession.h"
 
-#include "BacnetDisplayText.h"
-#include "BacnetFeatureGates.h"
+#include "support/BacnetDisplayText.h"
+#include "support/BacnetFeatureGates.h"
 #include "BacnetRemoteObject.h"
 
 #include <cstring>

@@ -6,21 +6,21 @@ include(CTest)
 set(ESP_BACNET_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../..")
 
 add_library(bacnet_portable STATIC
-  ${ESP_BACNET_ROOT}/src/portable/BacnetProtocol.cpp)
+  ${ESP_BACNET_ROOT}/src/core/protocol/BacnetProtocol.cpp)
 target_compile_features(bacnet_portable PUBLIC cxx_std_17)
 target_include_directories(bacnet_portable PUBLIC
   ${ESP_BACNET_ROOT}/src)
 
 add_library(bacnet_client STATIC
-  ${ESP_BACNET_ROOT}/src/BacnetClient.cpp
-  ${ESP_BACNET_ROOT}/src/BacnetLogger.cpp)
+  ${ESP_BACNET_ROOT}/src/core/client/BacnetClient.cpp
+  ${ESP_BACNET_ROOT}/src/support/BacnetLogger.cpp)
 target_compile_features(bacnet_client PUBLIC cxx_std_17)
 target_include_directories(bacnet_client PUBLIC
   ${ESP_BACNET_ROOT}/src)
 target_link_libraries(bacnet_client PUBLIC bacnet_portable)
 
 add_library(bacnet_server STATIC
-  ${ESP_BACNET_ROOT}/src/BacnetServer.cpp)
+  ${ESP_BACNET_ROOT}/src/core/server/BacnetServer.cpp)
 target_compile_features(bacnet_server PUBLIC cxx_std_17)
 target_include_directories(bacnet_server PUBLIC
   ${ESP_BACNET_ROOT}/src)
@@ -46,8 +46,8 @@ target_link_libraries(server_cov_tests PRIVATE bacnet_portable bacnet_server)
 
 add_executable(cov_session_tests
   ${ESP_BACNET_ROOT}/tests/portable/cov_session_tests.cpp
-  ${ESP_BACNET_ROOT}/src/BacnetDeviceSession.cpp
-  ${ESP_BACNET_ROOT}/src/BacnetRemoteObject.cpp)
+  ${ESP_BACNET_ROOT}/src/core/client/BacnetDeviceSession.cpp
+  ${ESP_BACNET_ROOT}/src/core/client/BacnetRemoteObject.cpp)
 target_compile_features(cov_session_tests PRIVATE cxx_std_17)
 target_link_libraries(cov_session_tests PRIVATE bacnet_portable bacnet_client)
 
