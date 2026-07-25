@@ -166,6 +166,13 @@ target_include_directories(bacnet_demo_property_browser_tests PRIVATE
   ${ESP_BACNET_ROOT}/examples/esp32/shared/client-demo/src)
 target_link_libraries(bacnet_demo_property_browser_tests PRIVATE bacnet_client)
 
+add_executable(bacnet_demo_recovery_tests
+  ${ESP_BACNET_ROOT}/tests/native/examples/client-demo/demo_recovery_tests.cpp)
+target_compile_features(bacnet_demo_recovery_tests PRIVATE cxx_std_17)
+target_include_directories(bacnet_demo_recovery_tests PRIVATE
+  ${ESP_BACNET_ROOT}/examples/esp32/shared/client-demo/src)
+target_link_libraries(bacnet_demo_recovery_tests PRIVATE bacnet_portable)
+
 add_executable(bacnet_object_list_scan_tests
   ${ESP_BACNET_ROOT}/tests/native/client/object_list_scan_tests.cpp
   ${ESP_BACNET_ROOT}/src/core/client/BacnetDeviceSession.cpp
@@ -208,6 +215,7 @@ if(BUILD_TESTING)
     COMMAND bacnet_demo_binary_value_status_tests)
   add_test(NAME bacnet_demo_property_browser_tests
     COMMAND bacnet_demo_property_browser_tests)
+  add_test(NAME bacnet_demo_recovery_tests COMMAND bacnet_demo_recovery_tests)
   add_test(NAME bacnet_object_list_scan_tests COMMAND bacnet_object_list_scan_tests)
   if(WIN32)
     find_program(BACNET_POWERSHELL_EXECUTABLE NAMES powershell pwsh)

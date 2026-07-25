@@ -694,6 +694,10 @@ void fillClientLiveRuntime(JsonObject& data) {
     data["covSendFailures"] = activeBacnetSession->covSendFailureCount();
     data["covTimeouts"] = activeBacnetSession->covTimeoutCount();
   }
+  char recoveryDiagnostics[224] = {};
+  FixedTextBuffer recoveryOut(recoveryDiagnostics, sizeof(recoveryDiagnostics));
+  formatBacnetRecoveryDiagnostics(recoveryOut);
+  data["recoveryDiagnostics"] = recoveryOut.data;
 }
 
 void addClientLiveText(const char* key, const char* label, int order) {
@@ -843,6 +847,7 @@ void setupClientLiveUi() {
   addClientLiveText("covSubscribeAttempts", "COV subscribe/renew attempts", 18);
   addClientLiveText("covSendFailures", "COV local send failures", 19);
   addClientLiveText("covTimeouts", "COV timeouts", 20);
+  addClientLiveText("recoveryDiagnostics", "Recovery diagnostics", 21);
 
   auto diagnostics = ConfigManager.liveGroup("esp2espClient")
                        .page("ESP-to-ESP", 90)
