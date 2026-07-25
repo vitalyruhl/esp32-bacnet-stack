@@ -609,7 +609,7 @@ Invoke-GateCheck -Name 'package-consumer' -Command 'pio pkg install; pio run -e 
 }
 
 $summary = Write-Summary
-if (-not $KeepLogs) {
+if (-not $KeepLogs.IsPresent) {
     # Logs and JSON remain available. Only reproducible build workspaces are
     # removed unless a caller explicitly requests diagnostic retention.
     foreach ($temporaryPath in @($script:GateRoot, $cmakeBuild, $packageDirectory, $consumerRoot, $archivePath)) {
