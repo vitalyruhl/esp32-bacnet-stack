@@ -17,8 +17,8 @@ REQUIRED_FILES = {
     "src/BacnetClient.h",
     "src/BacnetServer.h",
     "src/core/server/BacnetServer.cpp",
-    "examples/server-demo/platformio.ini",
-    "examples/server-bme280-demo/platformio.ini",
+    "examples/esp32/server/bacnet-server/platformio.ini",
+    "examples/esp32/server/bme280/platformio.ini",
 }
 
 REQUIRED_PUBLIC_LIBRARY_FILES = {

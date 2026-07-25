@@ -55,7 +55,7 @@ add_executable(io_example_input_tests
   ${ESP_BACNET_ROOT}/tests/portable/examples/io-server/io_example_input_tests.cpp)
 target_compile_features(io_example_input_tests PRIVATE cxx_std_17)
 target_include_directories(io_example_input_tests PRIVATE
-  ${ESP_BACNET_ROOT}/examples/server-io-example/src)
+  ${ESP_BACNET_ROOT}/examples/esp32/shared/io-server/src)
 
 if(BUILD_TESTING)
   add_test(NAME portable_smoke COMMAND portable_smoke)

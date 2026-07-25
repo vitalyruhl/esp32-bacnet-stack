@@ -6,10 +6,10 @@ param()
 $ErrorActionPreference = 'Stop'
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
-$wifiIni = Join-Path $repositoryRoot 'examples/client-demo-wifi/platformio.ini'
-$ethernetIni = Join-Path $repositoryRoot 'examples/client-demo-ETH/platformio.ini'
-$demoMain = Join-Path $repositoryRoot 'examples/common/client-demo/src/main.cpp'
-$browserSource = Join-Path $repositoryRoot 'examples/common/client-demo/src/BacnetDemoPropertyBrowser.cpp'
+$wifiIni = Join-Path $repositoryRoot 'examples/esp32/client/rich-client/wifi/platformio.ini'
+$ethernetIni = Join-Path $repositoryRoot 'examples/esp32/client/rich-client/ethernet/platformio.ini'
+$demoMain = Join-Path $repositoryRoot 'examples/esp32/shared/client-demo/src/main.cpp'
+$browserSource = Join-Path $repositoryRoot 'examples/esp32/shared/client-demo/src/BacnetDemoPropertyBrowser.cpp'
 
 function Require-Text {
   param([string]$Text, [string]$Pattern, [string]$Message)
@@ -31,7 +31,7 @@ $main = Get-Content -Raw -LiteralPath $demoMain
 $browser = Get-Content -Raw -LiteralPath $browserSource
 
 foreach ($ini in @($wifi, $ethernet)) {
-  Require-Text $ini '(?m)^src_dir\s*=\s*\.\./common/client-demo/src\s*$' `
+  Require-Text $ini '(?m)^src_dir\s*=\s*\.\./\.\./\.\./shared/client-demo/src\s*$' `
     'Both rich demos must use the shared client-demo source directory.'
   Require-Text $ini '-DESP_BACNET_ENABLE_WRITE_PROPERTY=1' `
     'Both rich demos must explicitly enable WriteProperty.'

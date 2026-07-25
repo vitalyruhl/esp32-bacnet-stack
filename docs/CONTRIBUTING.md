@@ -52,13 +52,13 @@ ESP32, PlatformIO, Arduino, and C++17.
 
 - Default root build: `pio run -e usb`
 - Compile-only tests: `pio test -e usb --without-uploading --without-testing`
-- WiFi client demo build: `pio run -d examples/client-demo-wifi -e usb`
-- Ethernet client demo build: `pio run -d examples/client-demo-ETH -e eth`
+- WiFi client demo build: `pio run -d examples/esp32/client/rich-client/wifi -e usb`
+- Ethernet client demo build: `pio run -d examples/esp32/client/rich-client/ethernet -e eth`
 - Basic client Ethernet build:
-  `pio run -d examples/client-object-list-scan-basic -e eth`
+  `pio run -d examples/esp32/client/basic-object-list-scan -e eth`
 - WAGO HIL Ethernet build:
   `pio run -d examples/hil-wago-client-acceptance -e eth`
-- Server demo builds: `pio run -d examples/server-demo -e usb -e eth`
+- Server demo builds: `pio run -d examples/esp32/server/bacnet-server -e usb -e eth`
 - Full local governance gate: `pwsh -NoProfile -ExecutionPolicy Bypass -File tools/run-precommit-full.ps1`
 - Direct static analysis gate: `pwsh -NoProfile -ExecutionPolicy Bypass -File tools/run-cppcheck.ps1`
 

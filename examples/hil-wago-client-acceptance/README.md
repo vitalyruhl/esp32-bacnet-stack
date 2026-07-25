@@ -102,5 +102,5 @@ The scenario order and BACnet calls intentionally remain visible in
 `HilScenarioRunner` and `HilResultOutput`; shared temporary-value selection and
 comparison for the ESP32 and native HIL runners live in
 `examples/common/BacnetHilPrioritySupport.h`. WiFi-only startup support is
-provided by `examples/common/Esp32WiFiNetwork.h` and does not own BACnet
+provided by `examples/esp32/shared/network/Esp32WiFiNetwork.h` and does not own BACnet
 requests or writes.

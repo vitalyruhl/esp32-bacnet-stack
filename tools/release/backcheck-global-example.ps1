@@ -57,7 +57,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File tools/release/backcheck-global-exa
 Uses library.json version from the registry and default example.
 
 .EXAMPLE
-pwsh -NoProfile -ExecutionPolicy Bypass -File tools/release/backcheck-global-example.ps1 -Version "0.24.2" -Example "examples/client-object-list-scan-basic"
+pwsh -NoProfile -ExecutionPolicy Bypass -File tools/release/backcheck-global-example.ps1 -Version "0.24.2" -Example "examples/esp32/client/basic-object-list-scan"
 
 Forces a published package backcheck for 0.24.2 on the selected example.
 

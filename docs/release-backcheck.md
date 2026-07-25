@@ -44,7 +44,7 @@ powershell -ExecutionPolicy Bypass -File tools/release/backcheck-global-example.
 Select a different example and PlatformIO environment:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File tools/release/backcheck-global-example.ps1 -Example "examples/client-object-list-scan-basic" -Environment "usb"
+powershell -ExecutionPolicy Bypass -File tools/release/backcheck-global-example.ps1 -Example "examples/esp32/client/basic-object-list-scan" -Environment "usb"
 ```
 
 Optional local-path mode (not for release verification):

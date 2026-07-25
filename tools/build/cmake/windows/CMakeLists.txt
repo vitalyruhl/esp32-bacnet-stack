@@ -153,17 +153,17 @@ add_executable(bacnet_demo_binary_value_status_tests
   ${ESP_BACNET_ROOT}/src/core/client/BacnetRemoteObject.cpp)
 target_compile_features(bacnet_demo_binary_value_status_tests PRIVATE cxx_std_17)
 target_include_directories(bacnet_demo_binary_value_status_tests PRIVATE
-  ${ESP_BACNET_ROOT}/examples/common/client-demo/src)
+  ${ESP_BACNET_ROOT}/examples/esp32/shared/client-demo/src)
 target_link_libraries(bacnet_demo_binary_value_status_tests PRIVATE bacnet_client)
 
 add_executable(bacnet_demo_property_browser_tests
   ${ESP_BACNET_ROOT}/tests/native/examples/client-demo/demo_property_browser_tests.cpp
-  ${ESP_BACNET_ROOT}/examples/common/client-demo/src/BacnetDemoPropertyBrowser.cpp
+  ${ESP_BACNET_ROOT}/examples/esp32/shared/client-demo/src/BacnetDemoPropertyBrowser.cpp
   ${ESP_BACNET_ROOT}/src/core/client/BacnetDeviceSession.cpp
   ${ESP_BACNET_ROOT}/src/core/client/BacnetRemoteObject.cpp)
 target_compile_features(bacnet_demo_property_browser_tests PRIVATE cxx_std_17)
 target_include_directories(bacnet_demo_property_browser_tests PRIVATE
-  ${ESP_BACNET_ROOT}/examples/common/client-demo/src)
+  ${ESP_BACNET_ROOT}/examples/esp32/shared/client-demo/src)
 target_link_libraries(bacnet_demo_property_browser_tests PRIVATE bacnet_client)
 
 add_executable(bacnet_object_list_scan_tests

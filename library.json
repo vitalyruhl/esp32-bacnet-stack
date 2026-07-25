@@ -29,7 +29,7 @@
     "EspBacnet.h"
   ],
   "build": {
-    "srcFilter": "+<*> -<main.cpp> -<platform/windows/>"
+    "srcFilter": "+<*> -<platform/windows/>"
   },
   "export": {
     "include": [
@@ -66,7 +66,6 @@
       "tools/native/build/**",
       "tools/portable-smoke/build",
       "tools/portable-smoke/build/**",
-      "src/main.cpp",
       "**/secret/secrets.h",
       "**/secret/wifiSecret.h",
       "**/secrets.h",

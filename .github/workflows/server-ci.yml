@@ -52,7 +52,7 @@ jobs:
         run: ctest --test-dir build/server-ci -R "portable_smoke|server_analog_value_tests" --output-on-failure
 
       - name: Build server demo
-        run: pio run -d examples/server-demo -e usb -e eth
+        run: pio run -d examples/esp32/server/bacnet-server -e usb -e eth
 
       - name: Build BME280 server demo
-        run: pio run -d examples/server-bme280-demo -e usb
+        run: pio run -d examples/esp32/server/bme280 -e usb
