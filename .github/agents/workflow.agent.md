@@ -41,14 +41,19 @@ procedures.
 - Inspect branch and status before Git mutation. Read-only Git inspection may
   run without asking. Stage, commit, push, merge, release updates, or branch
   cleanup require explicit user request or the named shortcut that permits it.
-- `main` is published/released and integrates through PRs by default. Do not
-  change `main`/`master` directly except an explicitly requested docs-only TODO
-  update under profile TODO paths; direct pushes require explicit request.
-  Fast-forward requires explicit `fast-forward` or `ff` wording.
+- `main` and `server` are permanent integration branches. Never delete or rename
+  either through cleanup, final synchronization, or a single-main rule. `main`
+  is published/released and integrates client, shared, repository, and general
+  work through PRs by default. `server` integrates server-specific work through
+  PRs by default. Integrate `server` into `main` only through an explicit
+  release/integration request. Do not change `main`/`master` directly except an
+  explicitly requested docs-only TODO update under profile TODO paths; direct
+  pushes require explicit request. Fast-forward requires explicit
+  `fast-forward` or `ff` wording.
 - `feature/*` branches may be unfinished. `release/*` branches are runnable
-  snapshots; absence before a first release is not a blocker. Create or update
-  a release branch only on explicit request. Prefer fast-forward; ask before a
-  force push and use `--force-with-lease` only when approved.
+  snapshots in an already released repository. Create or update a release branch
+  only on explicit request. Prefer fast-forward; ask before a force push and use
+  `--force-with-lease` only when approved.
 - Keep one side branch active. If a branch name mismatches the task, warn and
   propose a short English lowercase hyphenated name, normally `feature/`, rather
   than switching. Preserve exact user-supplied names and quoted literals.
@@ -83,9 +88,12 @@ direct `main`/`master` except the documented TODO exception. Invoke Validation
 Gate using `validation-gate`, reusing only valid final-state validation. Enforce
 Version Impact and block a required missing bump. Before accepting a final
 staged state or committing, report `git status --short`; never commit when the
-last validation failed, autofixed, or left unreported changes. Stage with
-`git add -A`, create one meaningful English commit, and push only the current
-work branch when explicitly requested or permitted by this shortcut.
+last validation failed, autofixed, or left unreported changes. Stage only the
+explicit intended paths. `git add -A` is allowed only when the baseline was
+clean and every changed path is clearly within the requested scope. Never stage
+preexisting, foreign, or unclear changes; stop and report an ambiguous staging
+set. Create one meaningful English commit, and push only the current work branch
+when explicitly requested or permitted by this shortcut.
 
 ### `workflow.docs`
 
@@ -140,6 +148,15 @@ PR integration is the default unless explicit `ff` is authorized. A required
 version bump blocks readiness when absent. Required checks remain mandatory
 unless separately and explicitly authorized for bypass with a reported reason.
 Missing, failed, or invalidly reused required validation blocks merge readiness.
+Use this route for client, shared, repository, and general work. Use
+`workflow.toServer` for server-specific work.
+
+### `workflow.toServer` / `.toServer`
+
+Act as the Terra coordinator using the same ordered gates as `workflow.toMain`,
+but integrate the approved server-specific work into `server`. Do not redirect
+the integration to `main`. Integrate `server` into `main` only through an
+explicit release/integration request.
 
 ## Helper Input Contract
 
@@ -156,9 +173,9 @@ Missing, failed, or invalidly reused required validation blocks merge readiness.
 ### `workflow.cleanBranches` / `.cleanBranches`
 
 Delegate directly to Branch Cleanup using `safe-branch-cleanup`. Immediately
-after a successful `workflow.toMain` cleanup, treat this as idempotent
-verification: report `already clean` when appropriate and do not repeat remote
-or destructive operations unless remaining branches are detected.
+after a successful `workflow.toMain` or `workflow.toServer` cleanup, treat this
+as idempotent verification: report `already clean` when appropriate and do not
+repeat remote or destructive operations unless remaining branches are detected.
 
 ### `workflow.end`
 

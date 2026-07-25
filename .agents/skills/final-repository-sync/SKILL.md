@@ -7,11 +7,12 @@ user-invocable: false
 # Final Repository Sync
 
 After integration and required cleanup, verify local `main`, `origin/main`,
-their equal HEADs, current branch and ahead/behind state, clean working tree,
-local branches, remote branches, and pruned tracking references. No integrated
-feature/work branch may remain locally or remotely unless explicitly preserved.
-Normally only `main` remains active. Fast-forward integration must preserve
-expected linear history and satisfy the same checks.
+`server`, and `origin/server`, their equal required HEADs, current branch and
+ahead/behind state, clean working tree, local branches, remote branches, and
+pruned tracking references. No integrated temporary feature/work branch may
+remain locally or remotely unless explicitly preserved. Permanent `main` and
+`server` remain active. Fast-forward integration must preserve expected linear
+history and satisfy the same checks.
 
 Report compactly: final success/failure, branch, tree state, local/remote sync,
 cleanup result, docs gate result, validation state, Issue/Project states,
