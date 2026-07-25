@@ -1535,8 +1535,7 @@ static bool subscribePresentValue(BacnetDeviceSession& session,
   demoLogging.log(BacnetDemoLogging::Level::Info,
                   "subscription created %s present-value mode=%s lifetime=%lu fallbackMs=%lu active=%s",
                   bacnetObjectDisplayName(preview.object).c_str(),
-                  options.usePropertyCov ? "property-cov" :
-                    (options.preferCov ? "object-cov" : "polling"),
+                  options.usePropertyCov ? "property-cov" : (options.preferCov ? "object-cov" : "polling"),
                   static_cast<unsigned long>(options.covLifetimeSeconds),
                   static_cast<unsigned long>(options.fallbackPollMs),
                   preview.subscription && preview.subscription->active() ? "yes"

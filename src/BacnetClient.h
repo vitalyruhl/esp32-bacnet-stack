@@ -59,11 +59,11 @@ public:
                                 bool hasCovIncrement = false,
                                 float covIncrement = 0.0F);
   BacnetSubscribeCovResponseKind pollSubscribeCov(uint8_t expectedInvokeId,
-                                                   uint8_t* rejectReason = nullptr,
-                                                   const BacnetIpEndpoint* expectedPeer = nullptr);
+                                                  uint8_t* rejectReason = nullptr,
+                                                  const BacnetIpEndpoint* expectedPeer = nullptr);
   BacnetSubscribeCovResponseKind pollSubscribeCovProperty(uint8_t expectedInvokeId,
-                                                           uint8_t* rejectReason = nullptr,
-                                                           const BacnetIpEndpoint* expectedPeer = nullptr);
+                                                          uint8_t* rejectReason = nullptr,
+                                                          const BacnetIpEndpoint* expectedPeer = nullptr);
   bool pollCovNotification(BacnetCovNotification& notification,
                            bool acknowledgeConfirmed = true);
   bool pollIAm(BacnetIAmDevice& device);

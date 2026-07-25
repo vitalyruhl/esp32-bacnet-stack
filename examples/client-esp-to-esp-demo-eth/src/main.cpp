@@ -48,6 +48,24 @@ uint32_t lastPeerHealthyMs = 0;
 std::atomic<bool> bv320WriteInProgress{false};
 String bv320CommandStatus = "No command sent";
 Bv320ValueState bv320IndicatorState = Bv320ValueState::Unavailable;
+std::atomic<bool> bo0SequenceInProgress{false};
+String bo0SequenceStatus = "No BO0 HIL sequence sent";
+uint32_t bo0CovUpdatesAtSequenceStart = 0;
+constexpr uint32_t kBo0HilInterStepDelayMs = 300U;
+constexpr uint32_t kBo0HilCovSettleDelayMs = 1000U;
+
+enum class Bo0HilStep : uint8_t {
+  Idle,
+  Baseline,
+  EffectiveWrite,
+  HiddenWrite,
+  HiddenRelease,
+  WinningRelease,
+  VerifyCov,
+};
+
+Bo0HilStep bo0HilStep = Bo0HilStep::Idle;
+uint32_t bo0HilNextStepAtMs = 0;
 
 void persistCounters() {
   diagnosticsPreferences.putUInt("boot", bootCount);
@@ -370,6 +388,128 @@ void relinquishBv320P8AndP16() {
   finishBv320Write();
 }
 
+const BacnetValueObjectPreview* bo0Preview() {
+  return findRemotePreview(BacnetObjectType::BinaryOutput, 0);
+}
+
+uint32_t bo0CovUpdateCount() {
+  const BacnetValueObjectPreview* preview = bo0Preview();
+  return preview == nullptr ? 0U : preview->covUpdateCount;
+}
+
+bool beginBo0HilSequence() {
+  if (bo0SequenceInProgress.exchange(true)) {
+    bo0SequenceStatus = "BO0 HIL sequence already in progress";
+    return false;
+  }
+  if (activeBacnetSession == nullptr || !bacnetScanFinished) {
+    bo0SequenceStatus = "BO0 unavailable";
+    bo0SequenceInProgress.store(false);
+    return false;
+  }
+  bo0CovUpdatesAtSequenceStart = bo0CovUpdateCount();
+  bo0SequenceStatus = "BO0 HIL sequence queued";
+  bo0HilStep = Bo0HilStep::Baseline;
+  bo0HilNextStepAtMs = millis();
+  return true;
+}
+
+bool reportBo0HilStep(const char* step, BacnetDeviceSessionWriteStatus status) {
+  Serial.printf("[HIL-CLIENT] BO0 %s: %s\n", step, bv320WriteStatusText(status));
+  if (status == BacnetDeviceSessionWriteStatus::Ack) {
+    return true;
+  }
+  bo0SequenceStatus = "BO0 ";
+  bo0SequenceStatus += step;
+  bo0SequenceStatus += " ";
+  bo0SequenceStatus += bv320WriteStatusText(status);
+  return false;
+}
+
+void runBo0BindingHilSequence() {
+  beginBo0HilSequence();
+}
+
+bool runBo0HilStep(const char* step, BacnetDeviceSessionWriteStatus status) {
+  if (reportBo0HilStep(step, status)) {
+    return true;
+  }
+  bo0HilStep = Bo0HilStep::Idle;
+  bo0SequenceInProgress.store(false);
+  return false;
+}
+
+void scheduleBo0HilStep(Bo0HilStep nextStep, uint32_t delayMs) {
+  bo0HilStep = nextStep;
+  bo0HilNextStepAtMs = millis() + delayMs;
+}
+
+void processBo0BindingHilSequence() {
+  if (!bo0SequenceInProgress.load() || bo0HilStep == Bo0HilStep::Idle ||
+      static_cast<int32_t>(millis() - bo0HilNextStepAtMs) < 0) {
+    return;
+  }
+  if (activeBacnetSession == nullptr) {
+    bo0SequenceStatus = "BO0 session unavailable";
+    bo0HilStep = Bo0HilStep::Idle;
+    bo0SequenceInProgress.store(false);
+    return;
+  }
+
+  const BacnetRemoteObject object =
+    activeBacnetSession->object(BacnetObjectType::BinaryOutput, 0);
+  BacnetValue inactive;
+  inactive.type = BacnetValueType::Enumerated;
+  inactive.unsignedValue = 0U;
+  BacnetValue active;
+  active.type = BacnetValueType::Enumerated;
+  active.unsignedValue = 1U;
+
+  switch (bo0HilStep) {
+    case Bo0HilStep::Baseline:
+      if (runBo0HilStep("P16 INACTIVE (baseline)",
+                        object.writePresentValue(inactive, 16, kBacnetScanReadTimeoutMs))) {
+        scheduleBo0HilStep(Bo0HilStep::EffectiveWrite, kBo0HilInterStepDelayMs);
+      }
+      return;
+    case Bo0HilStep::EffectiveWrite:
+      if (runBo0HilStep("P8 ACTIVE (effective)",
+                        object.writePresentValue(active, 8, kBacnetScanReadTimeoutMs))) {
+        scheduleBo0HilStep(Bo0HilStep::HiddenWrite, kBo0HilCovSettleDelayMs);
+      }
+      return;
+    case Bo0HilStep::HiddenWrite:
+      if (runBo0HilStep("P16 ACTIVE (hidden)",
+                        object.writePresentValue(active, 16, kBacnetScanReadTimeoutMs))) {
+        scheduleBo0HilStep(Bo0HilStep::HiddenRelease, kBo0HilInterStepDelayMs);
+      }
+      return;
+    case Bo0HilStep::HiddenRelease:
+      if (runBo0HilStep("NULL P16 (hidden release)",
+                        object.relinquishPresentValue(16, kBacnetScanReadTimeoutMs))) {
+        scheduleBo0HilStep(Bo0HilStep::WinningRelease, kBo0HilInterStepDelayMs);
+      }
+      return;
+    case Bo0HilStep::WinningRelease:
+      if (runBo0HilStep("NULL P8 (winning release)",
+                        object.relinquishPresentValue(8, kBacnetScanReadTimeoutMs))) {
+        scheduleBo0HilStep(Bo0HilStep::VerifyCov, kBo0HilCovSettleDelayMs);
+      }
+      return;
+    case Bo0HilStep::VerifyCov: {
+      const uint32_t covDelta = bo0CovUpdateCount() - bo0CovUpdatesAtSequenceStart;
+      bo0SequenceStatus = "BO0 sequence ACK; effective-value COV updates=";
+      bo0SequenceStatus += covDelta;
+      bo0SequenceStatus += covDelta == 2U ? " (expected 2)" : " (expected 2; mismatch)";
+      bo0HilStep = Bo0HilStep::Idle;
+      bo0SequenceInProgress.store(false);
+      return;
+    }
+    case Bo0HilStep::Idle:
+      return;
+  }
+}
+
 void setRemoteBinaryInput(JsonObject& data,
                           const char* key,
                           const BacnetValueObjectPreview* preview) {
@@ -443,6 +583,7 @@ void fillClientLiveRuntime(JsonObject& data) {
     findRemotePreview(BacnetObjectType::BinaryInput, 2);
   const BacnetValueObjectPreview* bv320 =
     findRemotePreview(BacnetObjectType::BinaryValue, 320);
+  const BacnetValueObjectPreview* bo0 = bo0Preview();
   const Bv320RemoteState bv320State = bv320RemoteState();
   updateBv320IndicatorStyle(bv320State.valueState);
 
@@ -472,6 +613,12 @@ void fillClientLiveRuntime(JsonObject& data) {
   }
   data["bv320CommandStatus"] = bv320CommandStatus;
   data["bv320WriteInProgress"] = bv320WriteInProgress.load() ? "Writing" : "Ready";
+  data["bo0CovUpdates"] = bo0 != nullptr ? bo0->covUpdateCount : 0U;
+  data["bo0CovDelta"] = bo0 != nullptr && bo0->covUpdateCount >= bo0CovUpdatesAtSequenceStart
+                          ? bo0->covUpdateCount - bo0CovUpdatesAtSequenceStart
+                          : 0U;
+  data["bo0SequenceStatus"] = bo0SequenceStatus;
+  data["bo0SequenceInProgress"] = bo0SequenceInProgress.load() ? "Writing" : "Ready";
 
   data["bootCount"] = bootCount;
   data["resetReason"] = lastResetReason;
@@ -546,6 +693,19 @@ void addBv320ControlText(const char* key, const char* label, int order) {
   ConfigManager.getRuntime().addRuntimeMeta(meta);
 }
 
+void addBo0ControlText(const char* key, const char* label, int order) {
+  RuntimeFieldMeta meta;
+  meta.sourceGroup = "esp2espClient";
+  meta.key = key;
+  meta.label = label;
+  meta.page = "ESP-to-ESP";
+  meta.card = "BO0 Binding HIL";
+  meta.group = "Priority and COV sequence";
+  meta.order = order;
+  meta.isString = true;
+  ConfigManager.getRuntime().addRuntimeMeta(meta);
+}
+
 void addBv320ValueIndicator() {
   RuntimeFieldMeta meta;
   meta.sourceGroup = "esp2espClient";
@@ -574,6 +734,7 @@ void setupClientLiveUi() {
   ConfigManager.addLiveCard("ESP-to-ESP", "Server Hardware Inputs", 10);
   ConfigManager.addLiveCard("ESP-to-ESP", "Remote COV Variables", 20);
   ConfigManager.addLiveCard("ESP-to-ESP", "BV320 Remote Control", 30);
+  ConfigManager.addLiveCard("ESP-to-ESP", "BO0 Binding HIL", 40);
   ConfigManager.addLiveCard("ESP-to-ESP", "Diagnostics", 90);
 
   for (size_t index = 0; index < kRemoteObjectCount; ++index) {
@@ -612,6 +773,19 @@ void setupClientLiveUi() {
   bv320Controls
     .button("bv320_relinquish", "RELINQUISH P8 + P16", []() { relinquishBv320P8AndP16(); })
     .order(30);
+  addBo0ControlText("bo0SequenceStatus", "Last BO0 sequence", 10);
+  addBo0ControlText("bo0SequenceInProgress", "Sequence state", 11);
+  addBo0ControlText("bo0CovUpdates", "BO0 total COV updates", 12);
+  addBo0ControlText("bo0CovDelta", "BO0 COV updates since sequence", 13);
+  auto bo0Controls = ConfigManager.liveGroup("esp2espClient")
+                       .page("ESP-to-ESP", 90)
+                       .card("BO0 Binding HIL", 40)
+                       .group("Priority and COV sequence", 1);
+  bo0Controls
+    .button("bo0_run_binding_hil", "RUN BO0 PRIORITY / RELINQUISH", []() {
+      runBo0BindingHilSequence();
+    })
+    .order(20);
   addClientLiveText("bootCount", "Boot count (NVS)", 10);
   addClientLiveText("resetReason", "Current reset reason", 11);
   addClientLiveText("uptimeSeconds", "Uptime", 12);
@@ -676,6 +850,7 @@ void setup() {
 void loop() {
   const uint32_t startedAtUs = micros();
   espToEspBaseLoop();
+  processBo0BindingHilSequence();
   updateClientDiagnostics();
   loopTimeMs = static_cast<float>(micros() - startedAtUs) / 1000.0F;
   lastMainLoopAtMs = millis();

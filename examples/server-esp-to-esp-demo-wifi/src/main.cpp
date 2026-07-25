@@ -36,6 +36,9 @@ uint32_t lastResetReason = 0;
 float loopTimeMs = 0.0F;
 uint32_t lastChangeMs = 0;
 uint32_t changeCount = 0;
+uint32_t bindingEventSequence = 0;
+// The wrapper owns this optional storage for the complete lifetime of BO0.
+BacnetBinaryOutputCallbackStorage led1Callbacks;
 // This wrapper owns the commandable value for the paired COV demonstration.
 // The server borrows this storage for its complete lifetime.
 BacnetServerBinaryValue binaryValues[] = {
@@ -52,6 +55,97 @@ bool previousLed1 = false;
 bool previousLed2 = false;
 bool previousBv320 = false;
 uint32_t lastCovSendFailureLogMs = 0;
+
+const char* changeOriginText(BacnetChangeOrigin origin) {
+  switch (origin) {
+    case BacnetChangeOrigin::Local:
+      return "local";
+    case BacnetChangeOrigin::BacnetWriteProperty:
+      return "bacnet-write";
+    case BacnetChangeOrigin::RelinquishDefault:
+      return "relinquish-default";
+  }
+  return "unknown";
+}
+
+const char* binaryValueText(bool value) {
+  return value ? "ACTIVE" : "INACTIVE";
+}
+
+float readCachedLightRaw(void*) {
+  // The base I/O example performs the ESP-specific ADC access and retains this
+  // cached raw sample. The portable provider only exposes that numeric value.
+  return static_cast<float>(lightRawValue);
+}
+
+void applyLed1WithBindingTrace(void*, bool presentValue, bool outOfService) {
+  Serial.printf("[HIL-BO %lu] output value=%s outOfService=%s\n",
+                static_cast<unsigned long>(++bindingEventSequence),
+                binaryValueText(presentValue),
+                outOfService ? "true" : "false");
+  applyLed1(nullptr, presentValue, outOfService);
+}
+
+void observeLed1Priority(void*, const BacnetPriorityValueChange& change) {
+  Serial.printf("[HIL-BO %lu] priority origin=%s priority=%u old=%s/%s new=%s/%s\n",
+                static_cast<unsigned long>(++bindingEventSequence),
+                changeOriginText(change.origin),
+                static_cast<unsigned int>(change.priority),
+                change.oldOccupied ? "set" : "null",
+                binaryValueText(change.oldValue),
+                change.newOccupied ? "set" : "null",
+                binaryValueText(change.newValue));
+}
+
+void observeLed1EffectivePriority(void*, const BacnetEffectivePriorityChange& change) {
+  Serial.printf("[HIL-BO %lu] effective origin=%s priority=%u->%u value=%s->%s\n",
+                static_cast<unsigned long>(++bindingEventSequence),
+                changeOriginText(change.origin),
+                static_cast<unsigned int>(change.oldPriority),
+                static_cast<unsigned int>(change.newPriority),
+                binaryValueText(change.oldValue),
+                binaryValueText(change.newValue));
+}
+
+void observeLed1PresentValue(void*, const BacnetPresentValueChange& change) {
+  Serial.printf("[HIL-BO %lu] present-value origin=%s value=%s->%s\n",
+                static_cast<unsigned long>(++bindingEventSequence),
+                changeOriginText(change.origin),
+                binaryValueText(change.oldValue),
+                binaryValueText(change.newValue));
+}
+
+void observeLed1Relinquish(void*, const BacnetRelinquishChange& change) {
+  Serial.printf("[HIL-BO %lu] relinquish origin=%s priority=%u value=%s->%s winner=%u%s\n",
+                static_cast<unsigned long>(++bindingEventSequence),
+                changeOriginText(change.origin),
+                static_cast<unsigned int>(change.releasedPriority),
+                binaryValueText(change.oldEffectiveValue),
+                binaryValueText(change.newEffectiveValue),
+                static_cast<unsigned int>(change.newEffectivePriority),
+                change.relinquishDefaultEffective ? " default" : "");
+}
+
+void configurePortableBindingHil() {
+  const BacnetLinearScale lightScale{0.0F, 4095.0F, 0.0F, 100.0F};
+  const bool inputConfigured =
+    lightSensor.bindInput(readCachedLightRaw, nullptr) == BacnetObjectConfigurationStatus::Ok &&
+    lightSensor.setInputScale(lightScale) == BacnetObjectConfigurationStatus::Ok;
+  led1.attachOutput(applyLed1WithBindingTrace, nullptr);
+  led1.attachCallbacks(led1Callbacks);
+  const bool callbacksConfigured =
+    led1.onPriorityValueChange(8, observeLed1Priority, nullptr) &&
+    led1.onPriorityValueChange(16, observeLed1Priority, nullptr) &&
+    led1.onEffectivePriorityChange(observeLed1EffectivePriority, nullptr) &&
+    led1.onPresentValueChange(observeLed1PresentValue, nullptr) &&
+    led1.onRelinquish(observeLed1Relinquish, nullptr);
+  if (inputConfigured && callbacksConfigured) {
+    Serial.println("[I] #127 portable binding and BO0 callbacks configured");
+    return;
+  }
+  bacnetConfigured = false;
+  Serial.println("[E] #127 portable binding or BO0 callback configuration failed");
+}
 
 void observeLiveCovDiagnostic(void*, const BacnetServerCovDiagnostic& diagnostic) {
 #if BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
@@ -156,8 +250,8 @@ void updateRuntimeDiagnostics() {
 
 void setupLiveDiagnosticsUi() {
   auto bv320Live = ConfigManager.liveGroup("esp2espServer")
-                      .page("ESP-to-ESP", 5)
-                      .card("BV320 Commandable Value");
+                     .page("ESP-to-ESP", 5)
+                     .card("BV320 Commandable Value");
   bv320Live.boolValue("bv320Value", []() { return binaryValues[0].priority.effectiveValue(); })
     .label("BV320 effective Present_Value")
     .order(10);
@@ -174,8 +268,8 @@ void setupLiveDiagnosticsUi() {
     .label("BV320 effective priority (0 = Relinquish_Default)")
     .order(20);
   bv320Live.value("bv320CovSubscriptions", []() {
-    return static_cast<uint32_t>(bv320CovSubscriptionCount());
-  })
+             return static_cast<uint32_t>(bv320CovSubscriptionCount());
+           })
     .label("BV320 active Present_Value COV subscriptions")
     .order(30);
 
@@ -194,6 +288,7 @@ void setupLiveDiagnosticsUi() {
 void setup() {
   initializeDiagnostics();
   espToEspBaseSetup();
+  configurePortableBindingHil();
   registerBv320();
   bacnetServer.setCovDiagnosticListener(observeLiveCovDiagnostic);
   ConfigManager.setAppName(kLiveDemoAppName);
