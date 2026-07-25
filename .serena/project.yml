@@ -93,7 +93,6 @@ ignored_paths:
 - "node_modules/**"
 - "docs/generated/**"
 - "src/secret/**"
-- "dev-info/secret/**"
 - "examples/**/.pio/**"
 - "examples/**/build/**"
 - "examples/**/dist/**"
