@@ -56,7 +56,7 @@ shows at most eight rows to bound RAM and UI payloads; per-property failures
 remain visible instead of being reported as successful fallback data. See the
 [Client Guide](docs/client/README.md) for lifecycle and API details.
 
-The working-tree package metadata is version `0.39.1`. It includes the portable
+The working-tree package metadata is version `0.40.0`. It includes the portable
 server runtime, read-only Analog Input/Binary Input profile, commandable Binary
 Output and Binary Value priority support, allocation-free server-side SubscribeCOV and
 SubscribeCOVProperty support, and ESP32 server examples. See
@@ -151,11 +151,16 @@ additional latency or jitter. Ethernet is recommended when more deterministic
 response times are required. Visible delay does not necessarily indicate a COV
 or BACnet protocol failure.
 
-For the paired COV setup, use the Wi-Fi server
+For the existing paired COV setup, use the Wi-Fi server
 [`examples/esp32/paired/live-cov/server-wifi`](examples/esp32/paired/live-cov/server-wifi/README.md),
 the Ethernet demo client
-[`examples/esp32/paired/live-cov/client-ethernet`](examples/esp32/paired/live-cov/client-ethernet/README.md),
-and the focused acceptance runner
+[`examples/esp32/paired/live-cov/client-ethernet`](examples/esp32/paired/live-cov/client-ethernet/README.md).
+
+For the inverse role setup, use the Ethernet server
+[`examples/esp32/paired/live-cov/server-ethernet`](examples/esp32/paired/live-cov/server-ethernet/README.md)
+and the WiFi demo client
+[`examples/esp32/paired/live-cov/client-wifi`](examples/esp32/paired/live-cov/client-wifi/README.md).
+Both pairings use the focused acceptance runner
 [`tests/hil/esp32/cov-client-server-acceptance`](tests/hil/esp32/cov-client-server-acceptance/README.md).
 
 ## screenshots
@@ -175,6 +180,8 @@ and the focused acceptance runner
 | `examples/esp32/server/bacnet-server/` | ESP32 WiFi/Ethernet BACnet server demo with BV320 priority writes |
 | `examples/esp32/paired/live-cov/server-wifi/` | Paired Wi-Fi BACnet server COV demo wrapper |
 | `examples/esp32/paired/live-cov/client-ethernet/` | Paired WT32-ETH01 BACnet client COV demo wrapper |
+| `examples/esp32/paired/live-cov/server-ethernet/` | Paired WT32-ETH01 BACnet server COV demo wrapper |
+| `examples/esp32/paired/live-cov/client-wifi/` | Paired WiFi BACnet client COV demo wrapper |
 | `tests/hil/esp32/cov-client-server-acceptance/` | Focused ESP-to-ESP COV acceptance runner |
 | `tests/` | Portable, native, Windows, ESP32, fixture, and HIL tests |
 | `docs/` | Project documentation |

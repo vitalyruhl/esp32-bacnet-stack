@@ -3,9 +3,30 @@
 // Keep the established Ethernet client implementation unchanged. The wrapper
 // provides the paired-server target, compact live diagnostics, fixed BV320
 // control actions, and a dedicated persistent diagnostics namespace.
-#define APP_NAME "ESP-to-ESP BACnet Client"
-#define APP_VERSION "0.36.0"
-#include "generated_client_base.inc"
+#ifndef BACNET_DEMO_USE_ETHERNET
+#define BACNET_DEMO_USE_ETHERNET 0
+#endif
+
+#if BACNET_DEMO_USE_ETHERNET
+#include <ETH.h>
+#endif
+
+#ifndef ESP_TO_ESP_CLIENT_APP_NAME
+#define ESP_TO_ESP_CLIENT_APP_NAME "ESP-to-ESP BACnet Client"
+#endif
+#ifndef ESP_TO_ESP_CLIENT_APP_VERSION
+#define ESP_TO_ESP_CLIENT_APP_VERSION "0.36.0"
+#endif
+#ifndef ESP_TO_ESP_CLIENT_NVS_NAMESPACE
+#define ESP_TO_ESP_CLIENT_NVS_NAMESPACE "esp2esp_cli"
+#endif
+#ifndef ESP_TO_ESP_CLIENT_BASE_INCLUDE
+#define ESP_TO_ESP_CLIENT_BASE_INCLUDE "generated_client_base.inc"
+#endif
+
+#define APP_NAME ESP_TO_ESP_CLIENT_APP_NAME
+#define APP_VERSION ESP_TO_ESP_CLIENT_APP_VERSION
+#include ESP_TO_ESP_CLIENT_BASE_INCLUDE
 
 #include <Preferences.h>
 #include <esp_system.h>
@@ -14,7 +35,7 @@
 
 namespace {
 
-constexpr char kNvsNamespace[] = "esp2esp_cli";
+constexpr char kNvsNamespace[] = ESP_TO_ESP_CLIENT_NVS_NAMESPACE;
 constexpr uint32_t kDiagnosticsSchema = 1;
 constexpr size_t kPreviewCount = kBacnetMaxFoundObjectsToDisplay;
 constexpr size_t kRemoteObjectCount = 8;
@@ -809,8 +830,12 @@ void setupClientLiveUi() {
 }
 
 void updateClientDiagnostics() {
-  const bool ethernetUp = bacnet_example::EthernetNetwork::hasIp();
-  if (ethernetUp) {
+#if BACNET_DEMO_USE_ETHERNET
+  const bool networkUp = bacnet_example::EthernetNetwork::hasIp();
+#else
+  const bool networkUp = WiFi.status() == WL_CONNECTED;
+#endif
+  if (networkUp) {
     if (ethernetConnectedOnce && ethernetOutageActive) {
       ++reconnectCount;
       ethernetOutageActive = false;
