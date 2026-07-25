@@ -43,7 +43,7 @@ target_compile_definitions(bacnet-write-hil PRIVATE
   ESP_BACNET_ENABLE_WRITE_PROPERTY=1
   ESP_BACNET_ENABLE_PRIORITY_WRITE=1)
 target_include_directories(bacnet-write-hil PRIVATE
-  ${ESP_BACNET_ROOT}/examples/common)
+  ${ESP_BACNET_ROOT}/tests/hil/esp32/shared)
 target_link_libraries(bacnet-write-hil PRIVATE
   bacnet_client_priority_enabled bacnet_cli_common bacnet_windows)
 

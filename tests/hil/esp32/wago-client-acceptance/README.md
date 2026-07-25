@@ -47,7 +47,7 @@ stage uses the writable command-priority reset mode: it relinquishes priorities
 1..5 and 7..16, explicitly reports skipped priority 6, and never writes
 `priority-array` directly. The Strict and writable reset semantics, including
 the WAGO compatibility observation, are documented in
-[`docs/bacnet-command-priority.md`](../../docs/bacnet-command-priority.md).
+[`docs/bacnet-command-priority.md`](../../../../docs/bacnet-command-priority.md).
 
 `S02` is enabled by default in the local secrets template and reads
 `present-value` from configured AI/AO/AV, BI/BO/BV, MI/MO/MSV objects without
@@ -65,14 +65,14 @@ abort the scenario. The derived object state is conservative and read-only.
 Build without upload:
 
 ```sh
-pio run -d examples/hil-wago-client-acceptance -e usb
-pio run -d examples/hil-wago-client-acceptance -e eth
+pio run -d tests/hil/esp32/wago-client-acceptance -e usb
+pio run -d tests/hil/esp32/wago-client-acceptance -e eth
 ```
 
 Run locally:
 
 ```sh
-pio run -d examples/hil-wago-client-acceptance -e usb -t upload
+pio run -d tests/hil/esp32/wago-client-acceptance -e usb -t upload
 pio device monitor -b 115200
 ```
 
@@ -101,6 +101,6 @@ The scenario order and BACnet calls intentionally remain visible in
 `src/main.cpp`. Reusable HIL-only result accounting and output live in
 `HilScenarioRunner` and `HilResultOutput`; shared temporary-value selection and
 comparison for the ESP32 and native HIL runners live in
-`examples/common/BacnetHilPrioritySupport.h`. WiFi-only startup support is
+`tests/hil/esp32/shared/BacnetHilPrioritySupport.h`. WiFi-only startup support is
 provided by `examples/esp32/shared/network/Esp32WiFiNetwork.h` and does not own BACnet
 requests or writes.

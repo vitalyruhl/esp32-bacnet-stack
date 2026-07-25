@@ -58,7 +58,7 @@ jobs:
         run: pio run -d examples/esp32/client/basic-object-list-scan -e usb -e eth
 
       - name: Build WAGO HIL runner
-        run: pio run -d examples/hil-wago-client-acceptance -e usb -e eth
+        run: pio run -d tests/hil/esp32/wago-client-acceptance -e usb -e eth
 
       - name: Build server demo
         run: pio run -d examples/esp32/server/bacnet-server -e usb -e eth

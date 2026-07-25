@@ -156,7 +156,7 @@ For the paired COV setup, use the Wi-Fi server
 the Ethernet demo client
 [`examples/esp32/paired/live-cov/client-ethernet`](examples/esp32/paired/live-cov/client-ethernet/README.md),
 and the focused acceptance runner
-[`examples/hil-cov-espClient-to-espServer-acceptance`](examples/hil-cov-espClient-to-espServer-acceptance/README.md).
+[`tests/hil/esp32/cov-client-server-acceptance`](tests/hil/esp32/cov-client-server-acceptance/README.md).
 
 ## screenshots
 
@@ -171,11 +171,11 @@ and the focused acceptance runner
 | `examples/esp32/client/rich-client/ethernet/` | Optional WT32-ETH01 V1.4 Ethernet transport variant of the same rich client demo |
 | `examples/esp32/shared/` | Shared ESP32 network, client-demo, and I/O-server implementation helpers |
 | `examples/esp32/client/basic-object-list-scan/` | Canonical serial-only basic BACnet/IP client example |
-| `examples/hil-wago-client-acceptance/` | Local ESP32/WAGO client acceptance HIL runner |
+| `tests/hil/esp32/wago-client-acceptance/` | Local ESP32/WAGO client acceptance HIL runner |
 | `examples/esp32/server/bacnet-server/` | ESP32 WiFi/Ethernet BACnet server demo with BV320 priority writes |
 | `examples/esp32/paired/live-cov/server-wifi/` | Paired Wi-Fi BACnet server COV demo wrapper |
 | `examples/esp32/paired/live-cov/client-ethernet/` | Paired WT32-ETH01 BACnet client COV demo wrapper |
-| `examples/hil-cov-espClient-to-espServer-acceptance/` | Focused ESP-to-ESP COV acceptance runner |
+| `tests/hil/esp32/cov-client-server-acceptance/` | Focused ESP-to-ESP COV acceptance runner |
 | `tests/` | Portable, native, Windows, ESP32, fixture, and HIL tests |
 | `docs/` | Project documentation |
 

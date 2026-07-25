@@ -62,7 +62,7 @@ Build with `pio run -d examples/esp32/client/rich-client/ethernet -e eth`. The l
 that port a generic repository assumption. See the example README for GPIO0,
 UART0, power, upload, and monitor instructions.
 
-## `examples/hil-wago-client-acceptance`
+## `tests/hil/esp32/wago-client-acceptance`
 
 This is the local hardware acceptance runner.
 

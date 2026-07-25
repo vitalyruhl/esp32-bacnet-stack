@@ -39,7 +39,7 @@ priority-slot changes and releases log their priority/relinquish events but do
 not produce an output or Present_Value event.
 For the COV protocol scope, see
 [Change of Value (COV)](../../../../../docs/cov.md); for the paired acceptance scenario,
-see the [COV HIL runner](../../../../hil-cov-espClient-to-espServer-acceptance/README.md).
+see the [COV HIL runner](../../../../../tests/hil/esp32/cov-client-server-acceptance/README.md).
 
 ## WAGO BACnet Configurator check
 

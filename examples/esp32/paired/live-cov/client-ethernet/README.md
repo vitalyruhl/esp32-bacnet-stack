@@ -51,7 +51,7 @@ The `eth-com6` environment uses the tested WT32-ETH01 DTR/RTS automatic-reset
 settings. Open the ConfigManager GUI at the Ethernet address shown on the
 serial console; `192.168.2.127` is the current laboratory configuration. See
 [Change of Value (COV)](../../../../../docs/cov.md) and the paired
-[COV HIL runner](../../../../hil-cov-espClient-to-espServer-acceptance/README.md) for
+[COV HIL runner](../../../../../tests/hil/esp32/cov-client-server-acceptance/README.md) for
 the protocol and acceptance scope.
 
 If COM6 remains in download mode after flashing, reset it manually before the

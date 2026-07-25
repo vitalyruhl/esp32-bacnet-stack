@@ -49,7 +49,7 @@ release_example: release/v0.1.0
 - client_example_wifi: `pio run -d examples/esp32/client/rich-client/wifi -e usb`
 - client_example_eth: `pio run -d examples/esp32/client/rich-client/ethernet -e eth`
 - basic_client_example_eth: `pio run -d examples/esp32/client/basic-object-list-scan -e eth`
-- hil_client_example_eth: `pio run -d examples/hil-wago-client-acceptance -e eth`
+- hil_client_example_eth: `pio run -d tests/hil/esp32/wago-client-acceptance -e eth`
 - server_example: `pio run -d examples/esp32/server/bacnet-server -e usb -e eth`
 - tests: `pio test -e usb --without-uploading --without-testing`
 - ota_when_relevant: `pio run -e ota`

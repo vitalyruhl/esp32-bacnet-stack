@@ -46,13 +46,13 @@ evidence, not a claim about every network, restart, or long-duration condition.
 Build only:
 
 ```sh
-pio run -d examples/hil-cov-espClient-to-espServer-acceptance -e eth-com6-cov-hil
+pio run -d tests/hil/esp32/cov-client-server-acceptance -e eth-com6-cov-hil
 ```
 
 For upload, manually place the ETH ESP32 in bootloader mode first:
 
 ```sh
-pio run -d examples/hil-cov-espClient-to-espServer-acceptance -e eth-com6-cov-hil -t upload
+pio run -d tests/hil/esp32/cov-client-server-acceptance -e eth-com6-cov-hil -t upload
 ```
 
 After upload, reset the ETH ESP32 normally and monitor COM6 at 115200 baud.
@@ -66,5 +66,5 @@ Server-side ConfigManager diagnostics must be checked concurrently for the
 single object-level entry, endpoint, process ID, lifetime, notification state,
 last send, and confirmed-notification acknowledgement.
 
-See [Change of Value (COV)](../../docs/cov.md) for the public protocol/API
+See [Change of Value (COV)](../../../../docs/cov.md) for the public protocol/API
 scope and lifecycle boundaries.

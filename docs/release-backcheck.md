@@ -8,7 +8,7 @@ It requires package metadata, public sources, documentation, and both server
 demos, while rejecting native test consumers, local secrets, IDE files, Git,
 PlatformIO, temporary, and compiled-build content.
 
-By default the check uses `examples/hil-wago-client-acceptance` as the source
+By default the check uses `tests/hil/esp32/wago-client-acceptance` as the source
 template because it is the realistic WAGO BACnet/IP client acceptance example.
 The script copies the selected example into `.Temp/release-backcheck/` and
 rewrites the temporary `platformio.ini` dependency for the selected environment.
