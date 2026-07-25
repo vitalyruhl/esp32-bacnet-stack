@@ -11,7 +11,10 @@ struct WindowsIpv4Interface {
   BacnetIpEndpoint netmask;
 };
 
-enum class WindowsInterfaceSelectionStatus { Selected, None, Multiple, NotFound };
+enum class WindowsInterfaceSelectionStatus { Selected,
+                                             None,
+                                             Multiple,
+                                             NotFound };
 
 BacnetIpEndpoint windowsBroadcastAddress(BacnetIpEndpoint address, BacnetIpEndpoint netmask);
 WindowsInterfaceSelectionStatus windowsSelectInterface(const WindowsIpv4Interface* interfaces, size_t count, const BacnetIpEndpoint* requestedAddress, WindowsIpv4Interface& selected);

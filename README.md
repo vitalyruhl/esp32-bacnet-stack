@@ -311,7 +311,7 @@ Winsock runtime and transport only; the transport test uses local UDP loopback
 on `127.0.0.1` and sends no broadcasts.
 
 Small PowerShell examples for the productive native tools are in
-[`tools/native/examples`](tools/native/examples/README.md). They cover
+[`examples/windows/bacnet-cli/scripts`](examples/windows/bacnet-cli/scripts/README.md). They cover
 Who-Is/I-Am discovery, AV/BV/MSV reads, SubscribeCOV, Analog Value listing, and
 an explicitly authorized Binary Value priority-8 toggle followed by a separate
 relinquish step. Edit their documented `settings.ps1` test-environment values

@@ -27,4 +27,4 @@ Thumbs.db
 .Temp/
 **/.Temp/
 build/
-tools/native/examples/settings.local.ps1
+examples/windows/bacnet-cli/scripts/settings.local.ps1

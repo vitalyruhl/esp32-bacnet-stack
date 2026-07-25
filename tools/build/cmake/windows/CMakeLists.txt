@@ -9,21 +9,22 @@ target_include_directories(bacnet_windows PUBLIC
 target_link_libraries(bacnet_windows PUBLIC bacnet_client ws2_32)
 
 add_library(bacnet_cli_common STATIC
-  ${ESP_BACNET_ROOT}/tools/native/cli/BacnetCliSupport.cpp
-  ${ESP_BACNET_ROOT}/tools/native/cli/BacnetNativeCli.cpp
-  ${ESP_BACNET_ROOT}/tools/native/cli/WindowsInterfaceSelection.cpp)
+  ${ESP_BACNET_ROOT}/examples/windows/bacnet-cli/src/BacnetCliSupport.cpp
+  ${ESP_BACNET_ROOT}/examples/windows/bacnet-cli/src/BacnetNativeCli.cpp
+  ${ESP_BACNET_ROOT}/examples/windows/bacnet-cli/src/WindowsInterfaceSelection.cpp)
 target_compile_features(bacnet_cli_common PUBLIC cxx_std_17)
 target_include_directories(bacnet_cli_common PUBLIC
   ${ESP_BACNET_ROOT}/src
-  ${ESP_BACNET_ROOT}/tools/native/cli)
+  ${ESP_BACNET_ROOT}/examples/windows/bacnet-cli/src)
 target_link_libraries(bacnet_cli_common PUBLIC bacnet_windows iphlpapi)
 
-add_executable(bacnet-discover ${ESP_BACNET_ROOT}/tools/native/cli/bacnet_discover.cpp)
+add_executable(bacnet-discover
+  ${ESP_BACNET_ROOT}/examples/windows/bacnet-cli/src/bacnet_discover.cpp)
 target_compile_features(bacnet-discover PRIVATE cxx_std_17)
 target_link_libraries(bacnet-discover PRIVATE bacnet_cli_common bacnet_client)
 
 add_executable(bacnet-client
-  ${ESP_BACNET_ROOT}/tools/native/cli/bacnet_client.cpp
+  ${ESP_BACNET_ROOT}/examples/windows/bacnet-cli/src/bacnet_client.cpp
   ${ESP_BACNET_ROOT}/src/BacnetDeviceSession.cpp
   ${ESP_BACNET_ROOT}/src/BacnetRemoteObject.cpp)
 target_compile_features(bacnet-client PRIVATE cxx_std_17)
@@ -33,8 +34,8 @@ target_compile_definitions(bacnet-client PRIVATE
 target_link_libraries(bacnet-client PRIVATE bacnet_cli_common bacnet_client_priority_enabled)
 
 add_executable(bacnet-write-hil
-  ${ESP_BACNET_ROOT}/tools/native/cli/bacnet_write_hil.cpp
-  ${ESP_BACNET_ROOT}/tools/native/cli/BacnetWriteHil.cpp
+  ${ESP_BACNET_ROOT}/tests/hil/windows/bacnet-write-hil/bacnet_write_hil.cpp
+  ${ESP_BACNET_ROOT}/tests/hil/windows/bacnet-write-hil/BacnetWriteHil.cpp
   ${ESP_BACNET_ROOT}/src/BacnetDeviceSession.cpp
   ${ESP_BACNET_ROOT}/src/BacnetRemoteObject.cpp)
 target_compile_features(bacnet-write-hil PRIVATE cxx_std_17)
@@ -174,7 +175,7 @@ target_link_libraries(bacnet_object_list_scan_tests PRIVATE bacnet_client)
 
 add_executable(bacnet_write_hil_tests
   ${ESP_BACNET_ROOT}/tests/hil/native/write_hil_tests.cpp
-  ${ESP_BACNET_ROOT}/tools/native/cli/BacnetWriteHil.cpp
+  ${ESP_BACNET_ROOT}/tests/hil/windows/bacnet-write-hil/BacnetWriteHil.cpp
   ${ESP_BACNET_ROOT}/src/BacnetClient.cpp
   ${ESP_BACNET_ROOT}/src/BacnetLogger.cpp
   ${ESP_BACNET_ROOT}/src/BacnetDeviceSession.cpp
@@ -185,7 +186,7 @@ target_compile_definitions(bacnet_write_hil_tests PRIVATE
   ESP_BACNET_ENABLE_PRIORITY_WRITE=1)
 target_include_directories(bacnet_write_hil_tests PRIVATE
   ${ESP_BACNET_ROOT}/src
-  ${ESP_BACNET_ROOT}/tools/native/cli
+  ${ESP_BACNET_ROOT}/tests/hil/windows/bacnet-write-hil
   ${ESP_BACNET_ROOT}/examples/common)
 target_link_libraries(bacnet_write_hil_tests PRIVATE bacnet_portable)
 

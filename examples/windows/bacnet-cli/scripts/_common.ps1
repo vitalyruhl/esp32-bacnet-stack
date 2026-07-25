@@ -134,8 +134,8 @@ function Get-BacnetNativeBinDirectory {
         throw "Native BACnet binaries were not found in: $resolved`nBuild them with:`n  cmake -S tools/build/cmake -B build/native-windows`n  cmake --build build/native-windows --config Debug`nor pass -ExeDir <path>."
     }
     $candidates = @(
-        (Join-Path $PSScriptRoot '..\..\..\build\native-windows\native\Debug'),
-        (Join-Path $PSScriptRoot '..\..\..\build\native-windows\native\Release')
+        (Join-Path $PSScriptRoot '..\..\..\..\build\native-windows\native\Debug'),
+        (Join-Path $PSScriptRoot '..\..\..\..\build\native-windows\native\Release')
     )
     foreach ($candidate in $candidates) {
         $resolved = [System.IO.Path]::GetFullPath($candidate)
