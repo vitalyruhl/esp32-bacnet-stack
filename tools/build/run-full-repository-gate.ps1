@@ -172,6 +172,13 @@ function Invoke-GateCheck {
         $stopwatch.Stop()
     }
 
+    # A failed-only rerun still needs a clean archive and fresh discovery, but
+    # those setup steps are not repeated validation checks in its JSON report.
+    if ($RequiredSetup -and $null -ne $script:OnlyFailedNames -and $succeeded) {
+        Write-Host "[PASS] $Name (setup)"
+        return
+    }
+
     if ($ExpectedFailure) {
         if (-not $succeeded) {
             Add-Result -Name $Name -Status PASS -Command $Command -ExitCode $script:LastNativeExitCode -LogPath $logPath -Duration $stopwatch.Elapsed -ExpectedFailure $true -Detail 'Expected compile failure observed.'
@@ -605,9 +612,18 @@ $summary = Write-Summary
 if (-not $KeepLogs) {
     # Logs and JSON remain available. Only reproducible build workspaces are
     # removed unless a caller explicitly requests diagnostic retention.
-    $preservedLogs = $script:LogsDirectory
-    $preservedSummary = $script:SummaryPath
-    Write-Output "Logs retained at $preservedLogs"
-    Write-Output "Summary retained at $preservedSummary"
+    foreach ($temporaryPath in @($script:GateRoot, $cmakeBuild, $packageDirectory, $consumerRoot, $archivePath)) {
+        if (-not (Test-Path -LiteralPath $temporaryPath)) {
+            continue
+        }
+        $resolvedTemporaryPath = (Resolve-Path -LiteralPath $temporaryPath).Path.TrimEnd('\')
+        $resolvedRunRoot = (Resolve-Path -LiteralPath $runRoot).Path.TrimEnd('\')
+        if (-not $resolvedTemporaryPath.StartsWith($resolvedRunRoot + '\', [StringComparison]::OrdinalIgnoreCase)) {
+            throw "Refusing to remove a path outside the current gate run: $resolvedTemporaryPath"
+        }
+        Remove-Item -LiteralPath $resolvedTemporaryPath -Recurse -Force
+    }
+    Write-Output "Logs retained at $($script:LogsDirectory)"
+    Write-Output "Summary retained at $($script:SummaryPath)"
 }
 exit $(if ($summary.fail -gt 0 -or $summary.skipped -gt 0) { 1 } else { 0 })
