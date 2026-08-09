@@ -11,9 +11,11 @@ The client discovers the Ethernet server object list and subscribes to the
 same eight process values: AI0, AI1, BI0 through BI2, BO0, BO1, and BV320.
 The **ESP-to-ESP** GUI cards show current cached values, receive mode, COV
 updates, renewal attempts, local send failures, timeouts, network reconnects,
-and peer recovery. Subscription renewal and polling fallback remain the proven
-shared client behavior. The manual BO0 priority/relinquish HIL action is also
-available unchanged; it is never run automatically.
+and peer recovery. The client recreates its session after a target I-Am
+timeout, an empty or failed object-list scan, or sustained loss of every
+previously active COV subscription. Subscription renewal and polling fallback
+remain the proven shared client behavior. The manual BO0 priority/relinquish
+HIL action is also available unchanged; it is never run automatically.
 
 Configure WiFi through ConfigManager. Keep real credentials exclusively in the
 ignored `src/secret/secrets.h`; without it, configure the WiFi network through

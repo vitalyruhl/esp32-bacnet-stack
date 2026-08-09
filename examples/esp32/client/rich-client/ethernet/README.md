@@ -5,7 +5,7 @@ V1.4 (WT32-S1) through its LAN8720 Ethernet interface. WiFi is compiled out of
 this project. The shared client-demo application remains the same as the WiFi
 variant; only the network adapter and ConfigManager network settings differ.
 
-ConfigManager V4.4.0 stores the Ethernet IP, subnet, gateway, DNS, settings
+ConfigManager 4.4.10 stores the Ethernet IP, subnet, gateway, DNS, settings
 password, and system/NTP settings. Address changes take effect after a reboot.
 The tracked first-run default is `192.168.2.127/24`; copy
 `src/secret/secrets.example.h` to `src/secret/secrets.h` to use other local

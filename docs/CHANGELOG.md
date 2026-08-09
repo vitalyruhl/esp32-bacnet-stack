@@ -3,13 +3,23 @@
 This changelog is a curated overview. The canonical library version is in
 `library.json`.
 
-## 0.40.0 - Unreleased
+## 0.40.0 - 2026-08-09
 
 ### Added
 
 - Added a separate ESP-to-ESP live-COV role-reversal pair: WT32-ETH01 Ethernet
   BACnet server and ESP32 WiFi BACnet client. The established WiFi-server /
   Ethernet-client pair remains available unchanged.
+- Added bounded application-level recovery to the paired clients after target
+  I-Am timeouts, unsuccessful object-list scans, local Ethernet IP changes,
+  and sustained loss of all previously active COV subscriptions.
+
+### Changed
+
+- Updated the rich-client and paired live-COV example dependencies to
+  ConfigManager 4.4.10.
+- Placed the paired Ethernet client's Diagnostics card after Server Hardware
+  Inputs.
 
 ## 0.39.1 - Unreleased
 

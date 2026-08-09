@@ -8,10 +8,12 @@ BACnet defaults. The wrapper keeps paired-demo runtime diagnostics in its own
 `esp2esp_cli` Preferences namespace.
 
 The inherited client discovers the server object list, subscribes supported
-process values through COV, renews subscriptions, and restores its client
-session after Ethernet reconnects. The paired profile retains two Analog Input
-and six Binary process-object previews, so it includes `BV320` as Binary Value
-instance `320` and reports `active 8/8` once all subscriptions are active.
+process values through COV, and renews subscriptions. It recreates its session
+after a target I-Am timeout, an empty or failed object-list scan, a local
+Ethernet IP change, or sustained loss of every previously active COV
+subscription. The paired profile retains two Analog Input and six Binary
+process-object previews, so it includes `BV320` as Binary Value instance `320`
+and reports `active 8/8` once all subscriptions are active.
 Existing client GUI cards display the remote process values; the **ESP-to-ESP**
 page adds compact paired-demo status and persistent counters.
 
@@ -47,9 +49,10 @@ pio run -d examples/esp32/paired/live-cov/client-ethernet -e eth-com6 -t upload
 pio device monitor -p COM6 -b 115200
 ```
 
-The `eth-com6` environment uses the tested WT32-ETH01 DTR/RTS automatic-reset
-settings. Open the ConfigManager GUI at the Ethernet address shown on the
-serial console; `192.168.2.127` is the current laboratory configuration. See
+The `eth-com6` environment is a local COM6 convenience profile. Reset the
+board manually after flashing when it remains in download mode. Open the
+ConfigManager GUI at the Ethernet address shown on the serial console;
+`192.168.2.127` is the current laboratory configuration. See
 [Change of Value (COV)](../../../../../docs/cov.md) and the paired
 [COV HIL runner](../../../../../tests/hil/esp32/cov-client-server-acceptance/README.md) for
 the protocol and acceptance scope.

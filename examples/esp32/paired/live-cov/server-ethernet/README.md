@@ -26,7 +26,8 @@ pio run -d examples/esp32/paired/live-cov/server-ethernet -e eth-com6 -t upload
 pio device monitor -p COM6 -b 115200
 ```
 
-The `eth-com6` environment uses the tested WT32-ETH01 reset settings. Open the
+The `eth-com6` environment is a local COM6 convenience profile. Reset the
+board manually after flashing when it remains in download mode. Open the
 ConfigManager GUI at the Ethernet address shown on the serial console. For the
 COV protocol scope, see [Change of Value (COV)](../../../../../docs/cov.md) and
 the paired [COV HIL runner](../../../../../tests/hil/esp32/cov-client-server-acceptance/README.md).

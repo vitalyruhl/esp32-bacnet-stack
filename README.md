@@ -1,6 +1,6 @@
 # ESP32 BACnet Stack
 
-ESP32 BACnet Stack provides platform-neutral BACnet/IP client and read-only
+ESP32 BACnet Stack provides platform-neutral BACnet/IP client and limited
 server roles in C++. ESP32 Arduino/PlatformIO and native Windows applications
 use the same portable core through dedicated platform adapters. The ESP32
 server demo binds the portable server runtime to Arduino UDP over WiFi or
@@ -25,8 +25,9 @@ coverage are still evolving.
 
 The portable BACnet/IP client core is available for ESP32 WiFi, ESP32 Ethernet,
 and native Windows applications. BACnet/IP server support provides a small
-read-only ESP32 profile with Who-Is/I-Am, ReadProperty, Binary Input/Analog
-Input objects, and a bounded COV subset; it is not a full BACnet server. `API`
+ESP32 profile with Who-Is/I-Am, ReadProperty, Binary Input/Analog Input
+objects, commandable Binary Outputs and Binary Values, and a bounded COV
+subset; it is not a full BACnet server. `API`
 in the Windows column means the native C++ API is available but the productive
 CLI does not expose that feature directly.
 
@@ -43,7 +44,7 @@ CLI does not expose that feature directly.
 | WriteProperty / Priority | Opt-in | Opt-in | Opt-in CLI |
 | Rich Client Demo | Yes | Yes | No |
 | Native CLI | No | No | Yes |
-| BACnet Server | Read-only demo | Read-only demo | Client only |
+| BACnet Server | Limited demo | Limited demo | Client only |
 
 The WiFi and Ethernet rich demos share the same BACnet application and feature
 set. They differ only in network transport, board, and connection parameters.
@@ -162,6 +163,10 @@ and the WiFi demo client
 [`examples/esp32/paired/live-cov/client-wifi`](examples/esp32/paired/live-cov/client-wifi/README.md).
 Both pairings use the focused acceptance runner
 [`tests/hil/esp32/cov-client-server-acceptance`](tests/hil/esp32/cov-client-server-acceptance/README.md).
+The paired clients accept only an I-Am from their configured Device and BACnet/IP
+endpoint. They recover their application session after a target I-Am timeout,
+an unsuccessful object-list scan, or sustained loss of all previously active
+COV subscriptions; the Ethernet variant also recovers after a local IP change.
 
 ## screenshots
 
