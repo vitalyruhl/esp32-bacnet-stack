@@ -17,6 +17,7 @@ inputs and the two LED Binary Outputs; relays remain reserved.
 | OLED / BME280 SCL | 22 | shared I2C bus |
 | LED 1 / BO0 | 25 | GPIO -> resistor -> LED -> GND; active-high by default, commandable |
 | LED 2 / BO1 | 26 | GPIO -> resistor -> LED -> GND; active-high by default, commandable |
+| PWM AO0 | 32 | unconnected header pin; 0..100% commandable AO, safe 0% startup; use only a high-impedance meter/scope or RC-filtered indicator for HIL |
 | Relay 1, reserved | 19 | not driven; moved from GPIO12 to avoid its boot strapping function |
 | Relay 2, reserved | 27 | not driven |
 | Relay 3, reserved | 23 | not driven |
