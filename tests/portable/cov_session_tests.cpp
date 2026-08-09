@@ -180,6 +180,123 @@ bool testSendFailureBackoffAndRecovery() {
   return expect(subscription.covStatus() == BacnetCovSubscriptionStatus::Active);
 }
 
+bool testCovRenewalOccursBeforeLifetimeExpiry() {
+  TestClock clock;
+  TestTransport transport;
+  BacnetClient client(transport, &clock);
+  const BacnetIpEndpoint peer(192, 0, 2, 1, 47808);
+  if (!client.begin(47809)) {
+    return false;
+  }
+  BacnetDeviceSession session(client, 1234, peer);
+  BacnetSubscribeOptions options;
+  options.preferCov = true;
+  options.usePropertyCov = true;
+  options.immediateFirstRead = false;
+  options.fallbackPollMs = 0;
+  options.covLifetimeSeconds = 120;
+  options.covRenewBeforeSeconds = 5;
+  BacnetPropertySubscription subscription =
+    session.object(BacnetObjectType::AnalogInput, 0)
+      .property(BacnetPropertyId::PresentValue)
+      .subscribe(nullptr, nullptr, options);
+
+  clock.now = 1000;
+  session.poll(subscription, clock.now);
+  if (!expect(subscription.inFlight()) ||
+      !queueSubscribeAck(transport, transport.lastSent[8], 0x1CU, peer)) {
+    return false;
+  }
+  session.poll(subscription, 1001);
+  const uint32_t sendsAfterInitialSubscribe = transport.sendCalls;
+  if (!expect(subscription.covStatus() == BacnetCovSubscriptionStatus::Active)) {
+    return false;
+  }
+
+  clock.now = 116000;
+  session.poll(subscription, clock.now);
+  if (!expect(transport.sendCalls == sendsAfterInitialSubscribe)) {
+    return false;
+  }
+
+  clock.now = 116001;
+  session.poll(subscription, clock.now);
+  if (!expect(transport.sendCalls == sendsAfterInitialSubscribe + 1U) ||
+      !expect(subscription.inFlight()) ||
+      !queueSubscribeAck(transport, transport.lastSent[8], 0x1CU, peer)) {
+    return false;
+  }
+  session.poll(subscription, 116002);
+  if (!expect(subscription.covStatus() == BacnetCovSubscriptionStatus::Active)) {
+    return false;
+  }
+
+  clock.now = 231001;
+  session.poll(subscription, clock.now);
+  return expect(transport.sendCalls == sendsAfterInitialSubscribe + 1U);
+}
+
+bool testCovRenewalTimeoutRetriesOnExistingPolicy() {
+  TestClock clock;
+  TestTransport transport;
+  BacnetClient client(transport, &clock);
+  const BacnetIpEndpoint peer(192, 0, 2, 1, 47808);
+  if (!client.begin(47809)) {
+    return false;
+  }
+  BacnetDeviceSession session(client, 1234, peer);
+  BacnetSubscribeOptions options;
+  options.preferCov = true;
+  options.usePropertyCov = true;
+  options.immediateFirstRead = false;
+  options.fallbackPollMs = 0;
+  options.timeoutMs = 1000;
+  options.covLifetimeSeconds = 10;
+  options.covRenewBeforeSeconds = 2;
+  BacnetPropertySubscription subscription =
+    session.object(BacnetObjectType::AnalogInput, 0)
+      .property(BacnetPropertyId::PresentValue)
+      .subscribe(nullptr, nullptr, options);
+
+  clock.now = 1000;
+  session.poll(subscription, clock.now);
+  if (!queueSubscribeAck(transport, transport.lastSent[8], 0x1CU, peer)) {
+    return false;
+  }
+  session.poll(subscription, 1001);
+
+  clock.now = 9001;
+  session.poll(subscription, clock.now);
+  const uint32_t sendsAfterRenewal = transport.sendCalls;
+  if (!expect(subscription.inFlight())) {
+    return false;
+  }
+
+  clock.now = 10001;
+  session.poll(subscription, clock.now);
+  if (!expect(subscription.covStatus() == BacnetCovSubscriptionStatus::Timeout) ||
+      !expect(subscription.inFlight()) ||
+      !expect(transport.sendCalls == sendsAfterRenewal + 1U)) {
+    return false;
+  }
+
+  clock.now = 11001;
+  session.poll(subscription, clock.now);
+  if (!expect(!subscription.inFlight())) {
+    return false;
+  }
+
+  clock.now = 12000;
+  session.poll(subscription, clock.now);
+  if (!expect(transport.sendCalls == sendsAfterRenewal + 1U)) {
+    return false;
+  }
+  clock.now = 12001;
+  session.poll(subscription, clock.now);
+  return expect(transport.sendCalls == sendsAfterRenewal + 2U) &&
+         expect(subscription.inFlight());
+}
+
 bool testSessionValidatesPeerAndProcessBeforeConfirmedAck() {
   TestClock clock;
   TestTransport transport;
@@ -250,6 +367,8 @@ bool testSessionValidatesPeerAndProcessBeforeConfirmedAck() {
 
 int main() {
   return testSendFailureBackoffAndRecovery() &&
+             testCovRenewalOccursBeforeLifetimeExpiry() &&
+             testCovRenewalTimeoutRetriesOnExistingPolicy() &&
              testSessionValidatesPeerAndProcessBeforeConfirmedAck()
            ? 0
            : 1;
