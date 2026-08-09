@@ -29,9 +29,12 @@ used only when that object's `Property_List` is explicitly unsupported. Each
 row preserves its typed value or its individual failure status, so an
 unsupported property does not block the remaining rows.
 
-The shared **Manual Priority Overrides** card contains a numeric AV input,
-AV write/relinquish actions, and BV Set 0, Set 1, and relinquish actions. It
-also shows the configured `BV<instance>` as a read-only Boolean indicator plus
+The shared **Manual Priority Overrides** card contains a numeric analog input,
+AV and AO write/relinquish actions, and BV Set 0, Set 1, and relinquish actions.
+The settings page selects the AV and AO object instances independently; AO0 is
+the default AO target for the I/O server demo. Both analog paths encode a BACnet
+REAL `present-value` write or BACnet `NULL` relinquish at the selected priority.
+The card also shows the configured `BV<instance>` as a read-only Boolean indicator plus
 an explicit `active`, `inactive`, or `unknown` Present Value status. The status
 uses the normal controlled polling interval and performs one actual
 `Present_Value` readback after an acknowledged BV action; it never assumes the

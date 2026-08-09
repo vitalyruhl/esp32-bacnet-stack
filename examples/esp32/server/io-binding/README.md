@@ -54,6 +54,8 @@ deadband, reliability, and intrinsic-reporting features.
 | Binary Input | 2 | Set Button | IOManager digital input | — |
 | Binary Output | 0 | LED 1 | IOManager digital output | — |
 | Binary Output | 1 | LED 2 | IOManager digital output | — |
+| Analog Output | 0 | PWM Output | GPIO32 PWM duty | Percent |
+| Analog Value | 0 | Analog Setpoint | BACnet-only setpoint | Percent |
 
 AI and BI Present_Value is read-only. BO Present_Value remains commandable.
 Incoming BACnet WriteProperty requests use their requested priority exactly,
@@ -67,6 +69,14 @@ the effective Priority_Array result; a lower, hidden slot never produces a
 false Present_Value change. Priority 1 is not an access lock: a permitted
 BACnet client can still write or relinquish that same slot. Priority_Array is
 read-only.
+
+AO0 and AV0 are separate opt-in commandable analog objects. Both use the same
+BACnet priority and NULL-relinquish semantics as BO. AO0 is the physical path:
+only its committed effective value is converted to an 8-bit PWM duty on GPIO32.
+AV0 is a logical setpoint and has no hardware binding. AO0 starts and returns
+to its 0% Relinquish_Default after the last active priority is relinquished.
+GPIO25 and GPIO26 remain exclusively owned by the accepted BO LEDs, so this
+WiFi station deliberately does not register a conflicting ESP32 DAC output.
 
 ## IOManager bindings and Live I/O
 
@@ -104,6 +114,12 @@ acknowledgement).
 Those diagnostics are RAM-only and are not BACnet properties or persistent
 settings.
 
+The AO0 PWM binding remains example-local. It validates that GPIO32 is a safe,
+unowned ESP32 PWM-capable output before configuring it, initializes it to a
+safe 0% duty, and receives only the post-priority effective value through the
+portable AO callback. It never runs from an ISR. The existing GPIO25/GPIO26
+LED and ConfigManager bindings are unchanged.
+
 BACnet/IP is UDP-based: the UI reports `Recent BACnet activity` or `No recent
 BACnet activity`, never a false connected/disconnected client state. The server
 accepts a fixed, allocation-free table of eight incoming SubscribeCOV and
@@ -136,5 +152,21 @@ pio device monitor -p COM4 -b 115200
 The requested user regression is intentionally short: open ConfigManager Live
 I/O, verify light and temperature, press one button, switch one LED through
 BACnet Present_Value, and read an object from the WAGO client to confirm last
-peer/request activity. Do not claim a complete HIL result until those physical
-observations have been made.
+peer/request activity. For AO0 HIL, attach only a high-impedance scope or
+meter, or an RC-filtered indicator, to GPIO32; do not use the reserved relay
+inputs as a PWM load. Verify priority 16, priority 8 override, relinquish 8,
+relinquish 16, and the 0% Relinquish_Default. Repeat the priority/relinquish
+readback for AV0 without a hardware observation.
+
+### Commandable analog HIL result
+
+The local HIL on 2026-08-09 passed. A high-impedance meter measured AO0
+directly between GPIO32 and GND: 0% was approximately -0.12 mV, 50% was
+1.63 V, and 100% was 3.26 V. Those values confirm the expected PWM average
+voltage and a plausible linear transfer across the 3.3 V output range.
+
+The Ethernet client also confirmed the logical path: priority 16 establishes
+the effective AO0/AV0 value, priority 8 overrides it, relinquishing priority 8
+restores priority 16, and relinquishing priority 16 restores the 0%
+Relinquish_Default. The Live UI and COV diagnostics remained responsive, with
+no observed callback or reentrancy loop.

@@ -27,6 +27,7 @@
 #endif
 #include <io/IOManager.h>
 
+#include "AnalogOutputLogic.h"
 #include "IoInputLogic.h"
 
 #ifndef BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
@@ -109,6 +110,13 @@ constexpr uint16_t kDevelopmentVendorId = 0;
 constexpr uint32_t kDeviceInstanceDefault = 1682127;
 constexpr int kDs18b20DefaultGpio = 18;
 constexpr int kSetButtonDefaultGpio = 19;
+constexpr int kAnalogOutputPwmGpio = 32;
+constexpr uint8_t kAnalogOutputPwmResolution = 8;
+constexpr uint32_t kCommandableAnalogValueInstance = 0;
+constexpr uint32_t kAnalogOutputInstance = 0;
+constexpr float kAnalogOutputMinimum = 0.0F;
+constexpr float kAnalogOutputMaximum = 100.0F;
+constexpr float kAnalogOutputRelinquishDefault = 0.0F;
 constexpr uint32_t kInputPollMs = 250;
 constexpr uint32_t kDsReadIntervalMs = 1000;
 constexpr uint32_t kRecentActivityMs = 60000;
@@ -232,6 +240,8 @@ BacnetBinaryInput midButton;
 BacnetBinaryInput setButton;
 BacnetBinaryOutput led1;
 BacnetBinaryOutput led2;
+BacnetServerCommandableAnalogValue commandableAnalogValues[1];
+BacnetServerAnalogOutput analogOutputs[1];
 
 ObjectActivity lightActivity;
 ObjectActivity temperatureActivity;
@@ -240,6 +250,8 @@ ObjectActivity midButtonActivity;
 ObjectActivity setButtonActivity;
 ObjectActivity led1Activity;
 ObjectActivity led2Activity;
+ObjectActivity commandableAnalogValueActivity;
+ObjectActivity analogOutputActivity;
 BacnetActivityState bacnetActivity;
 CovLiveState covLive;
 
@@ -254,6 +266,9 @@ uint32_t lastDsReadMs = 0;
 bool setInputDiagnosticInitialized = false;
 bool lastSetGpioActive = false;
 bool lastSetIoState = false;
+bool analogOutputHardwareConfigured = false;
+float analogOutputAppliedValue = kAnalogOutputRelinquishDefault;
+uint8_t analogOutputPwmDuty = 0;
 
 template <typename TObject>
 void logObjectError(const TObject& object, BacnetObjectConfigurationStatus registrationStatus) {
@@ -298,6 +313,8 @@ const char* propertyText(BacnetPropertyId property) {
       return "Property_List";
     case BacnetPropertyId::PriorityArray:
       return "Priority_Array";
+    case BacnetPropertyId::RelinquishDefault:
+      return "Relinquish_Default";
     case BacnetPropertyId::StatusFlags:
       return "Status_Flags";
     case BacnetPropertyId::Reliability:
@@ -442,6 +459,13 @@ const char* objectText(BacnetObjectId object) {
   if (object.type == static_cast<uint16_t>(BacnetObjectType::BinaryOutput)) {
     return object.instance == 0 ? "BO0 LED 1" : "BO1 LED 2";
   }
+  if (object.type == static_cast<uint16_t>(BacnetObjectType::AnalogOutput)) {
+    return object.instance == kAnalogOutputInstance ? "AO0 PWM Output" : "Other AO";
+  }
+  if (object.type == static_cast<uint16_t>(BacnetObjectType::AnalogValue)) {
+    return object.instance == kCommandableAnalogValueInstance ? "AV0 Analog Setpoint"
+                                                              : "Other AV";
+  }
   return "Other BACnet object";
 }
 
@@ -459,6 +483,14 @@ ObjectActivity* activityFor(BacnetObjectId object) {
   }
   if (object.type == static_cast<uint16_t>(BacnetObjectType::BinaryOutput)) {
     return object.instance == 0 ? &led1Activity : (object.instance == 1 ? &led2Activity : nullptr);
+  }
+  if (object.type == static_cast<uint16_t>(BacnetObjectType::AnalogOutput)) {
+    return object.instance == kAnalogOutputInstance ? &analogOutputActivity : nullptr;
+  }
+  if (object.type == static_cast<uint16_t>(BacnetObjectType::AnalogValue)) {
+    return object.instance == kCommandableAnalogValueInstance
+             ? &commandableAnalogValueActivity
+             : nullptr;
   }
   return nullptr;
 }
@@ -494,6 +526,77 @@ void applyLed1(void*, bool presentValue, bool outOfService) {
 
 void applyLed2(void*, bool presentValue, bool outOfService) {
   ioManager.set("led2", !outOfService && presentValue);
+}
+
+bool configureAnalogOutputHardware() {
+  static constexpr int kOwnedPins[] = {
+    36,
+    18,
+    14,
+    33,
+    kSetButtonDefaultGpio,
+    25,
+    26,
+  };
+  if (!io_example::isSafeEsp32PwmPin(kAnalogOutputPwmGpio) ||
+      !io_example::isUnownedOutputPin(kAnalogOutputPwmGpio,
+                                      kOwnedPins,
+                                      sizeof(kOwnedPins) / sizeof(kOwnedPins[0]))) {
+#if BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
+    Serial.printf("[E] AO0 GPIO%d is unsupported or already owned\n", kAnalogOutputPwmGpio);
+#endif
+    return false;
+  }
+  pinMode(kAnalogOutputPwmGpio, OUTPUT);
+  analogWriteResolution(kAnalogOutputPwmResolution);
+  analogWrite(kAnalogOutputPwmGpio, 0);
+  analogOutputHardwareConfigured = true;
+  return true;
+}
+
+void applyAnalogOutput(void*, float presentValue, bool outOfService) {
+  uint8_t duty = 0;
+  if (!io_example::scaleOutputPercentToPwm(presentValue,
+                                           kAnalogOutputMinimum,
+                                           kAnalogOutputMaximum,
+                                           false,
+                                           !outOfService,
+                                           duty)) {
+#if BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
+    Serial.println("[E] AO0 received an invalid effective value");
+#endif
+    return;
+  }
+  analogOutputAppliedValue = presentValue;
+  analogOutputPwmDuty = duty;
+  if (analogOutputHardwareConfigured) {
+    analogWrite(kAnalogOutputPwmGpio, duty);
+  }
+}
+
+void registerCommandableAnalogObjects() {
+  BacnetServerCommandableAnalogValue& analogValue = commandableAnalogValues[0];
+  analogValue.instance = kCommandableAnalogValueInstance;
+  analogValue.objectName = "Analog Setpoint";
+  analogValue.units = static_cast<uint32_t>(BacnetEngineeringUnits::Percent);
+  analogValue.priority.relinquishDefault = kAnalogOutputRelinquishDefault;
+
+  BacnetServerAnalogOutput& analogOutput = analogOutputs[0];
+  analogOutput.instance = kAnalogOutputInstance;
+  analogOutput.objectName = "PWM Output";
+  analogOutput.units = static_cast<uint32_t>(BacnetEngineeringUnits::Percent);
+  analogOutput.priority.relinquishDefault = kAnalogOutputRelinquishDefault;
+  analogOutput.apply = applyAnalogOutput;
+
+  if (!bacnetServer.setCommandableAnalogValues(commandableAnalogValues, 1) ||
+      !bacnetServer.setAnalogOutputs(analogOutputs, 1)) {
+    bacnetConfigured = false;
+#if BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
+    Serial.println("[E] Commandable analog object configuration failed");
+#endif
+    return;
+  }
+  applyAnalogOutput(nullptr, analogOutput.priority.effectiveValue(), analogOutput.outOfService);
 }
 
 void registerLightSensor() {
@@ -636,6 +739,7 @@ void configureBacnetObjects() {
   registerSetButton();
   registerLed1();
   registerLed2();
+  registerCommandableAnalogObjects();
   bacnetServer.setClock(&bacnetClock);
   bacnetServer.setActivityListener(observeBacnetActivity);
   bacnetServer.setCovDiagnosticListener(observeCovDiagnostic);
@@ -749,6 +853,25 @@ void setupRuntimeUi() {
   outputLive.value("led2Priority", []() { return led2.priority.effectivePriority(); })
     .label("LED 2 effective priority (0 = Relinquish_Default)")
     .order(60);
+  outputLive.value("ao0Value", []() { return analogOutputAppliedValue; })
+    .label("AO0 applied effective Present_Value")
+    .unit("%")
+    .precision(1)
+    .order(70);
+  outputLive.value("ao0Duty", []() { return analogOutputPwmDuty; })
+    .label("AO0 GPIO32 PWM duty")
+    .order(80);
+  outputLive.value("ao0Priority", []() { return analogOutputs[0].priority.effectivePriority(); })
+    .label("AO0 effective priority (0 = Relinquish_Default)")
+    .order(90);
+  outputLive.value("av0Value", []() { return commandableAnalogValues[0].priority.effectiveValue(); })
+    .label("AV0 BACnet Present_Value")
+    .unit("%")
+    .precision(1)
+    .order(100);
+  outputLive.value("av0Priority", []() { return commandableAnalogValues[0].priority.effectivePriority(); })
+    .label("AV0 effective priority (0 = Relinquish_Default)")
+    .order(110);
 
   auto activityLive = ConfigManager.liveGroup("bacnetActivity")
                         .page("BACnet", 20)
@@ -797,6 +920,10 @@ void setupRuntimeUi() {
   pointLive.value("led1WritePriority", []() { return led1Activity.lastWritePriority; }).label("BO0 last write priority").order(60);
   pointLive.value("led2Writes", []() { return led2Activity.writes; }).label("BO1 LED 2 writes").order(70);
   pointLive.value("led2WritePriority", []() { return led2Activity.lastWritePriority; }).label("BO1 last write priority").order(80);
+  pointLive.value("ao0Writes", []() { return analogOutputActivity.writes; }).label("AO0 PWM Output writes").order(90);
+  pointLive.value("ao0WritePriority", []() { return analogOutputActivity.lastWritePriority; }).label("AO0 last write priority").order(100);
+  pointLive.value("av0Writes", []() { return commandableAnalogValueActivity.writes; }).label("AV0 Analog Setpoint writes").order(110);
+  pointLive.value("av0WritePriority", []() { return commandableAnalogValueActivity.lastWritePriority; }).label("AV0 last write priority").order(120);
 }
 
 void startBacnetWhenConnected() {
@@ -919,6 +1046,7 @@ void setup() {
   ioManager.begin();
   ioManager.set("led1", false);
   ioManager.set("led2", false);
+  static_cast<void>(configureAnalogOutputHardware());
   deviceInstance = static_cast<uint32_t>(settings.deviceInstance->get());
   udpPort = static_cast<uint16_t>(settings.udpPort->get());
   const int configuredVendorId = settings.vendorId->get();

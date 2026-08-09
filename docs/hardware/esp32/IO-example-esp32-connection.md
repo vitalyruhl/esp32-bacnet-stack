@@ -17,9 +17,17 @@ inputs and the two LED Binary Outputs; relays remain reserved.
 | OLED / BME280 SCL | 22 | shared I2C bus |
 | LED 1 / BO0 | 25 | GPIO -> resistor -> LED -> GND; active-high by default, commandable |
 | LED 2 / BO1 | 26 | GPIO -> resistor -> LED -> GND; active-high by default, commandable |
+| PWM AO0 | 32 | unconnected header pin; 0..100% commandable AO, safe 0% startup; use only a high-impedance meter/scope or RC-filtered indicator for HIL |
 | Relay 1, reserved | 19 | not driven; moved from GPIO12 to avoid its boot strapping function |
 | Relay 2, reserved | 27 | not driven |
 | Relay 3, reserved | 23 | not driven |
+
+## Commandable analog HIL result
+
+The local HIL on 2026-08-09 measured AO0 directly from GPIO32 to GND with a
+high-impedance meter. The observed PWM averages were approximately -0.12 mV
+at 0%, 1.63 V at 50%, and 3.26 V at 100%. This confirms the configured 0..100%
+PWM output and its expected near-linear 3.3 V range.
 
 ## Boot and bus notes
 

@@ -18,8 +18,10 @@ pio run -d examples/esp32/client/rich-client/wifi -e usb
 
 The canonical `usb` build enables the same compile-time WriteProperty and
 priority-write gates as the Ethernet demo. The shared Manual Priority Overrides
-card still sends at most one request for an explicit user click, and every
-active priority must be relinquished explicitly.
+card provides AV and AO REAL `present-value` write/relinquish actions for their
+independently configured object instances. It still sends at most one request
+for an explicit user click, and every active priority must be relinquished
+explicitly.
 
 The Property Browser is incremental: its status progresses through `queued`,
 `reading-property-list`, `reading-properties`, and a terminal state while the
