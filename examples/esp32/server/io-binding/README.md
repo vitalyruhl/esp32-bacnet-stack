@@ -156,5 +156,17 @@ peer/request activity. For AO0 HIL, attach only a high-impedance scope or
 meter, or an RC-filtered indicator, to GPIO32; do not use the reserved relay
 inputs as a PWM load. Verify priority 16, priority 8 override, relinquish 8,
 relinquish 16, and the 0% Relinquish_Default. Repeat the priority/relinquish
-readback for AV0 without a hardware observation. Do not claim a complete HIL
-result until those physical observations have been made.
+readback for AV0 without a hardware observation.
+
+### Commandable analog HIL result
+
+The local HIL on 2026-08-09 passed. A high-impedance meter measured AO0
+directly between GPIO32 and GND: 0% was approximately -0.12 mV, 50% was
+1.63 V, and 100% was 3.26 V. Those values confirm the expected PWM average
+voltage and a plausible linear transfer across the 3.3 V output range.
+
+The Ethernet client also confirmed the logical path: priority 16 establishes
+the effective AO0/AV0 value, priority 8 overrides it, relinquishing priority 8
+restores priority 16, and relinquishing priority 16 restores the 0%
+Relinquish_Default. The Live UI and COV diagnostics remained responsive, with
+no observed callback or reentrancy loop.

@@ -22,6 +22,13 @@ inputs and the two LED Binary Outputs; relays remain reserved.
 | Relay 2, reserved | 27 | not driven |
 | Relay 3, reserved | 23 | not driven |
 
+## Commandable analog HIL result
+
+The local HIL on 2026-08-09 measured AO0 directly from GPIO32 to GND with a
+high-impedance meter. The observed PWM averages were approximately -0.12 mV
+at 0%, 1.63 V at 50%, and 3.26 V at 100%. This confirms the configured 0..100%
+PWM output and its expected near-linear 3.3 V range.
+
 ## Boot and bus notes
 
 - GPIO4 is a strapping pin and is the confirmed `SET` input. It must not be
