@@ -444,6 +444,59 @@ bool testWriteHelpers() {
   return expectBytes(transport.lastPacket, transport.lastPacketSize, expectedRelinquish, sizeof(expectedRelinquish), "relinquish null write encoding");
 }
 
+bool testAnalogOutputRealPriorityWrite() {
+  FakeTransport transport;
+  FakeClock clock;
+  transport.clock = &clock;
+  BacnetClient client(transport, &clock);
+  BacnetDeviceSession session(
+    client, 1234, BacnetIpEndpoint(192, 0, 2, 1, BacnetClient::kDefaultPort));
+  BacnetRemoteObject object = session.object(BacnetObjectType::AnalogOutput, 7);
+  if (!expect(client.begin(), "AO fake client begin")) {
+    return false;
+  }
+
+  uint8_t response[64] = {};
+  size_t responseSize = buildWriteAck(response, 1);
+  if (!expect(transport.queueResponse(response, responseSize),
+              "queue AO write ACK")) {
+    return false;
+  }
+  BacnetValue value;
+  value.type = BacnetValueType::Real;
+  value.realValue = 25.0F;
+  if (!expect(object.writePresentValue(value, 16, 3) ==
+                BacnetDeviceSessionWriteStatus::Ack,
+              "AO REAL priority write ACK") ||
+      !expect(transport.lastPacket[11] == 0x00 &&
+                transport.lastPacket[12] == 0x40 &&
+                transport.lastPacket[13] == 0x00 &&
+                transport.lastPacket[14] == 0x07 &&
+                transport.lastPacket[18] == 0x44 &&
+                transport.lastPacket[24] == 0x49 &&
+                transport.lastPacket[25] == 16,
+              "AO REAL priority write encoding")) {
+    return false;
+  }
+
+  responseSize = buildWriteAck(response, 2);
+  if (!expect(transport.queueResponse(response, responseSize),
+              "queue AO relinquish ACK") ||
+      !expect(object.relinquishPresentValue(16, 3) ==
+                BacnetDeviceSessionWriteStatus::Ack,
+              "AO relinquish ACK")) {
+    return false;
+  }
+  return expect(transport.lastPacket[11] == 0x00 &&
+                  transport.lastPacket[12] == 0x40 &&
+                  transport.lastPacket[13] == 0x00 &&
+                  transport.lastPacket[14] == 0x07 &&
+                  transport.lastPacket[18] == 0x00 &&
+                  transport.lastPacket[20] == 0x49 &&
+                  transport.lastPacket[21] == 16,
+                "AO NULL relinquish encoding");
+}
+
 bool testRelinquishAllPriorities() {
   FakeTransport transport;
   FakeClock clock;
@@ -593,7 +646,7 @@ bool testRelinquishAllPriorities() {
 } // namespace
 
 int main() {
-  return testReadHelpers() && testWriteHelpers() && testRelinquishAllPriorities()
+  return testReadHelpers() && testWriteHelpers() && testAnalogOutputRealPriorityWrite() && testRelinquishAllPriorities()
            ? 0
            : 1;
 }

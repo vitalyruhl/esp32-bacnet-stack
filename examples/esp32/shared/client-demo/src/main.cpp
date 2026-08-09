@@ -117,9 +117,10 @@ static cm::CoreSystemSettings& systemSettings = coreSettings.system;
 static cm::CoreNtpSettings& ntpSettings = coreSettings.ntp;
 static Config<int> bacnetWritePriority{ConfigOptions<int>{.key = "BacnetWritePriority", .name = "Write Priority", .category = "BACnet Override", .defaultValue = 8, .showInWeb = true, .sortOrder = 10}};
 static Config<int> bacnetOverrideAvInstance{ConfigOptions<int>{.key = "BacnetOverrideAV", .name = "AV Override Instance", .category = "BACnet Override", .defaultValue = 200, .showInWeb = true, .sortOrder = 20}};
-static Config<int> bacnetPollingAvInstance{ConfigOptions<int>{.key = "BacnetPollingAV", .name = "AV Polling Instance", .category = "BACnet Override", .defaultValue = 201, .showInWeb = true, .sortOrder = 30}};
-static Config<int> bacnetOverrideBvInstance{ConfigOptions<int>{.key = "BacnetOverrideBV", .name = "BV Override Instance", .category = "BACnet Override", .defaultValue = 320, .showInWeb = true, .sortOrder = 40}};
-static Config<int> bacnetCovLifetime{ConfigOptions<int>{.key = "BacnetCovLifetime", .name = "COV Lifetime Seconds", .category = "BACnet Override", .defaultValue = BACNET_DEMO_DEFAULT_COV_LIFETIME_SECONDS, .showInWeb = true, .sortOrder = 50}};
+static Config<int> bacnetOverrideAoInstance{ConfigOptions<int>{.key = "BacnetOverrideAO", .name = "AO Override Instance", .category = "BACnet Override", .defaultValue = 0, .showInWeb = true, .sortOrder = 30}};
+static Config<int> bacnetPollingAvInstance{ConfigOptions<int>{.key = "BacnetPollingAV", .name = "AV Polling Instance", .category = "BACnet Override", .defaultValue = 201, .showInWeb = true, .sortOrder = 40}};
+static Config<int> bacnetOverrideBvInstance{ConfigOptions<int>{.key = "BacnetOverrideBV", .name = "BV Override Instance", .category = "BACnet Override", .defaultValue = 320, .showInWeb = true, .sortOrder = 50}};
+static Config<int> bacnetCovLifetime{ConfigOptions<int>{.key = "BacnetCovLifetime", .name = "COV Lifetime Seconds", .category = "BACnet Override", .defaultValue = BACNET_DEMO_DEFAULT_COV_LIFETIME_SECONDS, .showInWeb = true, .sortOrder = 60}};
 static Config<int> bacnetBrowserObjectType{ConfigOptions<int>{.key = "BacnetBrowserObjectType", .name = "Object Type", .category = "BACnet Property Browser", .defaultValue = static_cast<int>(BacnetObjectType::Device), .showInWeb = true, .sortOrder = 10}};
 static Config<int> bacnetBrowserObjectInstance{ConfigOptions<int>{.key = "BacnetBrowserObjectInstance", .name = "Object Instance", .category = "BACnet Property Browser", .defaultValue = 0, .showInWeb = true, .sortOrder = 20}};
 static Config<int> bacnetBrowserPropertyRow{ConfigOptions<int>{.key = "BacnetBrowserPropertyRow", .name = "Property Row (1..8)", .category = "BACnet Property Browser", .defaultValue = 1, .showInWeb = true, .sortOrder = 30}};
@@ -1230,35 +1231,74 @@ static void refreshOverrideBvStatusAfterWrite(
     *activeBacnetSession, writeStatus);
 }
 
-static void writeOverrideAv() {
+static bool makeAnalogOverrideValue(BacnetValue& value) {
+  if (!std::isfinite(bacnetOverrideAnalogInput)) {
+    bacnetOverrideStatus = "Invalid analog value";
+    return false;
+  }
+  value.type = BacnetValueType::Real;
+  value.realValue = bacnetOverrideAnalogInput;
+  return true;
+}
+
+static void writeOverrideAnalog(BacnetObjectType objectType,
+                                uint32_t objectInstance,
+                                const char* action) {
 #if defined(ESP_BACNET_ENABLE_WRITE_PROPERTY) && ESP_BACNET_ENABLE_WRITE_PROPERTY && \
   defined(ESP_BACNET_ENABLE_PRIORITY_WRITE) && ESP_BACNET_ENABLE_PRIORITY_WRITE
   uint8_t priority = 0;
   if (!validOverrideConfiguration(priority))
     return;
-  if (!std::isfinite(bacnetOverrideAnalogInput)) {
-    bacnetOverrideStatus = "Invalid AV value";
+  BacnetValue value;
+  if (!makeAnalogOverrideValue(value)) {
     return;
   }
-  BacnetValue value;
-  value.type = BacnetValueType::Real;
-  value.realValue = bacnetOverrideAnalogInput;
-  setOverrideWriteStatus("AV write", activeBacnetSession->object(BacnetObjectType::AnalogValue, static_cast<uint32_t>(bacnetOverrideAvInstance.get())).writePresentValue(value, priority, kBacnetScanReadTimeoutMs));
+  setOverrideWriteStatus(action,
+                         activeBacnetSession->object(objectType, objectInstance)
+                           .writePresentValue(value, priority, kBacnetScanReadTimeoutMs));
 #else
   bacnetOverrideStatus = "WriteProperty/Priority feature unavailable";
 #endif
 }
 
-static void relinquishOverrideAv() {
+static void relinquishOverrideAnalog(BacnetObjectType objectType,
+                                     uint32_t objectInstance,
+                                     const char* action) {
 #if defined(ESP_BACNET_ENABLE_WRITE_PROPERTY) && ESP_BACNET_ENABLE_WRITE_PROPERTY && \
   defined(ESP_BACNET_ENABLE_PRIORITY_WRITE) && ESP_BACNET_ENABLE_PRIORITY_WRITE
   uint8_t priority = 0;
   if (!validOverrideConfiguration(priority))
     return;
-  setOverrideWriteStatus("AV relinquish", activeBacnetSession->object(BacnetObjectType::AnalogValue, static_cast<uint32_t>(bacnetOverrideAvInstance.get())).relinquishPresentValue(priority, kBacnetScanReadTimeoutMs));
+  setOverrideWriteStatus(action,
+                         activeBacnetSession->object(objectType, objectInstance)
+                           .relinquishPresentValue(priority, kBacnetScanReadTimeoutMs));
 #else
   bacnetOverrideStatus = "WriteProperty/Priority feature unavailable";
 #endif
+}
+
+static void writeOverrideAv() {
+  writeOverrideAnalog(BacnetObjectType::AnalogValue,
+                      static_cast<uint32_t>(bacnetOverrideAvInstance.get()),
+                      "AV write");
+}
+
+static void relinquishOverrideAv() {
+  relinquishOverrideAnalog(BacnetObjectType::AnalogValue,
+                           static_cast<uint32_t>(bacnetOverrideAvInstance.get()),
+                           "AV relinquish");
+}
+
+static void writeOverrideAo() {
+  writeOverrideAnalog(BacnetObjectType::AnalogOutput,
+                      static_cast<uint32_t>(bacnetOverrideAoInstance.get()),
+                      "AO write");
+}
+
+static void relinquishOverrideAo() {
+  relinquishOverrideAnalog(BacnetObjectType::AnalogOutput,
+                           static_cast<uint32_t>(bacnetOverrideAoInstance.get()),
+                           "AO relinquish");
 }
 
 static void writeOverrideBv(bool active) {
@@ -1499,9 +1539,11 @@ static void setupRuntimeUI() {
                          .group("Explicit Actions", 1);
 #if defined(ESP_BACNET_ENABLE_WRITE_PROPERTY) && ESP_BACNET_ENABLE_WRITE_PROPERTY && \
   defined(ESP_BACNET_ENABLE_PRIORITY_WRITE) && ESP_BACNET_ENABLE_PRIORITY_WRITE
-  overrideGroup.floatInput("override_av_value", "AV Value", -1000000.0F, 1000000.0F, 0.0F, 3, []() { return bacnetOverrideAnalogInput; }, [](float value) { bacnetOverrideAnalogInput = value; }).order(10);
+  overrideGroup.floatInput("override_analog_value", "Analog Value", -1000000.0F, 1000000.0F, 0.0F, 3, []() { return bacnetOverrideAnalogInput; }, [](float value) { bacnetOverrideAnalogInput = value; }).order(10);
   overrideGroup.button("override_av_write", "Write AV", []() { writeOverrideAv(); }).order(20);
   overrideGroup.button("override_av_relinquish", "Relinquish AV", []() { relinquishOverrideAv(); }).order(21);
+  overrideGroup.button("override_ao_write", "Write AO", []() { writeOverrideAo(); }).order(22);
+  overrideGroup.button("override_ao_relinquish", "Relinquish AO", []() { relinquishOverrideAo(); }).order(23);
   overrideGroup.boolValue("override_bv_active", []() {
                  return overrideBinaryValueStatus.isActive();
                })
@@ -2077,6 +2119,7 @@ static void registerBacnetOverrideSettings() {
   defined(ESP_BACNET_ENABLE_PRIORITY_WRITE) && ESP_BACNET_ENABLE_PRIORITY_WRITE
   ConfigManager.addSetting(&bacnetWritePriority);
   ConfigManager.addSetting(&bacnetOverrideAvInstance);
+  ConfigManager.addSetting(&bacnetOverrideAoInstance);
   ConfigManager.addSetting(&bacnetOverrideBvInstance);
 #endif
   ConfigManager.addSetting(&bacnetPollingAvInstance);
