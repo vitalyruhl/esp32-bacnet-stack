@@ -34,6 +34,18 @@ field with an adjacent comment. `applicationSoftwareVersion` is optional: a
 null or empty value makes the server expose `firmwareRevision` for that
 property, so this demo has one version source (`kDemoVersion`).
 
+The normal `usb` and `eth` profiles keep the Device compact: they do not
+register optional `Description`, `Location`, or `Serial_Number` metadata. The
+`usb-device-metadata` profile is a resource-comparison example that registers
+all three through caller-owned `BacnetServerPropertyRegistration` descriptors.
+Applications may register any one or combination of those properties; the
+descriptor is also the only source for its ReadProperty and `Property_List`
+entry. The sample texts are public demonstration values, not product identity.
+
+`Device_UUID` is not part of this demo or its Protocol Revision 14 profile.
+It is a later BACnet/SC, read-only 16-octet property and is intentionally not
+emulated as text or enabled by this metadata profile.
+
 Each caller-owned `BacnetServerAnalogValue` entry similarly documents its
 instance, object name, stored value, units, Out_Of_Service state, optional
 Present_Value provider, and optional provider context directly in `main.cpp`.
@@ -53,6 +65,7 @@ BACnet settings deliberately do not belong in `secrets.h`.
 
 ```sh
 pio run -d examples/esp32/server/bacnet-server -e usb
+pio run -d examples/esp32/server/bacnet-server -e usb-device-metadata
 pio run -d examples/esp32/server/bacnet-server -e eth
 ```
 

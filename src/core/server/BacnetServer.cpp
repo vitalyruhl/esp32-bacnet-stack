@@ -202,6 +202,12 @@ bool isBaseProperty(BacnetObjectId object, BacnetPropertyId property) {
   return false;
 }
 
+bool isDeviceMetadataProperty(BacnetPropertyId property) {
+  return property == BacnetPropertyId::Description ||
+         property == BacnetPropertyId::Location ||
+         property == BacnetPropertyId::SerialNumber;
+}
+
 struct ObjectPropertyListContext {
   const BacnetServer* server = nullptr;
   BacnetObjectId object;
@@ -1191,9 +1197,17 @@ bool BacnetServer::setTransport(BacnetDatagramTransport& transport) {
 
 bool BacnetServer::begin(const BacnetServerDevice& configuredDevice,
                          uint16_t localPort) {
-  if (transport_ == nullptr ||
-      configuredDevice.deviceInstance > 0x003FFFFFUL ||
-      !transport_->begin(localPort)) {
+  if (transport_ == nullptr || configuredDevice.deviceInstance > 0x003FFFFFUL) {
+    return false;
+  }
+  for (size_t index = 0; index < propertyRegistrationCount_; ++index) {
+    const BacnetServerPropertyRegistration& registration = propertyRegistrations_[index];
+    if (registration.object.type == static_cast<uint16_t>(BacnetObjectType::Device) &&
+        registration.object.instance != configuredDevice.deviceInstance) {
+      return false;
+    }
+  }
+  if (!transport_->begin(localPort)) {
     return false;
   }
 
@@ -1578,7 +1592,9 @@ bool BacnetServer::setPropertyRegistrations(
     const BacnetServerPropertyRegistration& registration = registrations[index];
     if (registration.provider == nullptr ||
         registration.object.instance > 0x003FFFFFUL ||
-        registration.property == BacnetPropertyId::PropertyList) {
+        registration.property == BacnetPropertyId::PropertyList ||
+        (registration.object.type == static_cast<uint16_t>(BacnetObjectType::Device) &&
+         !isDeviceMetadataProperty(registration.property))) {
       return false;
     }
     for (size_t previous = 0; previous < index; ++previous) {
@@ -1856,7 +1872,7 @@ BacnetServerPollResult BacnetServer::handleReadProperty(
       }
     } else if (request.request.property == BacnetPropertyId::PropertyList) {
       if (request.request.arrayIndex != kBacnetNoArrayIndex &&
-          request.request.arrayIndex > kDevicePropertyCount) {
+          request.request.arrayIndex > devicePropertyCount()) {
         errorClass = 2;
         errorCode = 42;
       }
@@ -1937,7 +1953,7 @@ BacnetServerPollResult BacnetServer::handleReadProperty(
         this);
     } else if (isDevice && request.request.property == BacnetPropertyId::PropertyList) {
       responseSize = BacnetProtocol::buildReadPropertyPropertyListAck(
-        response, sizeof(response), request, kDeviceProperties, kDevicePropertyCount);
+        response, sizeof(response), request, devicePropertyCount(), devicePropertyEntry, this);
     } else if (!isDevice && request.request.property == BacnetPropertyId::PropertyList) {
       const ObjectPropertyListContext context{this, request.request.object};
       responseSize = BacnetProtocol::buildReadPropertyPropertyListAck(
@@ -2495,6 +2511,12 @@ BacnetServerPollResult BacnetServer::handleSubscribeCov(
 
 bool BacnetServer::readDeviceProperty(BacnetPropertyId property,
                                       BacnetValue& value) const {
+  const BacnetObjectId object{static_cast<uint16_t>(BacnetObjectType::Device),
+                              device_.deviceInstance};
+  if (const BacnetServerPropertyRegistration* registration =
+        findPropertyRegistration(object, property)) {
+    return registration->provider(registration->context, value);
+  }
   value = BacnetValue{};
   const auto setText = [&value](const char* text) {
     if (text == nullptr) {
@@ -3088,6 +3110,47 @@ const BacnetServerPropertyRegistration* BacnetServer::findPropertyRegistration(
   return nullptr;
 }
 
+size_t BacnetServer::devicePropertyCount() const {
+  const BacnetObjectId deviceObject{static_cast<uint16_t>(BacnetObjectType::Device),
+                                    device_.deviceInstance};
+  size_t count = kDevicePropertyCount;
+  for (size_t index = 0; index < propertyRegistrationCount_; ++index) {
+    const BacnetServerPropertyRegistration& registration = propertyRegistrations_[index];
+    if (registration.object.type == deviceObject.type &&
+        registration.object.instance == deviceObject.instance) {
+      ++count;
+    }
+  }
+  return count;
+}
+
+bool BacnetServer::devicePropertyAt(size_t index, BacnetPropertyId& property) const {
+  if (index < kDevicePropertyCount) {
+    property = kDeviceProperties[index];
+    return true;
+  }
+
+  const BacnetObjectId deviceObject{static_cast<uint16_t>(BacnetObjectType::Device),
+                                    device_.deviceInstance};
+  size_t optionalIndex = index - kDevicePropertyCount;
+  for (size_t registrationIndex = 0;
+       registrationIndex < propertyRegistrationCount_;
+       ++registrationIndex) {
+    const BacnetServerPropertyRegistration& registration =
+      propertyRegistrations_[registrationIndex];
+    if (registration.object.type != deviceObject.type ||
+        registration.object.instance != deviceObject.instance) {
+      continue;
+    }
+    if (optionalIndex == 0) {
+      property = registration.property;
+      return true;
+    }
+    --optionalIndex;
+  }
+  return false;
+}
+
 size_t BacnetServer::objectPropertyCount(BacnetObjectId object) const {
   const BacnetPropertyId* baseProperties = nullptr;
   size_t baseCount = 0;
@@ -3241,6 +3304,13 @@ bool BacnetServer::objectPropertyEntry(const void* context,
   const auto* listContext = static_cast<const ObjectPropertyListContext*>(context);
   return listContext != nullptr && listContext->server != nullptr &&
          listContext->server->objectPropertyAt(listContext->object, index, property);
+}
+
+bool BacnetServer::devicePropertyEntry(const void* context,
+                                       size_t index,
+                                       BacnetPropertyId& property) {
+  const auto* server = static_cast<const BacnetServer*>(context);
+  return server != nullptr && server->devicePropertyAt(index, property);
 }
 
 bool BacnetServer::binaryOutputPriorityEntry(const void* context,

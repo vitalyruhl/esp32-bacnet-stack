@@ -763,6 +763,8 @@ const char* propertyName(BacnetPropertyId property) {
       return "covIncrement";
     case BacnetPropertyId::Description:
       return "description";
+    case BacnetPropertyId::Location:
+      return "location";
     case BacnetPropertyId::EventState:
       return "eventState";
     case BacnetPropertyId::FirmwareRevision:
@@ -795,6 +797,8 @@ const char* propertyName(BacnetPropertyId property) {
       return "relinquishDefault";
     case BacnetPropertyId::Resolution:
       return "resolution";
+    case BacnetPropertyId::SerialNumber:
+      return "serialNumber";
     case BacnetPropertyId::StateText:
       return "stateText";
     case BacnetPropertyId::StatusFlags:

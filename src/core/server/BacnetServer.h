@@ -167,8 +167,9 @@ struct BacnetAnalogCommandableCallbackStorage {
 
 // Caller-owned optional property descriptor. Register only properties that an
 // object actually supports; the server neither owns nor allocates descriptors
-// or their contexts. An empty string is a valid Description value, while a
-// null description context must simply not be registered.
+// or their contexts. Device registrations support only Description, Location,
+// and Serial_Number. An empty string is valid, while a null context must not
+// be registered.
 struct BacnetServerPropertyRegistration {
   BacnetObjectId object;
   BacnetPropertyId property = BacnetPropertyId::ObjectName;
@@ -765,6 +766,8 @@ private:
   const BacnetServerPropertyRegistration* findPropertyRegistration(
     BacnetObjectId object,
     BacnetPropertyId property) const;
+  size_t devicePropertyCount() const;
+  bool devicePropertyAt(size_t index, BacnetPropertyId& property) const;
   size_t objectPropertyCount(BacnetObjectId object) const;
   bool objectPropertyAt(BacnetObjectId object,
                         size_t index,
@@ -773,6 +776,9 @@ private:
                               size_t index,
                               BacnetObjectId& object);
   static bool objectPropertyEntry(const void* context,
+                                  size_t index,
+                                  BacnetPropertyId& property);
+  static bool devicePropertyEntry(const void* context,
                                   size_t index,
                                   BacnetPropertyId& property);
   static bool binaryOutputPriorityEntry(const void* context,
