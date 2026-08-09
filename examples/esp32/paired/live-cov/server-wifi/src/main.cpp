@@ -6,6 +6,31 @@
 #define BACNET_DEMO_ENABLE_COV_DIAGNOSTICS 1
 #endif
 
+#ifndef BACNET_DEMO_USE_ETHERNET
+#define BACNET_DEMO_USE_ETHERNET 0
+#endif
+
+#ifndef BACNET_DEMO_HAS_WIFI_SECRETS
+#if __has_include("secret/secrets.h")
+#include "secret/secrets.h"
+#define BACNET_DEMO_HAS_WIFI_SECRETS 1
+#else
+#define BACNET_DEMO_HAS_WIFI_SECRETS 0
+#endif
+#endif
+
+#ifndef ESP_TO_ESP_SERVER_APP_NAME
+#ifdef APP_NAME
+#define ESP_TO_ESP_SERVER_APP_NAME APP_NAME
+#else
+#define ESP_TO_ESP_SERVER_APP_NAME "ESP-to-ESP BACnet Server"
+#endif
+#endif
+
+#ifndef ESP_TO_ESP_SERVER_NVS_NAMESPACE
+#define ESP_TO_ESP_SERVER_NVS_NAMESPACE "esp2esp_srv"
+#endif
+
 #define setup espToEspBaseSetup
 #define loop espToEspBaseLoop
 #define onWiFiConnected espToEspBaseOnWiFiConnected
@@ -23,8 +48,8 @@
 
 namespace {
 
-constexpr char kLiveDemoAppName[] = "ESP-to-ESP BACnet Server";
-constexpr char kNvsNamespace[] = "esp2esp_srv";
+constexpr char kLiveDemoAppName[] = ESP_TO_ESP_SERVER_APP_NAME;
+constexpr char kNvsNamespace[] = ESP_TO_ESP_SERVER_NVS_NAMESPACE;
 constexpr uint32_t kDiagnosticsSchema = 1;
 
 Preferences diagnosticsPreferences;
@@ -246,6 +271,22 @@ void updateRuntimeDiagnostics() {
     persistCounters();
   }
   previousCovCount = covLive.count;
+
+#if BACNET_DEMO_USE_ETHERNET
+  const bool networkUp = bacnet_example::EthernetNetwork::hasIp();
+  if (networkUp) {
+    if (connectedOnce && networkOutageActive) {
+      ++reconnectCount;
+      networkOutageActive = false;
+      persistCounters();
+    }
+    connectedOnce = true;
+  } else if (connectedOnce && !networkOutageActive) {
+    ++networkDropCount;
+    networkOutageActive = true;
+    persistCounters();
+  }
+#endif
 }
 
 void setupLiveDiagnosticsUi() {
@@ -303,6 +344,7 @@ void loop() {
   loopTimeMs = static_cast<float>(micros() - startedAtUs) / 1000.0F;
 }
 
+#if !BACNET_DEMO_USE_ETHERNET
 void onWiFiConnected() {
   if (connectedOnce && networkOutageActive) {
     ++reconnectCount;
@@ -325,3 +367,4 @@ void onWiFiDisconnected() {
 void onWiFiAPMode() {
   espToEspBaseOnWiFiAPMode();
 }
+#endif

@@ -28,6 +28,7 @@
 #include "BacnetDemoBinaryValueStatus.h"
 #include "BacnetDemoFormat.h"
 #include "BacnetDemoLogging.h"
+#include "BacnetDemoRecovery.h"
 
 #ifndef BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
 #define BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS 1
@@ -50,7 +51,7 @@
 #endif
 
 #ifndef APP_VERSION
-#define APP_VERSION "0.34.0"
+#define APP_VERSION "0.40.0"
 #endif
 #ifndef APP_NAME
 #if BACNET_DEMO_USE_ETHERNET
@@ -86,6 +87,21 @@
 #endif
 #endif
 
+#ifndef BACNET_DEMO_FORCE_SECRET_DEFAULTS
+#define BACNET_DEMO_FORCE_SECRET_DEFAULTS 0
+#endif
+
+#if BACNET_DEMO_FORCE_SECRET_DEFAULTS && !BACNET_DEMO_HAS_SECRETS
+#error "BACNET_DEMO_FORCE_SECRET_DEFAULTS requires secret/secrets.h"
+#endif
+
+#if BACNET_DEMO_FORCE_SECRET_DEFAULTS && !BACNET_DEMO_USE_ETHERNET &&              \
+  (!defined(MY_WIFI_SSID) || !defined(MY_WIFI_PASSWORD) || !defined(MY_WIFI_IP) || \
+   !defined(MY_USE_DHCP) || !defined(MY_GATEWAY_IP) || !defined(MY_SUBNET_MASK) || \
+   !defined(MY_DNS_IP))
+#error "BACNET_DEMO_FORCE_SECRET_DEFAULTS requires complete MY_WIFI_* network settings"
+#endif
+
 #ifndef BACNET_DEMO_DEFAULT_COV_LIFETIME_SECONDS
 #define BACNET_DEMO_DEFAULT_COV_LIFETIME_SECONDS 120
 #endif
@@ -115,6 +131,7 @@ static Config<String> ethernetDns{ConfigOptions<String>{.key = "EthDNS", .name =
 static Config<String> settingsPassword{ConfigOptions<String>{.key = "SettingsPass", .name = "Settings Password", .category = "System", .defaultValue = String(""), .showInWeb = true, .isPassword = true, .sortOrder = 2}};
 static bool ethernetWasConnected = false;
 static bool ethernetServicesStarted = false;
+static IPAddress ethernetBoundIp;
 #else
 static cm::CoreWiFiSettings& wifiSettings = coreSettings.wifi;
 static cm::CoreWiFiServices wifiServices;
@@ -213,6 +230,7 @@ static size_t bacnetScanStoredObjects = 0;
 static BacnetObjectListScanPhase lastLoggedScanPhase = BacnetObjectListScanPhase::Idle;
 static uint32_t lastLoggedScanIndex = 0;
 static unsigned long lastWhoIsAt = 0;
+static BacnetDemoRecovery bacnetRecovery;
 
 static uint32_t processObjectCovLifetimeSeconds() {
 #if BACNET_DEMO_OBJECT_COV_LIFETIME_SECONDS > 0
@@ -410,6 +428,81 @@ static void resetBacnetPreviews() {
   bacnetScanRequested = false;
   bacnetScanRunning = false;
   bacnetScanFinished = false;
+}
+
+static size_t bacnetUsableObjectCount() {
+  size_t count = 0;
+  const BacnetValueObjectPreview* groups[] = {
+    analogValues, binaryValues, multiStateValues};
+  for (const BacnetValueObjectPreview* group : groups) {
+    for (size_t index = 0; index < kBacnetMaxFoundObjectsToDisplay; ++index) {
+      if (group[index].discovered) {
+        ++count;
+      }
+    }
+  }
+  return count;
+}
+
+static size_t bacnetActiveValueSubscriptionCount() {
+  size_t count = 0;
+  const BacnetValueObjectPreview* groups[] = {
+    analogValues, binaryValues, multiStateValues};
+  for (const BacnetValueObjectPreview* group : groups) {
+    for (size_t index = 0; index < kBacnetMaxFoundObjectsToDisplay; ++index) {
+      if (group[index].subscription &&
+          group[index].subscription->covStatus() == BacnetCovSubscriptionStatus::Active) {
+        ++count;
+      }
+    }
+  }
+  return count;
+}
+
+static const char* bacnetRecoveryStatusText() {
+  if (bacnetRecovery.scheduled()) {
+    return "backoff";
+  }
+  if (bacnetRecovery.awaitingIAm()) {
+    return "awaiting matching I-Am";
+  }
+  return bacnetDeviceSelected ? "active" : "idle";
+}
+
+static void formatBacnetSelectedEndpoint(FixedTextBuffer& out) {
+  if (!activeBacnetSession) {
+    out.append("none");
+    return;
+  }
+  const BacnetIpEndpoint& endpoint = activeBacnetSession->endpoint();
+  out.appendFormat("%u.%u.%u.%u:%u",
+                   static_cast<unsigned>(endpoint.address[0]),
+                   static_cast<unsigned>(endpoint.address[1]),
+                   static_cast<unsigned>(endpoint.address[2]),
+                   static_cast<unsigned>(endpoint.address[3]),
+                   static_cast<unsigned>(endpoint.port));
+}
+
+static void formatBacnetRecoveryDiagnostics(FixedTextBuffer& out) {
+  char endpoint[32] = {};
+  FixedTextBuffer endpointOut(endpoint, sizeof(endpoint));
+  formatBacnetSelectedEndpoint(endpointOut);
+  const uint32_t now = millis();
+  const uint32_t retryMs = bacnetRecovery.scheduled()
+                             ? bacnetRecovery.nextAttemptAtMs() - now
+                             : 0U;
+  const uint32_t whoIsAgeMs = lastWhoIsAt == 0U ? 0U : now - lastWhoIsAt;
+  out.appendFormat("state=%s reason=%s cycles=%lu retry=%lu whois-age=%lu "
+                   "scan=%s target=%s objects=%u active-cov=%u",
+                   bacnetRecoveryStatusText(),
+                   bacnetDemoRecoveryReasonText(bacnetRecovery.lastReason()),
+                   static_cast<unsigned long>(bacnetRecovery.recoveryCount()),
+                   static_cast<unsigned long>(retryMs),
+                   static_cast<unsigned long>(whoIsAgeMs),
+                   bacnetScanStatus.c_str(),
+                   endpointOut.data,
+                   static_cast<unsigned>(bacnetUsableObjectCount()),
+                   static_cast<unsigned>(bacnetActiveValueSubscriptionCount()));
 }
 
 static bool isDisplayedBacnetObject(BacnetObjectId object) {
@@ -1053,6 +1146,11 @@ static void fillBacnetRuntime(JsonObject& data) {
   FixedTextBuffer healthOut(health, sizeof(health));
   formatBacnetObjectStatusSummary(healthOut);
   data["device0_objectHealth"] = healthOut.data;
+
+  char recoveryDiagnostics[224] = {};
+  FixedTextBuffer recoveryOut(recoveryDiagnostics, sizeof(recoveryDiagnostics));
+  formatBacnetRecoveryDiagnostics(recoveryOut);
+  data["recoveryDiagnostics"] = recoveryOut.data;
 }
 
 static void fillPropertyBrowserRuntime(JsonObject& data) {
@@ -1220,6 +1318,8 @@ static void setupRuntimeUI() {
                       "BACnet/IP Client",
                       "Selected Device",
                       10);
+
+  addRuntimeTextField("bacnet", "recoveryDiagnostics", "Recovery diagnostics", "Sensors", "BACnet/IP Client", "Selected Device", 11);
 
   bacnetDeviceGroup.button("device0_rescan", "Scan / Rescan", []() { requestBacnetRescan("ui"); })
     .order(15);
@@ -1540,7 +1640,7 @@ static bool subscribePresentValue(BacnetDeviceSession& session,
                   static_cast<unsigned long>(options.fallbackPollMs),
                   preview.subscription && preview.subscription->active() ? "yes"
                                                                          : "no");
-  return preview.subscription && preview.subscription->active();
+  return preview.subscription != nullptr;
 }
 
 static bool copyScannedObjectToPreview(const BacnetScannedObject& scanned,
@@ -1626,6 +1726,8 @@ static bool beginValueObjectScan(BacnetDeviceSession& session) {
   return true;
 }
 
+static void scheduleBacnetRecovery(BacnetDemoRecoveryReason reason);
+
 static void finishValueObjectScan(BacnetDeviceSession& session,
                                   const BacnetObjectScanResult& scan) {
   size_t analogStored = 0;
@@ -1657,6 +1759,7 @@ static void finishValueObjectScan(BacnetDeviceSession& session,
 
   bacnetScanFinished = true;
   bacnetScanRunning = false;
+  bacnetRecovery.completeScan(bacnetScanStoredObjects, subscriptionsCreated);
   demoLogging.log(BacnetDemoLogging::Level::Info,
                   "scan terminal status=%s count-status=%s count=%lu inspected=%lu found=%u stored=%u analog=%u binary=%u multistate=%u truncated=%s",
                   bacnetObjectListScanJobStatusText(scanJob.status()),
@@ -1669,9 +1772,13 @@ static void finishValueObjectScan(BacnetDeviceSession& session,
                   static_cast<unsigned>(binaryStored),
                   static_cast<unsigned>(multiStateStored),
                   scan.truncated ? "yes" : "no");
-  if (scan.stored == 0 ||
+  if (bacnetScanStoredObjects == 0 || subscriptionsCreated == 0 ||
       scan.objectListCountStatus != BacnetDeviceSessionReadStatus::Ack) {
     demoLogging.log(BacnetDemoLogging::Level::Warn, "scan result: %s", bacnetScanStatus.c_str());
+    scheduleBacnetRecovery(
+      bacnetScanStoredObjects == 0 || subscriptionsCreated == 0
+        ? BacnetDemoRecoveryReason::EmptyObjectList
+        : BacnetDemoRecoveryReason::ScanFailed);
   }
   demoLogging.log(BacnetDemoLogging::Level::Info, "subscriptions recreated count=%u", static_cast<unsigned>(subscriptionsCreated));
 }
@@ -1699,6 +1806,7 @@ static void scanSelectedBacnetDevice() {
       watchedAnalogValue.setup(*activeBacnetSession);
       polledAnalogValue.setup(*activeBacnetSession);
 #endif
+      scheduleBacnetRecovery(BacnetDemoRecoveryReason::ScanFailed);
       return;
     }
   }
@@ -1797,6 +1905,42 @@ static void clearBacnetRuntime() {
   lastLoggedScanIndex = 0;
 }
 
+static void scheduleBacnetRecovery(BacnetDemoRecoveryReason reason) {
+  const uint32_t now = millis();
+  if (!bacnetRecovery.schedule(reason, now)) {
+    return;
+  }
+
+  demoLogging.log(BacnetDemoLogging::Level::Warn,
+                  "recovery scheduled reason=%s attempt=%lu retryMs=%lu",
+                  bacnetDemoRecoveryReasonText(reason),
+                  static_cast<unsigned long>(bacnetRecovery.recoveryCount()),
+                  static_cast<unsigned long>(
+                    bacnetRecovery.nextAttemptAtMs() - now));
+  clearBacnetRuntime();
+  bacnetScanStatus = "Recovery pending: ";
+  bacnetScanStatus += bacnetDemoRecoveryReasonText(reason);
+}
+
+static bool matchesConfiguredBacnetTarget(const BacnetIAmDevice& device) {
+  return BacnetDemoRecovery::matchesTarget(
+    device.deviceInstance,
+    device.endpoint,
+    BACNET_TARGET_DEVICE_INSTANCE,
+    bacnetIpEndpointFromArduino(configuredBacnetTargetAddress, BACNET_TARGET_PORT));
+}
+
+static void startBacnetDiscoveryAttempt(const char* source) {
+  if (!bacnetStarted) {
+    return;
+  }
+  bacnetScanStatus = "Waiting for matching I-Am";
+  demoLogging.log(BacnetDemoLogging::Level::Info,
+                  "BACnet discovery started source=%s",
+                  source != nullptr ? source : "unknown");
+  sendWhoIs();
+}
+
 static void startBacnetClient() {
   if (bacnetStarted) {
     return;
@@ -1827,24 +1971,48 @@ static void startBacnetClient() {
   Serial.println(bacnetClient.localPort());
 #endif
 
-  sendWhoIs();
-  selectBacnetDevice(BACNET_TARGET_DEVICE_INSTANCE,
-                     configuredBacnetTargetAddress,
-                     BACNET_TARGET_PORT,
-                     0);
+  if (!bacnetRecovery.scheduled()) {
+    bacnetRecovery.startInitialDiscovery(millis());
+    startBacnetDiscoveryAttempt("transport start");
+  }
 }
 
 static void pollBacnetDiscovery() {
-  if (!bacnetStarted || bacnetDeviceSelected) {
+  if (!bacnetStarted) {
+    return;
+  }
+
+  const uint32_t now = millis();
+  if (bacnetRecovery.beginScheduledDiscovery(now)) {
+    startBacnetDiscoveryAttempt("recovery");
+    return;
+  }
+  if (bacnetRecovery.discoveryTimedOut(now)) {
+    scheduleBacnetRecovery(BacnetDemoRecoveryReason::InitialDiscoveryTimeout);
+    return;
+  }
+  if (bacnetDeviceSelected) {
     return;
   }
 
   BacnetIAmDevice device;
   if (bacnetClient.pollIAm(device)) {
-    selectBacnetDevice(device);
+    if (matchesConfiguredBacnetTarget(device)) {
+      bacnetRecovery.acceptIAm();
+      selectBacnetDevice(device);
+    } else {
+      const IPAddress address = bacnetIpAddressFromEndpoint(device.endpoint);
+      demoLogging.log(BacnetDemoLogging::Level::Warn,
+                      "ignored I-Am device=%lu endpoint=%s:%u expectedDevice=%lu",
+                      static_cast<unsigned long>(device.deviceInstance),
+                      address.toString().c_str(),
+                      static_cast<unsigned>(device.endpoint.port),
+                      static_cast<unsigned long>(BACNET_TARGET_DEVICE_INSTANCE));
+    }
   }
 
-  if (!bacnetDeviceSelected && millis() - lastWhoIsAt >= kWhoIsIntervalMs) {
+  if (!bacnetDeviceSelected && !bacnetRecovery.awaitingIAm() &&
+      now - lastWhoIsAt >= kWhoIsIntervalMs) {
     sendWhoIs();
   }
 }
@@ -1896,6 +2064,11 @@ static void pollBacnetSubscriptions() {
     static_cast<uint32_t>(bacnetOverrideBvInstance.get()));
   overrideBinaryValueStatus.poll(*activeBacnetSession, now);
 #endif
+
+  if (bacnetRecovery.hasSustainedPeerLoss(
+        now, bacnetUsableObjectCount(), bacnetActiveValueSubscriptionCount())) {
+    scheduleBacnetRecovery(BacnetDemoRecoveryReason::PeerSubscriptionsLost);
+  }
 }
 
 static void registerBacnetOverrideSettings() {
@@ -1945,14 +2118,31 @@ static void startEthernetServices() {
   startBacnetClient();
 }
 
+static bool sameIpAddress(const IPAddress& left, const IPAddress& right) {
+  return left[0] == right[0] && left[1] == right[1] && left[2] == right[2] &&
+         left[3] == right[3];
+}
+
 static void updateEthernetNetwork() {
   const bool connected = bacnet_example::EthernetNetwork::hasIp();
+  const IPAddress currentIp = bacnet_example::EthernetNetwork::localIp();
   if (connected && !ethernetWasConnected) {
+    ethernetBoundIp = currentIp;
 #if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
     Serial.print("[I] Ethernet station IP: ");
-    Serial.println(bacnet_example::EthernetNetwork::localIp());
+    Serial.println(currentIp);
 #endif
     startEthernetServices();
+  } else if (connected && !sameIpAddress(currentIp, ethernetBoundIp)) {
+    scheduleBacnetRecovery(BacnetDemoRecoveryReason::LocalIpChanged);
+    bacnetClient.end();
+    bacnetStarted = false;
+    ethernetBoundIp = currentIp;
+#if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
+    Serial.print("[W] Ethernet local IP changed, rebinding BACnet UDP on ");
+    Serial.println(currentIp);
+#endif
+    startBacnetClient();
   } else if (!connected && ethernetWasConnected) {
     clearBacnetRuntime();
     bacnetClient.end();
@@ -2077,7 +2267,10 @@ void onWiFiAPMode() {
 
 static void setupNetworkDefaults() {
 #if BACNET_DEMO_USE_ETHERNET
-  if (ethernetIp.get().isEmpty()) {
+  if (BACNET_DEMO_FORCE_SECRET_DEFAULTS || ethernetIp.get().isEmpty()) {
+#if BACNET_DEMO_FORCE_SECRET_DEFAULTS && BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
+    Serial.println("[I] Applying forced local Ethernet defaults");
+#endif
     ethernetIp.set(MY_ETHERNET_IP);
     ethernetSubnet.set(MY_SUBNET_MASK);
     ethernetGateway.set(MY_GATEWAY_IP);
@@ -2094,10 +2287,12 @@ static void setupNetworkDefaults() {
     ConfigManager.setSettingsPassword(password);
   });
 #else
-  if (wifiSettings.wifiSsid.get().isEmpty()) {
+  if (BACNET_DEMO_FORCE_SECRET_DEFAULTS || wifiSettings.wifiSsid.get().isEmpty()) {
 #if BACNET_DEMO_HAS_SECRETS
 #if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
-    Serial.println("[I] WiFi SSID empty, applying local secret defaults");
+    Serial.println(BACNET_DEMO_FORCE_SECRET_DEFAULTS
+                     ? "[I] Applying forced local WiFi defaults"
+                     : "[I] WiFi SSID empty, applying local secret defaults");
 #endif
     wifiSettings.wifiSsid.set(MY_WIFI_SSID);
     wifiSettings.wifiPassword.set(MY_WIFI_PASSWORD);
@@ -2118,11 +2313,13 @@ static void setupNetworkDefaults() {
     wifiSettings.dnsPrimary.set(MY_DNS_IP);
 #endif
     ConfigManager.saveAll();
+#if !BACNET_DEMO_FORCE_SECRET_DEFAULTS
 #if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
     Serial.println("[I] Restarting after applying WiFi defaults");
 #endif
     delay(500);
     ESP.restart();
+#endif
 #else
 #if BACNET_DEMO_ENABLE_SERIAL_DIAGNOSTICS
     Serial.println("[W] WiFi SSID empty and secret/secrets.h missing");

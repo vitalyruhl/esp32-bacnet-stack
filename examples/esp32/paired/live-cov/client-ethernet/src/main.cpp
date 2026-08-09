@@ -3,9 +3,55 @@
 // Keep the established Ethernet client implementation unchanged. The wrapper
 // provides the paired-server target, compact live diagnostics, fixed BV320
 // control actions, and a dedicated persistent diagnostics namespace.
-#define APP_NAME "ESP-to-ESP BACnet Client"
-#define APP_VERSION "0.36.0"
-#include "generated_client_base.inc"
+#ifndef BACNET_DEMO_USE_ETHERNET
+#define BACNET_DEMO_USE_ETHERNET 0
+#endif
+
+#if BACNET_DEMO_USE_ETHERNET
+#include <ETH.h>
+#endif
+
+#ifndef BACNET_DEMO_HAS_PAIRED_SECRETS
+#if __has_include("secret/secrets.h")
+#include "secret/secrets.h"
+#define BACNET_DEMO_HAS_PAIRED_SECRETS 1
+#else
+#define BACNET_DEMO_HAS_PAIRED_SECRETS 0
+#endif
+#endif
+
+#ifndef ESP_TO_ESP_CLIENT_APP_NAME
+#ifdef APP_NAME
+#define ESP_TO_ESP_CLIENT_APP_NAME APP_NAME
+#else
+#define ESP_TO_ESP_CLIENT_APP_NAME "ESP-to-ESP BACnet Client"
+#endif
+#endif
+#ifndef ESP_TO_ESP_CLIENT_APP_VERSION
+#define ESP_TO_ESP_CLIENT_APP_VERSION "0.40.0"
+#endif
+#ifndef ESP_TO_ESP_CLIENT_NVS_NAMESPACE
+#define ESP_TO_ESP_CLIENT_NVS_NAMESPACE "esp2esp_cli"
+#endif
+#ifndef ESP_TO_ESP_CLIENT_BASE_INCLUDE
+#define ESP_TO_ESP_CLIENT_BASE_INCLUDE "generated_client_base.inc"
+#endif
+
+#ifndef BACNET_WHOIS_DESTINATION
+#define BACNET_WHOIS_DESTINATION "192.168.2.255"
+#endif
+#ifndef BACNET_TARGET_ADDRESS
+#define BACNET_TARGET_ADDRESS "192.168.2.126"
+#endif
+#ifndef BACNET_TARGET_DEVICE_INSTANCE
+#define BACNET_TARGET_DEVICE_INSTANCE 1682127
+#endif
+
+#ifndef APP_NAME
+#define APP_NAME ESP_TO_ESP_CLIENT_APP_NAME
+#endif
+#define APP_VERSION ESP_TO_ESP_CLIENT_APP_VERSION
+#include ESP_TO_ESP_CLIENT_BASE_INCLUDE
 
 #include <Preferences.h>
 #include <esp_system.h>
@@ -14,7 +60,7 @@
 
 namespace {
 
-constexpr char kNvsNamespace[] = "esp2esp_cli";
+constexpr char kNvsNamespace[] = ESP_TO_ESP_CLIENT_NVS_NAMESPACE;
 constexpr uint32_t kDiagnosticsSchema = 1;
 constexpr size_t kPreviewCount = kBacnetMaxFoundObjectsToDisplay;
 constexpr size_t kRemoteObjectCount = 8;
@@ -648,6 +694,10 @@ void fillClientLiveRuntime(JsonObject& data) {
     data["covSendFailures"] = activeBacnetSession->covSendFailureCount();
     data["covTimeouts"] = activeBacnetSession->covTimeoutCount();
   }
+  char recoveryDiagnostics[224] = {};
+  FixedTextBuffer recoveryOut(recoveryDiagnostics, sizeof(recoveryDiagnostics));
+  formatBacnetRecoveryDiagnostics(recoveryOut);
+  data["recoveryDiagnostics"] = recoveryOut.data;
 }
 
 void addClientLiveText(const char* key, const char* label, int order) {
@@ -735,7 +785,7 @@ void setupClientLiveUi() {
   ConfigManager.addLiveCard("ESP-to-ESP", "Remote COV Variables", 20);
   ConfigManager.addLiveCard("ESP-to-ESP", "BV320 Remote Control", 30);
   ConfigManager.addLiveCard("ESP-to-ESP", "BO0 Binding HIL", 40);
-  ConfigManager.addLiveCard("ESP-to-ESP", "Diagnostics", 90);
+  ConfigManager.addLiveCard("ESP-to-ESP", "Diagnostics", 900);
 
   for (size_t index = 0; index < kRemoteObjectCount; ++index) {
     char key[16] = {};
@@ -797,10 +847,11 @@ void setupClientLiveUi() {
   addClientLiveText("covSubscribeAttempts", "COV subscribe/renew attempts", 18);
   addClientLiveText("covSendFailures", "COV local send failures", 19);
   addClientLiveText("covTimeouts", "COV timeouts", 20);
+  addClientLiveText("recoveryDiagnostics", "Recovery diagnostics", 21);
 
   auto diagnostics = ConfigManager.liveGroup("esp2espClient")
                        .page("ESP-to-ESP", 90)
-                       .card("Diagnostics", 90);
+                       .card("Diagnostics", 900);
   diagnostics.value("loopTime", []() { return loopTimeMs; })
     .label("Loop time")
     .unit("ms")
@@ -809,8 +860,12 @@ void setupClientLiveUi() {
 }
 
 void updateClientDiagnostics() {
-  const bool ethernetUp = bacnet_example::EthernetNetwork::hasIp();
-  if (ethernetUp) {
+#if BACNET_DEMO_USE_ETHERNET
+  const bool networkUp = bacnet_example::EthernetNetwork::hasIp();
+#else
+  const bool networkUp = WiFi.status() == WL_CONNECTED;
+#endif
+  if (networkUp) {
     if (ethernetConnectedOnce && ethernetOutageActive) {
       ++reconnectCount;
       ethernetOutageActive = false;

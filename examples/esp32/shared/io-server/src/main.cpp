@@ -5,7 +5,6 @@
 #include <ConfigManager.h>
 #include <DallasTemperature.h>
 #include <OneWire.h>
-#include <WiFi.h>
 #include <WiFiUdp.h>
 
 #include <cmath>
@@ -15,7 +14,17 @@
 #include <ArduinoBacnetServer.h>
 #include <BacnetServer.h>
 #include <core/CoreSettings.h>
+#ifndef BACNET_DEMO_USE_ETHERNET
+#define BACNET_DEMO_USE_ETHERNET 0
+#endif
+
+#if BACNET_DEMO_USE_ETHERNET
+#include <ETH.h>
+#include <ExampleEthernet.h>
+#else
+#include <WiFi.h>
 #include <core/CoreWiFiServices.h>
+#endif
 #include <io/IOManager.h>
 
 #include "IoInputLogic.h"
@@ -24,10 +33,78 @@
 #define BACNET_DEMO_ENABLE_COV_DIAGNOSTICS 1
 #endif
 
+#ifndef BACNET_DEMO_HAS_WIFI_SECRETS
+#if __has_include("secret/secrets.h")
+#include "secret/secrets.h"
+#define BACNET_DEMO_HAS_WIFI_SECRETS 1
+#else
+#define BACNET_DEMO_HAS_WIFI_SECRETS 0
+#endif
+#endif
+
+#ifndef BACNET_DEMO_FORCE_SECRET_DEFAULTS
+#define BACNET_DEMO_FORCE_SECRET_DEFAULTS 0
+#endif
+
+#if BACNET_DEMO_FORCE_SECRET_DEFAULTS && !BACNET_DEMO_HAS_WIFI_SECRETS
+#error "BACNET_DEMO_FORCE_SECRET_DEFAULTS requires secret/secrets.h"
+#endif
+
+#if BACNET_DEMO_FORCE_SECRET_DEFAULTS && !BACNET_DEMO_USE_ETHERNET &&              \
+  (!defined(MY_WIFI_SSID) || !defined(MY_WIFI_PASSWORD) || !defined(MY_WIFI_IP) || \
+   !defined(MY_USE_DHCP) || !defined(MY_GATEWAY_IP) || !defined(MY_SUBNET_MASK) || \
+   !defined(MY_DNS_IP))
+#error "BACNET_DEMO_FORCE_SECRET_DEFAULTS requires complete MY_WIFI_* network settings"
+#endif
+
+#if BACNET_DEMO_USE_ETHERNET
+#ifndef BACNET_DEMO_ETHERNET_IP
+#ifdef MY_ETHERNET_IP
+#define BACNET_DEMO_ETHERNET_IP MY_ETHERNET_IP
+#else
+#define BACNET_DEMO_ETHERNET_IP "192.168.2.126"
+#endif
+#endif
+#ifndef BACNET_DEMO_ETHERNET_GATEWAY
+#ifdef MY_GATEWAY_IP
+#define BACNET_DEMO_ETHERNET_GATEWAY MY_GATEWAY_IP
+#else
+#define BACNET_DEMO_ETHERNET_GATEWAY "192.168.2.1"
+#endif
+#endif
+#ifndef BACNET_DEMO_ETHERNET_SUBNET
+#ifdef MY_SUBNET_MASK
+#define BACNET_DEMO_ETHERNET_SUBNET MY_SUBNET_MASK
+#else
+#define BACNET_DEMO_ETHERNET_SUBNET "255.255.255.0"
+#endif
+#endif
+#ifndef BACNET_DEMO_ETHERNET_DNS
+#ifdef MY_DNS_IP
+#define BACNET_DEMO_ETHERNET_DNS MY_DNS_IP
+#else
+#define BACNET_DEMO_ETHERNET_DNS BACNET_DEMO_ETHERNET_GATEWAY
+#endif
+#endif
+#ifndef BACNET_DEMO_ETHERNET_DHCP
+#ifdef MY_USE_DHCP
+#define BACNET_DEMO_ETHERNET_DHCP MY_USE_DHCP
+#else
+#define BACNET_DEMO_ETHERNET_DHCP false
+#endif
+#endif
+#endif
+
+#if BACNET_DEMO_FORCE_SECRET_DEFAULTS && BACNET_DEMO_USE_ETHERNET &&               \
+  (!defined(MY_ETHERNET_IP) || !defined(MY_USE_DHCP) || !defined(MY_GATEWAY_IP) || \
+   !defined(MY_SUBNET_MASK) || !defined(MY_DNS_IP))
+#error "BACNET_DEMO_FORCE_SECRET_DEFAULTS requires complete MY_ETHERNET_* network settings"
+#endif
+
 namespace {
 
 constexpr char kAppName[] = "ESP32 BACnet I/O Server";
-constexpr char kVersion[] = "0.36.0";
+constexpr char kVersion[] = "0.40.0";
 constexpr uint16_t kDevelopmentVendorId = 0;
 constexpr uint32_t kDeviceInstanceDefault = 1682127;
 constexpr int kDs18b20DefaultGpio = 18;
@@ -108,7 +185,16 @@ struct CovLiveState {
 Settings settings;
 cm::IOManager ioManager;
 cm::CoreSettings& coreSettings = cm::CoreSettings::instance();
+#if !BACNET_DEMO_USE_ETHERNET
 cm::CoreWiFiServices wifiServices;
+#else
+Config<String> ethernetIp{ConfigOptions<String>{.key = "EthIP", .name = "IP Address", .category = "Ethernet", .defaultValue = String(""), .showInWeb = true, .sortOrder = 1}};
+Config<String> ethernetSubnet{ConfigOptions<String>{.key = "EthSubnet", .name = "Subnet Mask", .category = "Ethernet", .defaultValue = String(""), .showInWeb = true, .sortOrder = 2}};
+Config<String> ethernetGateway{ConfigOptions<String>{.key = "EthGateway", .name = "Gateway", .category = "Ethernet", .defaultValue = String(""), .showInWeb = true, .sortOrder = 3}};
+Config<String> ethernetDns{ConfigOptions<String>{.key = "EthDNS", .name = "Primary DNS", .category = "Ethernet", .defaultValue = String(""), .showInWeb = true, .sortOrder = 4}};
+bool ethernetWasConnected = false;
+bool ethernetServicesStarted = false;
+#endif
 WiFiUDP udp;
 ArduinoUdpDatagramTransport transport(udp);
 BacnetServer bacnetServer(transport);
@@ -724,12 +810,88 @@ void startBacnetWhenConnected() {
 #endif
 }
 
+#if BACNET_DEMO_USE_ETHERNET
+void registerEthernetSettings() {
+  ConfigManager.setCategoryLayoutOverride(
+    "Ethernet", "Network", "Network", "Ethernet Settings", 10);
+  ConfigManager.addSettingsPage("Network", 10);
+  ConfigManager.addSettingsGroup(
+    "Network", "Network", "Ethernet Settings", 10);
+  ConfigManager.addSetting(&ethernetIp);
+  ConfigManager.addSetting(&ethernetSubnet);
+  ConfigManager.addSetting(&ethernetGateway);
+  ConfigManager.addSetting(&ethernetDns);
+}
+
+void startEthernetServices() {
+  if (!ethernetServicesStarted) {
+    ConfigManager.startWebServerOnNetwork();
+    configTzTime(coreSettings.ntp.tz.get().c_str(),
+                 coreSettings.ntp.server1.get().c_str(),
+                 coreSettings.ntp.server2.get().c_str());
+    ethernetServicesStarted = true;
+#if BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
+    Serial.println("[I] ConfigManager services started on Ethernet");
+#endif
+  }
+  startBacnetWhenConnected();
+}
+
+void updateEthernetNetwork() {
+  const bool connected = bacnet_example::EthernetNetwork::hasIp();
+  if (connected && !ethernetWasConnected) {
+#if BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
+    Serial.print("[I] Ethernet station IP: ");
+    Serial.println(bacnet_example::EthernetNetwork::localIp());
+#endif
+    startEthernetServices();
+  } else if (!connected && ethernetWasConnected) {
+    if (bacnetBound) {
+      bacnetServer.end();
+    }
+    bacnetBound = false;
+#if BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
+    Serial.println("[W] Ethernet network unavailable");
+#endif
+  }
+  ethernetWasConnected = connected;
+}
+#endif
+
 void setupNetworkDefaults() {
+#if BACNET_DEMO_USE_ETHERNET
+  if (!BACNET_DEMO_FORCE_SECRET_DEFAULTS && !ethernetIp.get().isEmpty()) {
+    return;
+  }
+#if BACNET_DEMO_FORCE_SECRET_DEFAULTS && BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
+  Serial.println("[I] Applying forced local Ethernet defaults");
+#endif
+  ethernetIp.set(BACNET_DEMO_ETHERNET_IP);
+  ethernetSubnet.set(BACNET_DEMO_ETHERNET_SUBNET);
+  ethernetGateway.set(BACNET_DEMO_ETHERNET_GATEWAY);
+  ethernetDns.set(BACNET_DEMO_ETHERNET_DNS);
+  ConfigManager.saveAll();
+#else
+#if BACNET_DEMO_FORCE_SECRET_DEFAULTS
+#if BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
+  Serial.println("[I] Applying forced local WiFi defaults");
+#endif
+  coreSettings.wifi.wifiSsid.set(MY_WIFI_SSID);
+  coreSettings.wifi.wifiPassword.set(MY_WIFI_PASSWORD);
+  coreSettings.wifi.staticIp.set(MY_WIFI_IP);
+  coreSettings.wifi.useDhcp.set(MY_USE_DHCP);
+  coreSettings.wifi.gateway.set(MY_GATEWAY_IP);
+  coreSettings.wifi.subnet.set(MY_SUBNET_MASK);
+  coreSettings.wifi.dnsPrimary.set(MY_DNS_IP);
+  ConfigManager.saveAll();
+  return;
+#endif
   if (!coreSettings.wifi.wifiSsid.get().isEmpty()) {
     return;
   }
 #if BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
   Serial.println("[W] WiFi settings are empty; configure them in ConfigManager");
+#endif
 #endif
 }
 
@@ -744,7 +906,11 @@ void setup() {
   ConfigManager.setAppTitle(kAppName);
   ConfigManager.setVersion(kVersion);
   ConfigManager.enableBuiltinSystemProvider();
+#if BACNET_DEMO_USE_ETHERNET
+  registerEthernetSettings();
+#else
   coreSettings.attachWiFi(ConfigManager);
+#endif
   coreSettings.attachSystem(ConfigManager);
   coreSettings.attachNtp(ConfigManager);
   settings.create();
@@ -771,14 +937,33 @@ void setup() {
   configureBacnetObjects();
   setupRuntimeUi();
   setupNetworkDefaults();
+#if BACNET_DEMO_USE_ETHERNET
+  const bacnet_example::EthernetConfig ethernetConfig{
+    BACNET_DEMO_ETHERNET_DHCP,
+    ethernetIp.get().c_str(),
+    ethernetGateway.get().c_str(),
+    ethernetSubnet.get().c_str(),
+    ethernetDns.get().c_str(),
+  };
+  if (!bacnet_example::EthernetNetwork::begin(kAppName, ethernetConfig)) {
+#if BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
+    Serial.println("[E] Ethernet startup failed");
+#endif
+  }
+#else
   ConfigManager.startWebServer();
+#endif
   // Keep live I/O feedback responsive; ConfigManager defaults to a slower push interval.
   ConfigManager.setWebSocketInterval(550);
 }
 
 void loop() {
   const uint32_t now = millis();
+#if BACNET_DEMO_USE_ETHERNET
+  updateEthernetNetwork();
+#else
   ConfigManager.getWiFiManager().update();
+#endif
   ioManager.update();
   observeSetInputDiagnostic(now);
   ConfigManager.handleClient();
@@ -789,6 +974,7 @@ void loop() {
   refreshCovLiveState();
 }
 
+#if !BACNET_DEMO_USE_ETHERNET
 void onWiFiConnected() {
   wifiServices.onConnected(ConfigManager, kAppName, coreSettings.system, coreSettings.ntp);
 #if BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
@@ -809,3 +995,4 @@ void onWiFiDisconnected() {
 void onWiFiAPMode() {
   wifiServices.onAPMode();
 }
+#endif

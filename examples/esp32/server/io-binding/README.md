@@ -70,7 +70,7 @@ read-only.
 
 ## IOManager bindings and Live I/O
 
-The example uses ConfigManager 4.4.1 `cm::IOManager` from `src/io/IOManager.h`.
+The example uses ConfigManager 4.4.10 `cm::IOManager` from `src/io/IOManager.h`.
 The LDR binding is registered as:
 
 ```cpp

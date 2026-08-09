@@ -105,7 +105,9 @@ The client subscription abstraction has two independent paths:
   may still be requested by the handle's `immediateFirstRead` setting.
 - A later acknowledged COV registration clears fallback state and restores
   `Active`. Discovery and session rebinding remain application-owned; the
-  client does not maintain a global device registry.
+  client does not maintain a global device registry. The paired ESP32 live-COV
+  examples add bounded application-level rediscovery for their configured peer;
+  this is example behavior, not a portable client registry.
 
 For confirmed server notifications, retries after a missing `SimpleACK` are
 bounded by `BacnetServerDevice::numberOfApduRetries` and its `apduTimeout`.
@@ -137,8 +139,8 @@ verification layer.
 
 ## Scope boundary
 
-The implementation covers the client/session flow and the small read-only
-server profile used by the examples. It is not a substitute for full BACnet
+The implementation covers the client/session flow and the small server profile
+used by the examples. It is not a substitute for full BACnet
 event reporting, intrinsic reporting, arbitrary-object COV support, or a
 network-wide interoperability certification. See the paired
 [ESP-to-ESP examples](../tests/hil/esp32/cov-client-server-acceptance/README.md)

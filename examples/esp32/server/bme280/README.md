@@ -1,7 +1,7 @@
 # BACnet BME280 Server Demo
 
 This ESP32 WiFi example exposes a BME280 through the portable read-only BACnet
-server and persists setup through ConfigManager 4.4.1. It requires no BME280
+server and persists setup through ConfigManager 4.4.10. It requires no BME280
 for compilation.
 
 ## Hardware interoperability validation
@@ -11,7 +11,7 @@ four AV300–AV303 objects were read over BACnet, and the ConfigManager Live Vie
 matched BACnet Present_Value exactly. Home Assistant recognized the Device and
 all four sensors. Pressure is published in Pascals, including the BME280 hPa to
 Pa conversion. Sensor-fault/recovery manipulation, full Intrinsic Reporting,
-COV, and WriteProperty/Priority Array remain outside this demo.
+and WriteProperty/Priority Array remain outside this demo.
 
 ## Wiring and sensor
 
@@ -69,6 +69,14 @@ humidity `%RH`, and pressure `Pa` without a separate sensor read or conversion.
 The dew point uses the Magnus approximation with `a=17.62` and `b=243.12 °C`.
 Non-finite values and humidity outside `(0, 100]` are rejected.
 
+## Change of Value (COV)
+
+The demo accepts COV subscriptions across the four AV objects. Object-level
+SubscribeCOV publishes `Present_Value` and `Status_Flags`; SubscribeCOVProperty
+supports `Present_Value`, including a client-supplied `COV_Increment`. Every
+subscription receives its own initial notification and later sensor or status
+changes.
+
 ## Dew-point state mapping
 
 Within warnings: normal, no alarm/fault, reliability `no-fault-detected`.
@@ -76,7 +84,7 @@ Outside a warning but inside error bounds: Low/High Limit Event_State,
 `inAlarm=true`, no fault. Outside error bounds: Low/High Limit Event_State,
 `fault=true`, Reliability `under-range`/`over-range`. Hysteresis is applied on
 return from the corresponding side. This slice exposes state only; it sends no
-BACnet event notifications, COV, or Notification-Class messages.
+BACnet event notifications or Notification-Class messages.
 
 ## Build
 
