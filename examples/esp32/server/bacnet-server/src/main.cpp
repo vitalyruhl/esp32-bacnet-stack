@@ -9,6 +9,10 @@
 #define EXAMPLE_USE_ETHERNET 0
 #endif
 
+#ifndef EXAMPLE_ENABLE_DEVICE_METADATA
+#define EXAMPLE_ENABLE_DEVICE_METADATA 0
+#endif
+
 #if EXAMPLE_USE_ETHERNET
 #include <ETH.h>
 #include <ExampleEthernet.h>
@@ -47,6 +51,11 @@ constexpr float kStoredValuePeriodMs = 60000.0F;
 constexpr float kTwoPi = 6.28318530718F;
 constexpr uint32_t kPercentUnits = 98;
 constexpr uint32_t kSecondsUnits = 73;
+#if EXAMPLE_ENABLE_DEVICE_METADATA
+constexpr char kDeviceDescription[] = "ESP32 BACnet server demonstration";
+constexpr char kDeviceLocation[] = "Local development station";
+constexpr char kDeviceSerialNumber[] = "DEMO-ESP32-0001";
+#endif
 
 struct PollingDemoState {
   uint32_t startedAtMs = 0;
@@ -118,6 +127,32 @@ const BacnetServerDevice kDevice{
   14,                                // protocolRevision: BACnet protocol revision
   3,                                 // segmentationSupported: Device Segmentation_Supported code
 };
+
+#if EXAMPLE_ENABLE_DEVICE_METADATA
+bool readDeviceMetadata(const void* context, BacnetValue& value) {
+  const auto* text = static_cast<const char*>(context);
+  if (text == nullptr) {
+    return false;
+  }
+  const size_t length = strlen(text);
+  if (length >= sizeof(value.text)) {
+    return false;
+  }
+  value = BacnetValue{};
+  value.type = BacnetValueType::CharacterString;
+  value.textLength = length;
+  memcpy(value.text, text, length + 1U);
+  return true;
+}
+
+const BacnetObjectId kDeviceObject{
+  static_cast<uint16_t>(BacnetObjectType::Device), kDemoDeviceInstance};
+const BacnetServerPropertyRegistration kDeviceMetadata[] = {
+  {kDeviceObject, BacnetPropertyId::Description, readDeviceMetadata, kDeviceDescription},
+  {kDeviceObject, BacnetPropertyId::Location, readDeviceMetadata, kDeviceLocation},
+  {kDeviceObject, BacnetPropertyId::SerialNumber, readDeviceMetadata, kDeviceSerialNumber},
+};
+#endif
 
 bool connectNetwork() {
 #if EXAMPLE_USE_ETHERNET
@@ -202,6 +237,13 @@ void setup() {
     Serial.println("[E] BACnet Multi-state Value configuration failed");
     return;
   }
+#if EXAMPLE_ENABLE_DEVICE_METADATA
+  if (!bacnetServer.setPropertyRegistrations(
+        kDeviceMetadata, sizeof(kDeviceMetadata) / sizeof(kDeviceMetadata[0]))) {
+    Serial.println("[E] BACnet Device metadata configuration failed");
+    return;
+  }
+#endif
   if (!bacnetServer.begin(kDevice, kBacnetPort)) {
     Serial.println("[E] BACnet server UDP startup failed");
     return;

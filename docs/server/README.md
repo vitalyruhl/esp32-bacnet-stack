@@ -13,6 +13,46 @@ Address Binding list. It returns BACnet errors for unknown objects/properties
 and invalid array indices. Object and property lists support full, count
 (`index 0`), and individual-entry reads.
 
+## Device metadata opt-ins
+
+The compact Device profile has no optional metadata storage. Applications may
+independently add Device `Description`, `Location`, and `Serial_Number` through
+caller-owned `BacnetServerPropertyRegistration` entries. Each entry must use
+the Device object instance supplied to `begin()` and a CharacterString provider
+whose context remains valid while the server runs. A registration is the sole
+source for both ReadProperty and `Property_List`: an omitted metadata property
+is neither advertised nor readable.
+
+```cpp
+const BacnetObjectId deviceObject{
+  static_cast<uint16_t>(BacnetObjectType::Device), device.deviceInstance};
+const BacnetServerPropertyRegistration metadata[] = {
+  {deviceObject, BacnetPropertyId::Description, readText, description},
+  {deviceObject, BacnetPropertyId::SerialNumber, readText, serialNumber},
+};
+server.setPropertyRegistrations(metadata, sizeof(metadata) / sizeof(metadata[0]));
+server.begin(device);
+```
+
+There is no metadata bundle, default text, generated identifier, or hardware
+lookup. `Device_UUID` is deliberately not exposed: the active Device profile
+declares BACnet Protocol Revision 14, while Device_UUID was added for the
+later BACnet/SC revision as a read-only 16-octet value. Supporting it would
+require a protocol-profile expansion, not an optional text-property addition.
+
+The resource comparison uses the same NodeMCU-32S WiFi server demo and
+toolchain for the compact `usb` profile and `usb-device-metadata`, which
+registers all three metadata properties:
+
+| Profile | RAM | Flash | Delta from compact |
+| --- | ---: | ---: | ---: |
+| `usb` | 46,336 B | 765,141 B | baseline |
+| `usb-device-metadata` | 46,336 B | 765,561 B | +0 B RAM, +420 B Flash |
+
+The compact build does not compile the demo metadata strings or registration
+array. The general server already borrows optional-property descriptors, so no
+per-Device metadata fields or allocations are added to the base profile.
+
 Analog Values are supplied in caller-owned `BacnetServerAnalogValue` storage
 through `setAnalogValues()`. Registering no entries consumes no object-table
 storage in the server and does not advertise Analog Value support. Each entry

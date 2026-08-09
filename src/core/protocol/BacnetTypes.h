@@ -69,6 +69,7 @@ enum class BacnetPropertyId : uint32_t {
   DeviceAddressBinding = 30,
   EventState = 36,
   FirmwareRevision = 44,
+  Location = 58,
   MaxApduLengthAccepted = 62,
   MaxPresentValue = 65,
   MinPresentValue = 69,
@@ -99,6 +100,7 @@ enum class BacnetPropertyId : uint32_t {
   DatabaseRevision = 155,
   SegmentationSupported = 107,
   PropertyList = 371,
+  SerialNumber = 372,
 };
 
 static constexpr uint32_t kBacnetNoArrayIndex = 0xFFFFFFFFUL;
@@ -299,6 +301,8 @@ inline const char* bacnetPropertyName(BacnetPropertyId property) {
       return "covIncrement";
     case BacnetPropertyId::Description:
       return "description";
+    case BacnetPropertyId::Location:
+      return "location";
     case BacnetPropertyId::EventState:
       return "eventState";
     case BacnetPropertyId::FirmwareRevision:
@@ -339,6 +343,8 @@ inline const char* bacnetPropertyName(BacnetPropertyId property) {
       return "relinquishDefault";
     case BacnetPropertyId::Resolution:
       return "resolution";
+    case BacnetPropertyId::SerialNumber:
+      return "serialNumber";
     case BacnetPropertyId::StateText:
       return "stateText";
     case BacnetPropertyId::StatusFlags:
