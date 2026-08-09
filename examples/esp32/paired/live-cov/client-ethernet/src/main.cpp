@@ -785,7 +785,7 @@ void setupClientLiveUi() {
   ConfigManager.addLiveCard("ESP-to-ESP", "Remote COV Variables", 20);
   ConfigManager.addLiveCard("ESP-to-ESP", "BV320 Remote Control", 30);
   ConfigManager.addLiveCard("ESP-to-ESP", "BO0 Binding HIL", 40);
-  ConfigManager.addLiveCard("ESP-to-ESP", "Diagnostics", 90);
+  ConfigManager.addLiveCard("ESP-to-ESP", "Diagnostics", 900);
 
   for (size_t index = 0; index < kRemoteObjectCount; ++index) {
     char key[16] = {};
@@ -851,7 +851,7 @@ void setupClientLiveUi() {
 
   auto diagnostics = ConfigManager.liveGroup("esp2espClient")
                        .page("ESP-to-ESP", 90)
-                       .card("Diagnostics", 90);
+                       .card("Diagnostics", 900);
   diagnostics.value("loopTime", []() { return loopTimeMs; })
     .label("Loop time")
     .unit("ms")
