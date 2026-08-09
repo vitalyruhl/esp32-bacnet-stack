@@ -1310,6 +1310,199 @@ bool testWritePriorityDefaultsAndEffectiveOutput() {
   return !writeOutput(transport, server, source, object, BacnetPropertyId::PresentValue, active, invalidZero, 6);
 }
 
+struct AnalogOutputApplyState {
+  uint32_t calls = 0;
+  float presentValue = 0.0F;
+  bool outOfService = false;
+};
+
+void applyAnalogOutput(void* context, float presentValue, bool outOfService) {
+  auto* state = static_cast<AnalogOutputApplyState*>(context);
+  if (state == nullptr) {
+    return;
+  }
+  ++state->calls;
+  state->presentValue = presentValue;
+  state->outOfService = outOfService;
+}
+
+struct AnalogCallbackState {
+  uint32_t presentValueCalls = 0;
+  uint32_t relinquishCalls = 0;
+  BacnetChangeOrigin origin = BacnetChangeOrigin::Local;
+  float presentValue = 0.0F;
+};
+
+void captureAnalogPresentValue(void* context, const BacnetAnalogPresentValueChange& change) {
+  auto* state = static_cast<AnalogCallbackState*>(context);
+  if (state == nullptr) {
+    return;
+  }
+  ++state->presentValueCalls;
+  state->origin = change.origin;
+  state->presentValue = change.newValue;
+}
+
+void captureAnalogRelinquish(void* context, const BacnetAnalogRelinquishChange& change) {
+  auto* state = static_cast<AnalogCallbackState*>(context);
+  if (state == nullptr) {
+    return;
+  }
+  ++state->relinquishCalls;
+  state->origin = change.origin;
+  state->presentValue = change.newEffectiveValue;
+}
+
+bool testIndividuallyCommandableAnalogObjects() {
+  TestTransport transport;
+  BacnetServer server(transport);
+  BacnetServerAnalogValue ordinaryValues[] = {{100, "Ordinary AV", 1.5F, 62}};
+  BacnetServerCommandableAnalogValue commandableValues[1];
+  commandableValues[0].instance = 200;
+  commandableValues[0].objectName = "Commandable AV";
+  commandableValues[0].units = 62;
+  commandableValues[0].priority.relinquishDefault = 2.0F;
+  BacnetAnalogCommandableCallbackStorage callbacks;
+  AnalogCallbackState callbackState;
+  callbacks.presentValueChange = captureAnalogPresentValue;
+  callbacks.presentValueContext = &callbackState;
+  callbacks.relinquishChange = captureAnalogRelinquish;
+  callbacks.relinquishContext = &callbackState;
+  commandableValues[0].callbackStorage = &callbacks;
+
+  BacnetServerAnalogOutput outputs[1];
+  outputs[0].instance = 300;
+  outputs[0].objectName = "Commandable AO";
+  outputs[0].units = 62;
+  outputs[0].priority.relinquishDefault = 3.0F;
+  AnalogOutputApplyState applied;
+  outputs[0].apply = applyAnalogOutput;
+  outputs[0].applyContext = &applied;
+  BacnetServerDevice device;
+  device.deviceInstance = 7892;
+  if (!server.setAnalogValues(ordinaryValues, 1) ||
+      !server.setCommandableAnalogValues(commandableValues, 1) ||
+      !server.setAnalogOutputs(outputs, 1) || server.analogValueCount() != 2 ||
+      server.commandableAnalogValueCount() != 1 || server.analogOutputCount() != 1 ||
+      !server.begin(device)) {
+    return false;
+  }
+
+  const BacnetIpEndpoint source(192, 0, 2, 46, 47809);
+  const BacnetObjectId ordinary{static_cast<uint16_t>(BacnetObjectType::AnalogValue), 100};
+  const BacnetObjectId commandable{static_cast<uint16_t>(BacnetObjectType::AnalogValue), 200};
+  const BacnetObjectId output{static_cast<uint16_t>(BacnetObjectType::AnalogOutput), 300};
+  static constexpr BacnetPropertyId kExpectedProperties[] = {
+    BacnetPropertyId::ObjectIdentifier,
+    BacnetPropertyId::ObjectName,
+    BacnetPropertyId::ObjectType,
+    BacnetPropertyId::PresentValue,
+    BacnetPropertyId::StatusFlags,
+    BacnetPropertyId::EventState,
+    BacnetPropertyId::OutOfService,
+    BacnetPropertyId::Units,
+    BacnetPropertyId::PriorityArray,
+    BacnetPropertyId::RelinquishDefault,
+    BacnetPropertyId::PropertyList,
+  };
+  BacnetValue value;
+  const auto hasExpectedPropertyList = [&](BacnetObjectId object, uint8_t invokeId) {
+    if (!readProperty(transport,
+                      server,
+                      source,
+                      {object, BacnetPropertyId::PropertyList, 0},
+                      invokeId++,
+                      value) ||
+        value.type != BacnetValueType::Unsigned ||
+        value.unsignedValue != sizeof(kExpectedProperties) / sizeof(kExpectedProperties[0])) {
+      return false;
+    }
+    for (size_t index = 0; index < sizeof(kExpectedProperties) / sizeof(kExpectedProperties[0]); ++index) {
+      if (!readProperty(transport,
+                        server,
+                        source,
+                        {object, BacnetPropertyId::PropertyList, static_cast<uint32_t>(index + 1U)},
+                        invokeId++,
+                        value) ||
+          value.type != BacnetValueType::Enumerated ||
+          value.unsignedValue != static_cast<uint32_t>(kExpectedProperties[index])) {
+        return false;
+      }
+    }
+    return true;
+  };
+  if (!readProperty(transport, server, source,
+                    {ordinary, BacnetPropertyId::PresentValue, kBacnetNoArrayIndex}, 1, value) ||
+      value.type != BacnetValueType::Real || value.realValue != 1.5F ||
+      !readError(transport, server, source,
+                 {ordinary, BacnetPropertyId::PriorityArray, kBacnetNoArrayIndex}, 2, 32) ||
+      !hasExpectedPropertyList(commandable, 3) ||
+      !hasExpectedPropertyList(output, 30) ||
+      !readProperty(transport, server, source,
+                    {commandable, BacnetPropertyId::PriorityArray, 0}, 60, value) ||
+      value.type != BacnetValueType::Unsigned || value.unsignedValue != 16 ||
+      !readProperty(transport, server, source,
+                    {commandable, BacnetPropertyId::RelinquishDefault, kBacnetNoArrayIndex}, 61, value) ||
+      value.type != BacnetValueType::Real || value.realValue != 2.0F) {
+    return false;
+  }
+
+  BacnetValue real;
+  real.type = BacnetValueType::Real;
+  BacnetValue nullValue;
+  nullValue.type = BacnetValueType::Null;
+  BacnetWritePropertyOptions priority8;
+  priority8.hasPriority = true;
+  priority8.priority = 8;
+  BacnetWritePropertyOptions priority16;
+  priority16.hasPriority = true;
+  priority16.priority = 16;
+  real.realValue = 4.0F;
+  if (!writeOutput(transport, server, source, commandable, BacnetPropertyId::PresentValue,
+                   real, priority16, 62) || commandableValues[0].priority.effectiveValue() != 4.0F ||
+      callbackState.presentValueCalls != 1 ||
+      callbackState.origin != BacnetChangeOrigin::BacnetWriteProperty ||
+      !readProperty(transport, server, source,
+                    {commandable, BacnetPropertyId::PriorityArray, 16}, 63, value) ||
+      value.type != BacnetValueType::Real || value.realValue != 4.0F ||
+      !writeOutput(transport, server, source, commandable, BacnetPropertyId::PresentValue,
+                   nullValue, priority16, 64) || commandableValues[0].priority.effectiveValue() != 2.0F ||
+      callbackState.relinquishCalls != 1 || callbackState.presentValue != 2.0F) {
+    return false;
+  }
+
+  real.realValue = 6.0F;
+  if (!writeOutput(transport, server, source, output, BacnetPropertyId::PresentValue,
+                   real, priority16, 65) || applied.calls != 1 || applied.presentValue != 6.0F ||
+      !writeOutput(transport, server, source, output, BacnetPropertyId::PresentValue,
+                   real, priority8, 66) || applied.calls != 1 ||
+      !([&]() {
+        real.realValue = 9.0F;
+        return true;
+      }()) ||
+      !writeOutput(transport, server, source, output, BacnetPropertyId::PresentValue,
+                   real, priority8, 67) || applied.calls != 2 || applied.presentValue != 9.0F ||
+      !writeOutput(transport, server, source, output, BacnetPropertyId::PresentValue,
+                   nullValue, priority8, 68) || applied.calls != 3 || applied.presentValue != 6.0F ||
+      !writeOutput(transport, server, source, output, BacnetPropertyId::PresentValue,
+                   nullValue, priority16, 69) || applied.calls != 4 || applied.presentValue != 3.0F ||
+      !readProperty(transport, server, source,
+                    {output, BacnetPropertyId::PresentValue, kBacnetNoArrayIndex}, 70, value) ||
+      value.type != BacnetValueType::Real || value.realValue != 3.0F) {
+    return false;
+  }
+
+  BacnetServer onlyCommandable;
+  BacnetServer onlyOutput;
+  BacnetServer both;
+  return onlyCommandable.setCommandableAnalogValues(commandableValues, 1) &&
+         onlyCommandable.analogOutputCount() == 0 &&
+         onlyOutput.setAnalogOutputs(outputs, 1) &&
+         onlyOutput.commandableAnalogValueCount() == 0 &&
+         both.setCommandableAnalogValues(commandableValues, 1) &&
+         both.setAnalogOutputs(outputs, 1);
+}
+
 } // namespace
 
 int main() {
@@ -1317,7 +1510,8 @@ int main() {
              testIndividuallyRegisteredOptionalProperties() &&
              testStartConfigurationAndVersionFallback() && testLimitStates() && testReadOnlyInputObjects() && testCommandableBinaryOutputs() &&
              testCommandableBinaryValue() &&
-             testWritePriorityDefaultsAndEffectiveOutput()
+             testWritePriorityDefaultsAndEffectiveOutput() &&
+             testIndividuallyCommandableAnalogObjects()
            ? 0
            : 1;
 }
