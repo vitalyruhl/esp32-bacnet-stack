@@ -168,9 +168,13 @@ endpoint. They recover their application session after a target I-Am timeout,
 an unsuccessful object-list scan, or sustained loss of all previously active
 COV subscriptions; the Ethernet variant also recovers after a local IP change.
 
-## screenshots
+## Screenshots
 
-![Screenshot V0.24.1](docs/screenshots/bnm-V0.24.1.jpg)
+### ESP-to-ESP live COV (v0.40.0)
+
+![WiFi server live COV](docs/screenshots/V0.40.0.server-wifi.jpg)
+
+![Ethernet client live COV](docs/screenshots/V0.40.0.client-eth.jpg)
 
 ## Repository Layout
 
