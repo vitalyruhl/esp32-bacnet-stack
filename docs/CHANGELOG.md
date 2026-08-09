@@ -16,8 +16,7 @@ This changelog is a curated overview. The canonical library version is in
 
 ### Changed
 
-- Updated the rich-client and paired live-COV example dependencies to
-  ConfigManager 4.4.10.
+- Updated all example ConfigManager dependencies to 4.4.10.
 - Placed the paired Ethernet client's Diagnostics card after Server Hardware
   Inputs.
 
