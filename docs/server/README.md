@@ -3,8 +3,9 @@
 The portable `BacnetServer` runtime accepts an injected
 `BacnetDatagramTransport`, is driven by non-blocking `poll()`, decodes Who-Is,
 emits I-Am, serves caller-owned objects through ReadProperty, and supports
-WriteProperty for registered commandable Binary Outputs and Binary Values plus incoming
-SubscribeCOV and SubscribeCOVProperty requests.
+WriteProperty for registered commandable Binary Outputs, Binary Values, Analog
+Outputs, and Analog Values plus incoming SubscribeCOV and SubscribeCOVProperty
+requests.
 
 The active Device profile exposes its mandatory identity, protocol-capability,
 and transport properties, an Object List, Property List, and an empty Device
@@ -28,6 +29,37 @@ provider is configured. A configured `BacnetServerAnalogValueProvider` is a
 function pointer plus caller context and is invoked only while serving a
 Present Value read. The server neither owns the entries, strings, nor provider
 context; all must remain valid while the server is running.
+
+## Commandable analog objects
+
+`BacnetServerAnalogValue` remains the compact read-only AV profile. Register
+`BacnetServerCommandableAnalogValue` through
+`setCommandableAnalogValues()` only for AV instances that need BACnet command
+priority. The two AV forms can be registered together, but must not reuse an
+instance number. Commandable AV storage owns its `BacnetCommandPriority<float>`
+state and exposes `Present_Value`, `Priority_Array`, and
+`Relinquish_Default`; ordinary AVs expose none of those commandable
+properties.
+
+`BacnetServerAnalogOutput` is a separate opt-in registration through
+`setAnalogOutputs()`. AO and commandable AV registration are independent: an
+application may enable either, both, or neither. Both types use priorities 1
+through 16; omitted WriteProperty priority means 16, and a BACnet NULL
+relinquishes only the selected slot. `Priority_Array` is read-only and reports
+BACnet NULL for unoccupied slots. After every successful operation the highest
+occupied priority determines `Present_Value`; when no slot is occupied,
+`Relinquish_Default` is effective.
+
+The AO `apply` callback is portable and optional. It receives only a changed,
+committed effective value, never an individual priority slot. This keeps the
+data path `Priority_Array -> effective priority -> Present_Value -> output
+hook`; PWM, DAC, GPIO, and other hardware conversion remain platform-adapter
+work. Commandable analog callback storage is also optional and follows the
+existing synchronous ordering: output hook first, then priority-slot,
+effective-priority, present-value, and relinquish callbacks where applicable.
+Callbacks observe committed state, must not recursively mutate the same object,
+and do not send COV traffic; the existing snapshot path is still the sole COV
+change detector.
 
 Property registrations are also caller-owned and use a function pointer plus
 const context. Their presence is the single source for both `Property_List`
@@ -116,6 +148,6 @@ Property-COV forms, `COV_Increment`, lifetime/renewal/cancellation semantics,
 bounded confirmed-notification retries, diagnostics, and scope boundaries.
 
 This is not a complete BACnet/IP server feature: there is no EventNotification,
-Analog Output/PWM, or generic real-I/O policy.
+PWM/DAC/GPIO adapter, or generic real-I/O policy.
 
 See [Planned Server Work](planned.md) for the current scope boundary.

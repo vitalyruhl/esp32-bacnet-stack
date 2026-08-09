@@ -35,6 +35,9 @@ using BacnetServerBinaryInputProvider = bool (*)(void* context);
 using BacnetServerBinaryOutputApply = void (*)(void* context,
                                                bool presentValue,
                                                bool outOfService);
+using BacnetServerAnalogOutputApply = void (*)(void* context,
+                                               float presentValue,
+                                               bool outOfService);
 using BacnetServerPropertyProvider = bool (*)(const void* context, BacnetValue& value);
 
 enum class BacnetChangeOrigin : uint8_t {
@@ -103,6 +106,65 @@ struct BacnetBinaryOutputCallbackStorage {
   void* relinquishContext = nullptr;
 };
 
+// Analog commandable objects use dedicated real-valued events so existing
+// Binary Output callbacks remain source-compatible.
+struct BacnetAnalogPresentValueChange {
+  BacnetObjectId object;
+  float oldValue = 0.0F;
+  float newValue = 0.0F;
+  BacnetChangeOrigin origin = BacnetChangeOrigin::Local;
+};
+
+struct BacnetAnalogPriorityValueChange {
+  BacnetObjectId object;
+  uint8_t priority = 0;
+  bool oldOccupied = false;
+  float oldValue = 0.0F;
+  bool newOccupied = false;
+  float newValue = 0.0F;
+  BacnetChangeOrigin origin = BacnetChangeOrigin::Local;
+};
+
+struct BacnetAnalogEffectivePriorityChange {
+  BacnetObjectId object;
+  uint8_t oldPriority = 0;
+  uint8_t newPriority = 0;
+  float oldValue = 0.0F;
+  float newValue = 0.0F;
+  BacnetChangeOrigin origin = BacnetChangeOrigin::Local;
+};
+
+struct BacnetAnalogRelinquishChange {
+  BacnetObjectId object;
+  uint8_t releasedPriority = 0;
+  float oldEffectiveValue = 0.0F;
+  float newEffectiveValue = 0.0F;
+  uint8_t newEffectivePriority = 0;
+  bool relinquishDefaultEffective = false;
+  BacnetChangeOrigin origin = BacnetChangeOrigin::Local;
+};
+
+using BacnetAnalogPresentValueChangeCallback = void (*)(
+  void* context, const BacnetAnalogPresentValueChange& change);
+using BacnetAnalogPriorityValueChangeCallback = void (*)(
+  void* context, const BacnetAnalogPriorityValueChange& change);
+using BacnetAnalogEffectivePriorityChangeCallback = void (*)(
+  void* context, const BacnetAnalogEffectivePriorityChange& change);
+using BacnetAnalogRelinquishChangeCallback = void (*)(
+  void* context, const BacnetAnalogRelinquishChange& change);
+
+struct BacnetAnalogCommandableCallbackStorage {
+  BacnetAnalogPresentValueChangeCallback presentValueChange = nullptr;
+  void* presentValueContext = nullptr;
+  BacnetAnalogPriorityValueChangeCallback
+    priorityValueChange[BacnetCommandPriority<float>::kSlotCount] = {};
+  void* priorityValueContext[BacnetCommandPriority<float>::kSlotCount] = {};
+  BacnetAnalogEffectivePriorityChangeCallback effectivePriorityChange = nullptr;
+  void* effectivePriorityContext = nullptr;
+  BacnetAnalogRelinquishChangeCallback relinquishChange = nullptr;
+  void* relinquishContext = nullptr;
+};
+
 // Caller-owned optional property descriptor. Register only properties that an
 // object actually supports; the server neither owns nor allocates descriptors
 // or their contexts. An empty string is a valid Description value, while a
@@ -125,6 +187,45 @@ struct BacnetServerAnalogValue {
   bool outOfService = false;
   BacnetServerAnalogValueProvider presentValueProvider = nullptr;
   void* presentValueContext = nullptr;
+};
+
+// Caller-owned opt-in commandable Analog Value. Register it separately from
+// BacnetServerAnalogValue so ordinary AV instances retain their compact,
+// read-only layout. Priority_Array and Relinquish_Default are always paired.
+struct BacnetServerCommandableAnalogValue {
+  uint32_t instance = 0;
+  const char* objectName = nullptr;
+  BacnetCommandPriority<float> priority;
+  uint32_t units = 0;
+  bool outOfService = false;
+  BacnetAnalogCommandableCallbackStorage* callbackStorage = nullptr;
+  bool callbackInProgress = false;
+
+  bool applyPriorityValue(float value,
+                          uint8_t priorityValue,
+                          bool relinquish,
+                          BacnetChangeOrigin origin);
+  bool setRelinquishDefaultValue(float value, BacnetChangeOrigin origin);
+};
+
+// Caller-owned opt-in commandable Analog Output. The output hook receives
+// only the committed effective value after priority resolution.
+struct BacnetServerAnalogOutput {
+  uint32_t instance = 0;
+  const char* objectName = nullptr;
+  BacnetCommandPriority<float> priority;
+  uint32_t units = 0;
+  bool outOfService = false;
+  BacnetServerAnalogOutputApply apply = nullptr;
+  void* applyContext = nullptr;
+  BacnetAnalogCommandableCallbackStorage* callbackStorage = nullptr;
+  bool callbackInProgress = false;
+
+  bool applyPriorityValue(float value,
+                          uint8_t priorityValue,
+                          bool relinquish,
+                          BacnetChangeOrigin origin);
+  bool setRelinquishDefaultValue(float value, BacnetChangeOrigin origin);
 };
 
 // Caller-owned Analog Input configuration. This has the same read-only value
@@ -527,6 +628,12 @@ public:
   bool setAnalogValues(BacnetServerAnalogValue* analogValues,
                        size_t count);
   size_t analogValueCount() const;
+  bool setCommandableAnalogValues(BacnetServerCommandableAnalogValue* analogValues,
+                                  size_t count);
+  size_t commandableAnalogValueCount() const;
+  bool setAnalogOutputs(BacnetServerAnalogOutput* analogOutputs,
+                        size_t count);
+  size_t analogOutputCount() const;
   bool setAnalogInputs(BacnetServerAnalogInput* analogInputs,
                        size_t count);
   size_t analogInputCount() const;
@@ -616,6 +723,13 @@ private:
   bool readAnalogValueProperty(const BacnetServerAnalogValue& analogValue,
                                BacnetPropertyId property,
                                BacnetValue& value) const;
+  bool readCommandableAnalogValueProperty(
+    const BacnetServerCommandableAnalogValue& analogValue,
+    BacnetPropertyId property,
+    BacnetValue& value) const;
+  bool readAnalogOutputProperty(const BacnetServerAnalogOutput& analogOutput,
+                                BacnetPropertyId property,
+                                BacnetValue& value) const;
   bool readAnalogInputProperty(const BacnetServerAnalogInput& analogInput,
                                BacnetPropertyId property,
                                BacnetValue& value) const;
@@ -632,6 +746,10 @@ private:
                                    BacnetPropertyId property,
                                    BacnetValue& value) const;
   const BacnetServerAnalogValue* findAnalogValue(uint32_t instance) const;
+  BacnetServerCommandableAnalogValue* findCommandableAnalogValue(uint32_t instance);
+  const BacnetServerCommandableAnalogValue* findCommandableAnalogValue(uint32_t instance) const;
+  BacnetServerAnalogOutput* findAnalogOutput(uint32_t instance);
+  const BacnetServerAnalogOutput* findAnalogOutput(uint32_t instance) const;
   const BacnetServerAnalogInput* findAnalogInput(uint32_t instance) const;
   const BacnetServerBinaryInput* findBinaryInput(uint32_t instance) const;
   BacnetServerBinaryOutput* findBinaryOutput(uint32_t instance) const;
@@ -663,6 +781,12 @@ private:
   static bool binaryValuePriorityEntry(const void* context,
                                        size_t index,
                                        BacnetValue& value);
+  static bool commandableAnalogValuePriorityEntry(const void* context,
+                                                  size_t index,
+                                                  BacnetValue& value);
+  static bool analogOutputPriorityEntry(const void* context,
+                                        size_t index,
+                                        BacnetValue& value);
 
   BacnetDatagramTransport* transport_ = nullptr; // Non-owning.
   bool running_ = false;
@@ -670,6 +794,10 @@ private:
   uint16_t port_ = kDefaultPort;
   BacnetServerAnalogValue* analogValues_ = nullptr; // Caller-owned.
   size_t analogValueCount_ = 0;
+  BacnetServerCommandableAnalogValue* commandableAnalogValues_ = nullptr; // Caller-owned.
+  size_t commandableAnalogValueCount_ = 0;
+  BacnetServerAnalogOutput* analogOutputs_ = nullptr; // Caller-owned.
+  size_t analogOutputCount_ = 0;
   BacnetServerAnalogInput* analogInputs_ = nullptr; // Caller-owned.
   size_t analogInputCount_ = 0;
   BacnetServerAnalogInput* objectCentricAnalogInputs_[kMaxObjectCentricAnalogInputs] = {};
