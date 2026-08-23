@@ -176,6 +176,12 @@ COV subscriptions; the Ethernet variant also recovers after a local IP change.
 
 ![Ethernet client live COV](docs/screenshots/V0.40.0.client-eth.jpg)
 
+### ESP-to-ESP live COV (0.40.0)
+
+![Ethernet client live COV](docs/screenshots/V0.40.0.client-eth.jpg)
+
+![WiFi server live COV](docs/screenshots/V0.40.0.server-wifi.jpg)
+
 ## Repository Layout
 
 | Path | Purpose |
