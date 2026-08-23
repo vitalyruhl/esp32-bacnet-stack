@@ -3,6 +3,24 @@
 This changelog is a curated overview. The canonical library version is in
 `library.json`.
 
+## 0.41.0 - 2026-08-23
+
+### Added
+
+- Added independently opt-in commandable Analog Output and Analog Value server
+  objects with BACnet priority handling, effective-value callbacks, and COV.
+- Added the ESP32 I/O demo AO0 PWM binding, rich-client analog priority-write
+  controls, and the Ethernet rich-client OTA build profile.
+- Added independently opt-in Device Description, Location, and Serial Number
+  properties without increasing the compact Device profile.
+
+### Fixed
+
+- Renew active client COV subscriptions before their requested lifetime expires.
+- Recover paired client sessions through Device-ID discovery after sustained
+  peer loss, failed object-list scans, local Ethernet address changes, or loss
+  of all previously active COV subscriptions.
+
 ## 0.40.0 - 2026-08-09
 
 ### Added
