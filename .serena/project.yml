@@ -66,6 +66,7 @@ ignored_paths:
 - ".serena/memories/tmp/**"
 - ".serena/memories/local_*.md"
 - ".serena/memories/tmp_*.md"
+- ".projectatlas/**"
 - "compile_commands.json"
 - "*.bin"
 - "*.elf"
@@ -115,9 +116,13 @@ added_modes:
 initial_prompt: >-
   Repository governance is canonical. Before repository work, read
   .github/AGENTS.md and the applicable .github/agents/*.agent.md file directly.
-  Serena memories are curated summaries only. Preserve user changes, do not
-  modify main or master, and do not run upload, monitor, erase, or other
-  hardware/network-affecting commands without explicit user approval.
+  After those mandatory reads, use the installed version-matched ProjectAtlas
+  skill and MCP tools as the repository orientation layer when available;
+  otherwise use direct bounded discovery. Use Serena only after Atlas or direct
+  discovery narrows the scope and LSP semantics are material. Serena memories are
+  curated summaries only. Preserve user changes, do not modify main or master,
+  and do not run upload, monitor, erase, or other hardware/network-affecting
+  commands without explicit user approval.
 
 # time budget (seconds) per tool call for the retrieval of additional symbol information
 # such as docstrings or parameter information.

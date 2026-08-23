@@ -36,6 +36,12 @@
 ## Search / Discovery Reminder
 
 - Hidden governance paths may be skipped by plain search.
+- After direct governance reads, use ProjectAtlas when available for repository
+  orientation, candidate ranking, summaries, indexed search, exact slices, and
+  structural health. Use Serena only for LSP-semantic work inside the selected
+  scope.
+- Keep ProjectAtlas and Serena freshness independent and do not duplicate a
+  trusted result without a material completeness or ambiguity reason.
 - Use hidden-path-aware searches such as:
   - `rg --hidden ...`
   - `fd --hidden ...`

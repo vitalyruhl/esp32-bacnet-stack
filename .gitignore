@@ -14,6 +14,7 @@ compile_commands.json
 .serena/memories/tmp/
 .serena/memories/local_*.md
 .serena/memories/tmp_*.md
+.projectatlas/
 .DS_Store
 Thumbs.db
 

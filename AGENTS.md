@@ -14,6 +14,10 @@ This file is the universal, cross-tool governance kernel. If it conflicts with
 - Reuse stable context in the same session; reload only after a role or relevant
   governance change, uncertainty, or an explicit fresh audit. Never load
   unrelated agents merely because governance changed.
+- When ProjectAtlas is available, read and follow its installed,
+  version-matched `projectatlas` skill after the governance gate and before
+  broad repository discovery. Initialize only when project-local Atlas state is
+  absent, and follow the skill's MCP-first incremental freshness policy.
 
 ## Universal Safety
 
