@@ -49,11 +49,27 @@ The root `AGENTS.md` owns universal safety, language, and loading rules.
 
 ## Shared Practices
 
-- Prefer workspace tools. Use Serena for healthy semantic navigation, but it
-  never replaces direct governance reads or exact hidden-path checks. For
-  governance, docs, GitHub, or workflow-only tasks, skip Serena indexing unless
-  explicitly needed. For C++ work, refresh it only after relevant source/build
-  changes or clear evidence it is stale.
+- Read governance directly before tool-assisted repository discovery. When
+  ProjectAtlas is available, it is the primary orientation layer for task
+  startup, folder/file
+  ranking, compact summaries, indexed search, exact slices, broad static
+  architecture candidates, purpose curation, health, and lint. Call one compact
+  `atlas_session_brief`, follow its typed next call, and do not repeat discovery
+  with another tool.
+- When ProjectAtlas is unavailable, fall back to direct `rg`/`fd` and bounded
+  source reads while preserving the same Serena semantic boundary.
+- Use Serena after ProjectAtlas has narrowed the relevant file or symbol when
+  LSP semantics are material: declarations, implementations, overloads,
+  references, and diagnostics. Do not reconfirm trusted Atlas relations with
+  Serena unless Atlas reports incomplete, ambiguous, unresolved, or truncated
+  evidence that matters to the decision. Serena remains read-only unless a
+  separate governance decision enables semantic writes.
+- Neither tool replaces direct governance reads, current source evidence, or
+  exact `rg --hidden` audits. For governance, docs, GitHub, or workflow-only
+  tasks, skip Serena indexing unless explicitly needed. Refresh Atlas with
+  `atlas_watch_once` after relevant changes; refresh Serena only under
+  `serena-index-freshness`, and never reuse either index across branches without
+  proven identical tree state.
 - For plan, refactor, audit, and architecture-audit tasks that actually use
   Serena, load `serena-index-freshness`.
 - Prefer `rg`/`fd` for exact audits, `gh` for authenticated GitHub operations,
@@ -77,6 +93,8 @@ The root `AGENTS.md` owns universal safety, language, and loading rules.
 - `safe-branch-cleanup`: protected branch preservation and cleanup checks.
 - `final-repository-sync`: post-integration repository synchronization.
 - `docs-gate`: semantic documentation consistency review.
+- `projectatlas` (installed plugin): Atlas-first repository orientation,
+  incremental freshness, purpose curation, health, and lint.
 - `serena-index-freshness`: precise Serena index refresh and reuse criteria.
 
 Agent and skill instructions may add role-specific rules but must not weaken

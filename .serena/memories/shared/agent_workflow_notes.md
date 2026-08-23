@@ -5,6 +5,20 @@
 - Always reread `.github/AGENTS.md`, `.github/agents/project.agent.md`, and `.github/agents/workflow.agent.md` when a full governance reload is required.
 - Workflow shortcuts are governed actions, not casual shell aliases.
 
+## Repository Orientation
+
+- Read canonical governance directly before using repository-navigation tools.
+- When available, use the installed version-matched ProjectAtlas skill as the
+  first orientation layer: call one compact `atlas_session_brief`, follow its
+  typed next call, and refresh changed files with `atlas_watch_once` instead of
+  routine full scans. Otherwise use direct bounded discovery.
+- Use Serena only after Atlas has selected the relevant file or symbol and LSP
+  declarations, implementations, references, overloads, or diagnostics matter.
+- Do not query both tools for the same relation unless Atlas reports material
+  incomplete, ambiguous, unresolved, or truncated evidence.
+- Atlas purposes describe path responsibility; Serena memories retain curated
+  project knowledge. Repository files remain authoritative over both.
+
 ## Workflow Shortcuts
 
 - `workflow.begin`: create or select the appropriate side branch, then stop before edits unless the workflow explicitly continues.
