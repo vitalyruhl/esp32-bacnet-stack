@@ -10,8 +10,13 @@ Load the project profile when selecting repository commands. Use enabled CI only
 if none exists, report that and use required local validation. Run relevant tests
 when affected. Root builds, affected examples, affected tests, and relevant OTA
 work use profile commands. Upload and monitor require explicit request.
-When full pre-commit is required, run:
-`pwsh -NoProfile -ExecutionPolicy Bypass -File tools/run-precommit-full.ps1`
+For the narrow autofix-capable pre-commit component, run:
+`pwsh -NoProfile -ExecutionPolicy Bypass -File tools/quality/run-precommit-full.ps1`
+
+For a full repository or integration gate, use the canonical orchestrator:
+`pwsh -NoProfile -ExecutionPolicy Bypass -File tools/build/run-full-repository-gate.ps1`
+It discovers the current PlatformIO matrix from the repository; do not replace it
+with a copied environment list in governance.
 
 Governance-only changes require a consistency check of routing, shortcuts,
 branch/Git/PR rules, tools, Serena, validation, version, session close,
@@ -44,14 +49,17 @@ blocker if it cannot run.
 
 ## Reuse
 
-Reuse validation only if it passed clearly in this session, covered the same
-scope, the working tree matches the validated state, and no relevant files
-changed. State: `Validation reused: <command>, passed before checkpoint, no
-relevant changes since.` Never reuse after branch change without proven identical
-tree, merge, rebase, conflict resolution, dependency update, PlatformIO config
-change, generated refresh, or any relevant source/header/example/test/build or
-metadata modification. Failed, partial, skipped, ambiguous, or insufficient
-validation is never reusable.
+Reuse validation across agents or sessions only when all of the following are
+documented: identical commit/source state, clean working tree, exact command and
+successful result, unchanged relevant scope, and continued sufficiency for the
+pending decision. State: `Validation reused: <command>, passed for identical
+commit/source state, clean tree, unchanged relevant scope, and documented result.`
+Changed relevant scope requires a rerun. Never reuse after branch change without
+proven identical tree, merge, rebase, conflict resolution, dependency update,
+PlatformIO config change, generated refresh, or any relevant
+source/header/example/test/build or metadata modification. Reuse never bypasses
+safety, release, package, or hardware requirements. Failed, partial, skipped,
+ambiguous, or insufficient validation is never reusable.
 
 For a GitHub Actions-only workflow dependency update, fresh successful Actions
 checks on the updated workflow may validate that workflow change. Report local

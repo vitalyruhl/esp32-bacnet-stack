@@ -1,6 +1,6 @@
 {
   "name": "ESP32 BACnet Stack",
-  "version": "0.37.0",
+  "version": "0.41.0",
   "keywords": "bacnet, bacnet-ip, bacnet-client, bacnet-stack, building-automation, bms, automation, hvac, scada, esp32, arduino, platformio, ethernet, wifi, cpp, portable, windows, winsock, cmake",
   "description": "Portable BACnet/IP client core and ESP32 server demo for Arduino and native Windows applications.",
   "license": "GPL-2.0-or-later",
@@ -29,14 +29,18 @@
     "EspBacnet.h"
   ],
   "build": {
-    "srcFilter": "+<*> -<main.cpp> -<platform/windows/>"
+    "srcFilter": "+<*> -<platform/windows/>"
   },
   "export": {
     "include": [
       "src/**",
       "examples/**",
       "docs/**",
-      "tools/**",
+      "tools/build/**",
+      "tools/quality/**",
+      "tools/release/**",
+      "tools/repository/**",
+      "tools/governance/**",
       "README.md",
       "LICENSE",
       "THIRD_PARTY_NOTICES.md",
@@ -62,13 +66,6 @@
       ".idea",
       ".idea/**",
       "*.code-workspace",
-      "tools/native/build",
-      "tools/native/build/**",
-      "tools/native/test",
-      "tools/native/test/**",
-      "tools/portable-smoke/build",
-      "tools/portable-smoke/build/**",
-      "src/main.cpp",
       "**/secret/secrets.h",
       "**/secret/wifiSecret.h",
       "**/secrets.h",

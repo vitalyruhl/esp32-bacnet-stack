@@ -20,7 +20,7 @@ version_source: library.json
 github_project: ESP32 BACnet Stack (#6)
 default_env: usb
 ota_env: ota
-release_example: release/v0.1.0
+release_example: release/v<version>
 ```
 
 ## Paths
@@ -31,26 +31,27 @@ release_example: release/v0.1.0
 - headers: `include/` when present
 - internal_libs: `lib/` when present
 - examples: `examples/`
-- client_example_wifi: `examples/client-demo-wifi`
-- client_example_eth: `examples/client-demo-ETH`
-- server_example: `examples/server-demo`
-- tests: `test/` when present
+- client_example_wifi: `examples/esp32/client/rich-client/wifi`
+- client_example_eth: `examples/esp32/client/rich-client/ethernet`
+- server_example: `examples/esp32/server/bacnet-server`
+- tests: `tests/` when present
 - docs: `README.md`, `docs/`
 - changelog: `docs/CHANGELOG.md` when present
 - docs_todo: `docs/TODO.md`, `docs/todo_*.md`
 - tools: `tools/`
 - serena: `.serena/`; memories never override repo files, user instructions,
   `.github/AGENTS.md`, or this profile
-- wokwi: example-specific `Wokwi/` folders when present
+- wokwi: example-specific `Wokwi/` folders and shared fixtures under
+  `tests/fixtures/wokwi/` when present
 
 ## Validation
 
 - root: `pio run -e usb`
-- client_example_wifi: `pio run -d examples/client-demo-wifi -e usb`
-- client_example_eth: `pio run -d examples/client-demo-ETH -e eth`
-- basic_client_example_eth: `pio run -d examples/client-object-list-scan-basic -e eth`
-- hil_client_example_eth: `pio run -d examples/hil-wago-client-acceptance -e eth`
-- server_example: `pio run -d examples/server-demo -e usb -e eth`
+- client_example_wifi: `pio run -d examples/esp32/client/rich-client/wifi -e usb`
+- client_example_eth: `pio run -d examples/esp32/client/rich-client/ethernet -e eth`
+- basic_client_example_eth: `pio run -d examples/esp32/client/basic-object-list-scan -e eth`
+- hil_client_example_eth: `pio run -d tests/hil/esp32/wago-client-acceptance -e eth`
+- server_example: `pio run -d examples/esp32/server/bacnet-server -e usb -e eth`
 - tests: `pio test -e usb --without-uploading --without-testing`
 - ota_when_relevant: `pio run -e ota`
 - upload/monitor: explicit user request only
@@ -96,4 +97,9 @@ release_example: release/v0.1.0
 
 - Use GitHub Project `ESP32 BACnet Stack` (#6) only when tracked workflow or
   project coordination is explicitly in scope.
-- Release branches are optional before first release.
+- The repository has released versions. Release branches are optional runnable
+  snapshots and are created or updated only on explicit request.
+- `main` and `server` are permanent integration branches. Client, shared,
+  repository, and general work normally integrates into `main`; server-specific
+  work normally integrates into `server`. Integrate `server` into `main` only
+  through an explicit release/integration request.

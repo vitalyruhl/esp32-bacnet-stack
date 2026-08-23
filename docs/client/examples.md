@@ -2,7 +2,7 @@
 
 The repository contains multiple client-facing examples with different purposes.
 
-## `examples/client-object-list-scan-basic`
+## `examples/esp32/client/basic-object-list-scan`
 
 This is the canonical serial-only basic client example.
 
@@ -17,12 +17,12 @@ demonstrates:
 - one fallback-polled `present-value` subscription
 - compact Serial output without ConfigManager or web UI
 
-See [examples/client-object-list-scan-basic/README.md](../../examples/client-object-list-scan-basic/README.md).
+See [examples/esp32/client/basic-object-list-scan/README.md](../../examples/esp32/client/basic-object-list-scan/README.md).
 
-## `examples/client-demo-wifi`
+## `examples/esp32/client/rich-client/wifi`
 
 This is the preserved WiFi variant of the richer optional client demo with
-ConfigManager V4.4.0 integration.
+ConfigManager 4.4.10 integration.
 
 It demonstrates:
 
@@ -45,7 +45,7 @@ The canonical WiFi `usb` and Ethernet `eth` builds enable the same existing
 manual priority controls. They are still compile-time opt-ins at the demo
 level, and every operation requires an explicit user action.
 
-## `examples/client-demo-ETH`
+## `examples/esp32/client/rich-client/ethernet`
 
 This project builds the same shared BACnet/UI application for the Wireless-Tag
 WT32-ETH01 V1.4 and its LAN8720 Ethernet interface. ConfigManager WiFi support
@@ -57,12 +57,36 @@ demo. Its existing manual priority controls are the only write surface; they
 remain explicit, require both compile-time write gates, and issue at most one
 request per button action.
 
-Build with `pio run -d examples/client-demo-ETH -e eth`. The local
+Build with `pio run -d examples/esp32/client/rich-client/ethernet -e eth`. The local
 `eth-com6` environment adds the current COM6 upload/monitor port without making
 that port a generic repository assumption. See the example README for GPIO0,
 UART0, power, upload, and monitor instructions.
 
-## `examples/hil-wago-client-acceptance`
+## `examples/esp32/paired/live-cov`
+
+The paired live-COV examples provide both ESP-to-ESP role combinations:
+
+- WiFi server with WT32-ETH01 Ethernet client (`wifi-com7` / `eth-com6`)
+- WT32-ETH01 Ethernet server with WiFi client (`eth-com6` / `wifi-com7`)
+
+Each client discovers only its configured Device and BACnet/IP endpoint, scans
+the object list, and creates the eight paired process-value subscriptions. The
+shared client recovery retries discovery after a target I-Am timeout, an empty
+or failed object-list scan, or sustained loss of every previously active COV
+subscription. The Ethernet client also recreates its BACnet session when its
+local IP address changes. Individual subscription registration, renewal, and
+polling fallback remain independent of that application-level recovery.
+
+The client notification callback updates each preview's cached value, COV
+counter, and timestamp. The `subscription update ...` diagnostic is routed to
+the demo logger; it is not guaranteed to be mirrored on Serial when GUI
+logging is disabled.
+
+See the four example READMEs under
+[`examples/esp32/paired/live-cov`](../../examples/esp32/paired/live-cov/) for
+their lab defaults, build commands, and manual priority-write scope.
+
+## `tests/hil/esp32/wago-client-acceptance`
 
 This is the local hardware acceptance runner.
 

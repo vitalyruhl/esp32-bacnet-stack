@@ -1,0 +1,1126 @@
+// SPDX-License-Identifier: GPL-2.0-or-later WITH GCC-exception-2.0
+
+#include <Arduino.h>
+#include <ArduinoBacnetClient.h>
+#include <ConfigManager.h>
+#include <DallasTemperature.h>
+#include <OneWire.h>
+#include <WiFiUdp.h>
+
+#include <cmath>
+#include <cstdint>
+#include <cstdio>
+
+#include <ArduinoBacnetServer.h>
+#include <BacnetServer.h>
+#include <core/CoreSettings.h>
+#ifndef BACNET_DEMO_USE_ETHERNET
+#define BACNET_DEMO_USE_ETHERNET 0
+#endif
+
+#if BACNET_DEMO_USE_ETHERNET
+#include <ETH.h>
+#include <ExampleEthernet.h>
+#else
+#include <WiFi.h>
+#include <core/CoreWiFiServices.h>
+#endif
+#include <io/IOManager.h>
+
+#include "AnalogOutputLogic.h"
+#include "IoInputLogic.h"
+
+#ifndef BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
+#define BACNET_DEMO_ENABLE_COV_DIAGNOSTICS 1
+#endif
+
+#ifndef BACNET_DEMO_HAS_WIFI_SECRETS
+#if __has_include("secret/secrets.h")
+#include "secret/secrets.h"
+#define BACNET_DEMO_HAS_WIFI_SECRETS 1
+#else
+#define BACNET_DEMO_HAS_WIFI_SECRETS 0
+#endif
+#endif
+
+#ifndef BACNET_DEMO_FORCE_SECRET_DEFAULTS
+#define BACNET_DEMO_FORCE_SECRET_DEFAULTS 0
+#endif
+
+#if BACNET_DEMO_FORCE_SECRET_DEFAULTS && !BACNET_DEMO_HAS_WIFI_SECRETS
+#error "BACNET_DEMO_FORCE_SECRET_DEFAULTS requires secret/secrets.h"
+#endif
+
+#if BACNET_DEMO_FORCE_SECRET_DEFAULTS && !BACNET_DEMO_USE_ETHERNET &&              \
+  (!defined(MY_WIFI_SSID) || !defined(MY_WIFI_PASSWORD) || !defined(MY_WIFI_IP) || \
+   !defined(MY_USE_DHCP) || !defined(MY_GATEWAY_IP) || !defined(MY_SUBNET_MASK) || \
+   !defined(MY_DNS_IP))
+#error "BACNET_DEMO_FORCE_SECRET_DEFAULTS requires complete MY_WIFI_* network settings"
+#endif
+
+#if BACNET_DEMO_USE_ETHERNET
+#ifndef BACNET_DEMO_ETHERNET_IP
+#ifdef MY_ETHERNET_IP
+#define BACNET_DEMO_ETHERNET_IP MY_ETHERNET_IP
+#else
+#define BACNET_DEMO_ETHERNET_IP "192.168.2.126"
+#endif
+#endif
+#ifndef BACNET_DEMO_ETHERNET_GATEWAY
+#ifdef MY_GATEWAY_IP
+#define BACNET_DEMO_ETHERNET_GATEWAY MY_GATEWAY_IP
+#else
+#define BACNET_DEMO_ETHERNET_GATEWAY "192.168.2.1"
+#endif
+#endif
+#ifndef BACNET_DEMO_ETHERNET_SUBNET
+#ifdef MY_SUBNET_MASK
+#define BACNET_DEMO_ETHERNET_SUBNET MY_SUBNET_MASK
+#else
+#define BACNET_DEMO_ETHERNET_SUBNET "255.255.255.0"
+#endif
+#endif
+#ifndef BACNET_DEMO_ETHERNET_DNS
+#ifdef MY_DNS_IP
+#define BACNET_DEMO_ETHERNET_DNS MY_DNS_IP
+#else
+#define BACNET_DEMO_ETHERNET_DNS BACNET_DEMO_ETHERNET_GATEWAY
+#endif
+#endif
+#ifndef BACNET_DEMO_ETHERNET_DHCP
+#ifdef MY_USE_DHCP
+#define BACNET_DEMO_ETHERNET_DHCP MY_USE_DHCP
+#else
+#define BACNET_DEMO_ETHERNET_DHCP false
+#endif
+#endif
+#endif
+
+#if BACNET_DEMO_FORCE_SECRET_DEFAULTS && BACNET_DEMO_USE_ETHERNET &&               \
+  (!defined(MY_ETHERNET_IP) || !defined(MY_USE_DHCP) || !defined(MY_GATEWAY_IP) || \
+   !defined(MY_SUBNET_MASK) || !defined(MY_DNS_IP))
+#error "BACNET_DEMO_FORCE_SECRET_DEFAULTS requires complete MY_ETHERNET_* network settings"
+#endif
+
+namespace {
+
+constexpr char kAppName[] = "ESP32 BACnet I/O Server";
+constexpr char kVersion[] = "0.40.0";
+constexpr uint16_t kDevelopmentVendorId = 0;
+constexpr uint32_t kDeviceInstanceDefault = 1682127;
+constexpr int kDs18b20DefaultGpio = 18;
+constexpr int kSetButtonDefaultGpio = 19;
+constexpr int kAnalogOutputPwmGpio = 32;
+constexpr uint8_t kAnalogOutputPwmResolution = 8;
+constexpr uint32_t kCommandableAnalogValueInstance = 0;
+constexpr uint32_t kAnalogOutputInstance = 0;
+constexpr float kAnalogOutputMinimum = 0.0F;
+constexpr float kAnalogOutputMaximum = 100.0F;
+constexpr float kAnalogOutputRelinquishDefault = 0.0F;
+constexpr uint32_t kInputPollMs = 250;
+constexpr uint32_t kDsReadIntervalMs = 1000;
+constexpr uint32_t kRecentActivityMs = 60000;
+
+struct Settings {
+  Config<int>* deviceInstance = nullptr;
+  Config<int>* udpPort = nullptr;
+  Config<int>* vendorId = nullptr;
+  Config<bool>* dsEnabled = nullptr;
+  Config<int>* dsGpio = nullptr;
+
+  void create() {
+    deviceInstance = &ConfigManager.addSettingInt("bacnetDevice")
+                        .name("BACnet Device Instance (restart required)")
+                        .category("BACnet")
+                        .defaultValue(kDeviceInstanceDefault)
+                        .build();
+    udpPort = &ConfigManager.addSettingInt("bacnetPort")
+                 .name("BACnet UDP Port (restart required)")
+                 .category("BACnet")
+                 .defaultValue(BacnetServer::kDefaultPort)
+                 .build();
+    vendorId = &ConfigManager.addSettingInt("bacnetVendorId")
+                  .name("BACnet Vendor ID (restart required)")
+                  .category("BACnet")
+                  .defaultValue(kDevelopmentVendorId)
+                  .build();
+    dsEnabled = &ConfigManager.addSettingBool("dsEnabled")
+                   .name("DS18B20 Enabled (restart required)")
+                   .category("DS18B20")
+                   .defaultValue(true)
+                   .build();
+    dsGpio = &ConfigManager.addSettingInt("dsGpio")
+                .name("DS18B20 GPIO (restart required)")
+                .category("DS18B20")
+                .defaultValue(kDs18b20DefaultGpio)
+                .build();
+  }
+};
+
+struct ObjectActivity {
+  uint32_t reads = 0;
+  uint32_t lastReadMs = 0;
+  uint32_t writes = 0;
+  uint32_t lastWriteMs = 0;
+  uint8_t lastWritePriority = 0;
+  BacnetPropertyId lastProperty = BacnetPropertyId::ObjectName;
+};
+
+struct BacnetActivityState {
+  bool seen = false;
+  uint32_t lastSeenMs = 0;
+  BacnetIpEndpoint peer;
+  BacnetServerActivityService service = BacnetServerActivityService::ReadProperty;
+  BacnetObjectId object;
+  BacnetPropertyId property = BacnetPropertyId::ObjectName;
+  uint8_t priority = 0;
+  char peerText[32] = "No recent BACnet activity";
+};
+
+struct CovLiveState {
+  char peer[32] = "No active subscriptions";
+  char object[32] = "None";
+  char property[32] = "None";
+  char mode[24] = "None";
+  char state[24] = "Inactive";
+  uint32_t processId = 0;
+  uint32_t lifetimeSeconds = 0;
+  uint32_t lastSentMs = 0;
+  uint32_t lastAckMs = 0;
+  size_t count = 0;
+};
+
+Settings settings;
+cm::IOManager ioManager;
+cm::CoreSettings& coreSettings = cm::CoreSettings::instance();
+#if !BACNET_DEMO_USE_ETHERNET
+cm::CoreWiFiServices wifiServices;
+#else
+Config<String> ethernetIp{ConfigOptions<String>{.key = "EthIP", .name = "IP Address", .category = "Ethernet", .defaultValue = String(""), .showInWeb = true, .sortOrder = 1}};
+Config<String> ethernetSubnet{ConfigOptions<String>{.key = "EthSubnet", .name = "Subnet Mask", .category = "Ethernet", .defaultValue = String(""), .showInWeb = true, .sortOrder = 2}};
+Config<String> ethernetGateway{ConfigOptions<String>{.key = "EthGateway", .name = "Gateway", .category = "Ethernet", .defaultValue = String(""), .showInWeb = true, .sortOrder = 3}};
+Config<String> ethernetDns{ConfigOptions<String>{.key = "EthDNS", .name = "Primary DNS", .category = "Ethernet", .defaultValue = String(""), .showInWeb = true, .sortOrder = 4}};
+bool ethernetWasConnected = false;
+bool ethernetServicesStarted = false;
+#endif
+WiFiUDP udp;
+ArduinoUdpDatagramTransport transport(udp);
+BacnetServer bacnetServer(transport);
+ArduinoMonotonicClock bacnetClock;
+OneWire oneWire(kDs18b20DefaultGpio);
+DallasTemperature ds18b20(&oneWire);
+
+float lightValue = 0.0F;
+float temperatureValue = 0.0F;
+bool resetButtonValue = false;
+bool midButtonValue = false;
+bool setButtonValue = false;
+int lightRawValue = 0;
+
+BacnetServerStatusFlags lightStatusFlags;
+BacnetServerStatusFlags temperatureStatusFlags;
+BacnetServerStatusFlags resetButtonStatusFlags;
+BacnetServerStatusFlags midButtonStatusFlags;
+BacnetServerStatusFlags setButtonStatusFlags;
+BacnetEnumeratedValue lightEventState;
+BacnetEnumeratedValue temperatureEventState;
+BacnetEnumeratedValue resetButtonEventState;
+BacnetEnumeratedValue midButtonEventState;
+BacnetEnumeratedValue setButtonEventState;
+BacnetEnumeratedValue lightReliability;
+BacnetEnumeratedValue temperatureReliability;
+BacnetEnumeratedValue resetButtonReliability;
+BacnetEnumeratedValue midButtonReliability;
+BacnetEnumeratedValue setButtonReliability;
+
+BacnetAnalogInput lightSensor;
+BacnetAnalogInput temperatureSensor;
+BacnetBinaryInput resetButton;
+BacnetBinaryInput midButton;
+BacnetBinaryInput setButton;
+BacnetBinaryOutput led1;
+BacnetBinaryOutput led2;
+BacnetServerCommandableAnalogValue commandableAnalogValues[1];
+BacnetServerAnalogOutput analogOutputs[1];
+
+ObjectActivity lightActivity;
+ObjectActivity temperatureActivity;
+ObjectActivity resetButtonActivity;
+ObjectActivity midButtonActivity;
+ObjectActivity setButtonActivity;
+ObjectActivity led1Activity;
+ObjectActivity led2Activity;
+ObjectActivity commandableAnalogValueActivity;
+ObjectActivity analogOutputActivity;
+BacnetActivityState bacnetActivity;
+CovLiveState covLive;
+
+bool dsConfigured = false;
+bool bacnetConfigured = false;
+bool bacnetBound = false;
+uint32_t deviceInstance = kDeviceInstanceDefault;
+uint16_t udpPort = BacnetServer::kDefaultPort;
+uint16_t vendorId = kDevelopmentVendorId;
+uint32_t lastInputPollMs = 0;
+uint32_t lastDsReadMs = 0;
+bool setInputDiagnosticInitialized = false;
+bool lastSetGpioActive = false;
+bool lastSetIoState = false;
+bool analogOutputHardwareConfigured = false;
+float analogOutputAppliedValue = kAnalogOutputRelinquishDefault;
+uint8_t analogOutputPwmDuty = 0;
+
+template <typename TObject>
+void logObjectError(const TObject& object, BacnetObjectConfigurationStatus registrationStatus) {
+  bacnetConfigured = false;
+  const BacnetObjectConfigurationError error = object.configurationError();
+  const BacnetObjectConfigurationStatus status =
+    error.status == BacnetObjectConfigurationStatus::Ok ? registrationStatus : error.status;
+#if BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
+  Serial.printf("[E] BACnet object configuration failed: %s (%u:%lu), %s: %s\n",
+                error.objectName == nullptr ? "unnamed object" : error.objectName,
+                static_cast<unsigned int>(error.object.type),
+                static_cast<unsigned long>(error.object.instance),
+                bacnetPropertyIdText(error.property),
+                bacnetObjectConfigurationStatusText(status));
+#endif
+}
+
+void updateHealth(const io_example::InputHealth& health,
+                  BacnetServerStatusFlags& statusFlags,
+                  BacnetEnumeratedValue& eventState,
+                  BacnetEnumeratedValue& reliability) {
+  statusFlags.value = (health.fault ? 1UL << 1U : 0UL) |
+                      (health.outOfService ? 1UL << 3U : 0UL);
+  statusFlags.bitCount = 4;
+  eventState.value = health.eventState;
+  reliability.value = health.reliability;
+}
+
+const char* reliabilityText(const BacnetEnumeratedValue& reliability) {
+  return reliability.value == io_example::kReliabilityNoFaultDetected
+           ? "No fault detected"
+           : "No sensor / invalid I/O";
+}
+
+const char* propertyText(BacnetPropertyId property) {
+  switch (property) {
+    case BacnetPropertyId::PresentValue:
+      return "Present_Value";
+    case BacnetPropertyId::Description:
+      return "Description";
+    case BacnetPropertyId::PropertyList:
+      return "Property_List";
+    case BacnetPropertyId::PriorityArray:
+      return "Priority_Array";
+    case BacnetPropertyId::RelinquishDefault:
+      return "Relinquish_Default";
+    case BacnetPropertyId::StatusFlags:
+      return "Status_Flags";
+    case BacnetPropertyId::Reliability:
+      return "Reliability";
+    case BacnetPropertyId::OutOfService:
+      return "Out_Of_Service";
+    default:
+      return "Other property";
+  }
+}
+
+const char* covStateText(BacnetServerCovSubscriptionState state) {
+  switch (state) {
+    case BacnetServerCovSubscriptionState::Active:
+      return "Active";
+    case BacnetServerCovSubscriptionState::AwaitingConfirmedAck:
+      return "Pending ACK";
+    default:
+      return "Inactive";
+  }
+}
+
+const char* objectText(BacnetObjectId object);
+
+const char* covDiagnosticEventText(BacnetServerCovDiagnosticEvent event) {
+  switch (event) {
+    case BacnetServerCovDiagnosticEvent::SubscriptionActivated:
+      return "subscription active";
+    case BacnetServerCovDiagnosticEvent::ChangeDetected:
+      return "change detected";
+    case BacnetServerCovDiagnosticEvent::NotificationSent:
+      return "notification sent";
+    case BacnetServerCovDiagnosticEvent::NotificationSendFailed:
+      return "notification send failed";
+  }
+  return "unknown";
+}
+
+void printCovSubscriptionDiagnostic(const BacnetServerCovSubscription& subscription,
+                                    const char* prefix) {
+#if BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
+  Serial.printf("[COV-DIAG %lu] %s object=%u:%lu process=%lu peer=%u.%u.%u.%u:%u confirmed=%s state=%s\n",
+                static_cast<unsigned long>(millis()),
+                prefix,
+                static_cast<unsigned int>(subscription.object.type),
+                static_cast<unsigned long>(subscription.object.instance),
+                static_cast<unsigned long>(subscription.processId),
+                subscription.peer.address[0],
+                subscription.peer.address[1],
+                subscription.peer.address[2],
+                subscription.peer.address[3],
+                subscription.peer.port,
+                subscription.confirmed ? "yes" : "no",
+                covStateText(subscription.state));
+#else
+  (void)subscription;
+  (void)prefix;
+#endif
+}
+
+void observeCovDiagnostic(void*, const BacnetServerCovDiagnostic& diagnostic) {
+  printCovSubscriptionDiagnostic(diagnostic.subscription, covDiagnosticEventText(diagnostic.event));
+}
+
+void observeSetInputDiagnostic(uint32_t now) {
+  const bool gpioActive = digitalRead(kSetButtonDefaultGpio) == LOW;
+  const bool ioState = ioManager.getInputState("set");
+  if (setInputDiagnosticInitialized && gpioActive == lastSetGpioActive && ioState == lastSetIoState) {
+    return;
+  }
+#if BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
+  Serial.printf("[COV-DIAG %lu] SET GPIO%d raw-active=%s io-logical=%s\n",
+                static_cast<unsigned long>(now),
+                kSetButtonDefaultGpio,
+                gpioActive ? "true" : "false",
+                ioState ? "true" : "false");
+#endif
+  setInputDiagnosticInitialized = true;
+  lastSetGpioActive = gpioActive;
+  lastSetIoState = ioState;
+}
+
+void logSetButtonCovSubscriptions() {
+  for (size_t index = 0; index < bacnetServer.covSubscriptionCount(); ++index) {
+    BacnetServerCovSubscription subscription;
+    if (!bacnetServer.covSubscriptionAt(index, subscription) ||
+        subscription.object.type != static_cast<uint16_t>(BacnetObjectType::BinaryInput) ||
+        subscription.object.instance != 2U) {
+      continue;
+    }
+    printCovSubscriptionDiagnostic(subscription, "BI2 Present_Value changed; active subscription");
+  }
+}
+
+void refreshCovLiveState() {
+  covLive.count = bacnetServer.covSubscriptionCount();
+  if (covLive.count == 0) {
+    std::snprintf(covLive.peer, sizeof(covLive.peer), "%s", "No active subscriptions");
+    std::snprintf(covLive.object, sizeof(covLive.object), "%s", "None");
+    std::snprintf(covLive.property, sizeof(covLive.property), "%s", "None");
+    std::snprintf(covLive.mode, sizeof(covLive.mode), "%s", "None");
+    std::snprintf(covLive.state, sizeof(covLive.state), "%s", "Inactive");
+    covLive.processId = 0;
+    covLive.lifetimeSeconds = 0;
+    covLive.lastSentMs = 0;
+    covLive.lastAckMs = 0;
+    return;
+  }
+  BacnetServerCovSubscription subscription;
+  if (!bacnetServer.covSubscriptionAt(0, subscription)) {
+    return;
+  }
+  std::snprintf(covLive.peer, sizeof(covLive.peer), "%u.%u.%u.%u:%u", subscription.peer.address[0], subscription.peer.address[1], subscription.peer.address[2], subscription.peer.address[3], subscription.peer.port);
+  std::snprintf(covLive.object, sizeof(covLive.object), "%s", objectText(subscription.object));
+  std::snprintf(covLive.property, sizeof(covLive.property), "%s", subscription.isPropertySubscription ? propertyText(subscription.property) : "Object (PV + Status_Flags)");
+  std::snprintf(covLive.mode, sizeof(covLive.mode), "%s %s", subscription.confirmed ? "Confirmed" : "Unconfirmed", subscription.isPropertySubscription ? "property" : "object");
+  std::snprintf(covLive.state, sizeof(covLive.state), "%s", covStateText(subscription.state));
+  covLive.processId = subscription.processId;
+  const int32_t remainingLifetimeMs =
+    static_cast<int32_t>(subscription.expiresAtMs - millis());
+  covLive.lifetimeSeconds = subscription.lifetimeSeconds == 0U ||
+                                subscription.expiresAtMs == 0U
+                              ? 0U
+                              : (remainingLifetimeMs <= 0 ? 0U
+                                                          : static_cast<uint32_t>(
+                                                              (remainingLifetimeMs + 999) / 1000));
+  covLive.lastSentMs = subscription.lastSentMs;
+  covLive.lastAckMs = subscription.lastAckMs;
+}
+
+const char* objectText(BacnetObjectId object) {
+  if (object.type == static_cast<uint16_t>(BacnetObjectType::AnalogInput)) {
+    return object.instance == 0 ? "AI0 Light Sensor" : "AI1 Temperature";
+  }
+  if (object.type == static_cast<uint16_t>(BacnetObjectType::BinaryInput)) {
+    if (object.instance == 0)
+      return "BI0 Reset Button";
+    if (object.instance == 1)
+      return "BI1 Mid Button";
+    return "BI2 Set Button";
+  }
+  if (object.type == static_cast<uint16_t>(BacnetObjectType::BinaryOutput)) {
+    return object.instance == 0 ? "BO0 LED 1" : "BO1 LED 2";
+  }
+  if (object.type == static_cast<uint16_t>(BacnetObjectType::AnalogOutput)) {
+    return object.instance == kAnalogOutputInstance ? "AO0 PWM Output" : "Other AO";
+  }
+  if (object.type == static_cast<uint16_t>(BacnetObjectType::AnalogValue)) {
+    return object.instance == kCommandableAnalogValueInstance ? "AV0 Analog Setpoint"
+                                                              : "Other AV";
+  }
+  return "Other BACnet object";
+}
+
+ObjectActivity* activityFor(BacnetObjectId object) {
+  if (object.type == static_cast<uint16_t>(BacnetObjectType::AnalogInput)) {
+    return object.instance == 0 ? &lightActivity : (object.instance == 1 ? &temperatureActivity : nullptr);
+  }
+  if (object.type == static_cast<uint16_t>(BacnetObjectType::BinaryInput)) {
+    if (object.instance == 0)
+      return &resetButtonActivity;
+    if (object.instance == 1)
+      return &midButtonActivity;
+    if (object.instance == 2)
+      return &setButtonActivity;
+  }
+  if (object.type == static_cast<uint16_t>(BacnetObjectType::BinaryOutput)) {
+    return object.instance == 0 ? &led1Activity : (object.instance == 1 ? &led2Activity : nullptr);
+  }
+  if (object.type == static_cast<uint16_t>(BacnetObjectType::AnalogOutput)) {
+    return object.instance == kAnalogOutputInstance ? &analogOutputActivity : nullptr;
+  }
+  if (object.type == static_cast<uint16_t>(BacnetObjectType::AnalogValue)) {
+    return object.instance == kCommandableAnalogValueInstance
+             ? &commandableAnalogValueActivity
+             : nullptr;
+  }
+  return nullptr;
+}
+
+void observeBacnetActivity(void*, const BacnetServerActivity& activity) {
+  const uint32_t now = millis();
+  bacnetActivity.seen = true;
+  bacnetActivity.lastSeenMs = now;
+  bacnetActivity.peer = activity.peer;
+  bacnetActivity.service = activity.service;
+  bacnetActivity.object = activity.object;
+  bacnetActivity.property = activity.property;
+  bacnetActivity.priority = activity.hasPriority ? activity.priority : 16U;
+  std::snprintf(bacnetActivity.peerText, sizeof(bacnetActivity.peerText), "%u.%u.%u.%u:%u", activity.peer.address[0], activity.peer.address[1], activity.peer.address[2], activity.peer.address[3], activity.peer.port);
+  ObjectActivity* objectActivity = activityFor(activity.object);
+  if (objectActivity == nullptr) {
+    return;
+  }
+  objectActivity->lastProperty = activity.property;
+  if (activity.service == BacnetServerActivityService::ReadProperty) {
+    ++objectActivity->reads;
+    objectActivity->lastReadMs = now;
+  } else {
+    ++objectActivity->writes;
+    objectActivity->lastWriteMs = now;
+    objectActivity->lastWritePriority = activity.hasPriority ? activity.priority : 16U;
+  }
+}
+
+void applyLed1(void*, bool presentValue, bool outOfService) {
+  ioManager.set("led1", !outOfService && presentValue);
+}
+
+void applyLed2(void*, bool presentValue, bool outOfService) {
+  ioManager.set("led2", !outOfService && presentValue);
+}
+
+bool configureAnalogOutputHardware() {
+  static constexpr int kOwnedPins[] = {
+    36,
+    18,
+    14,
+    33,
+    kSetButtonDefaultGpio,
+    25,
+    26,
+  };
+  if (!io_example::isSafeEsp32PwmPin(kAnalogOutputPwmGpio) ||
+      !io_example::isUnownedOutputPin(kAnalogOutputPwmGpio,
+                                      kOwnedPins,
+                                      sizeof(kOwnedPins) / sizeof(kOwnedPins[0]))) {
+#if BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
+    Serial.printf("[E] AO0 GPIO%d is unsupported or already owned\n", kAnalogOutputPwmGpio);
+#endif
+    return false;
+  }
+  pinMode(kAnalogOutputPwmGpio, OUTPUT);
+  analogWriteResolution(kAnalogOutputPwmResolution);
+  analogWrite(kAnalogOutputPwmGpio, 0);
+  analogOutputHardwareConfigured = true;
+  return true;
+}
+
+void applyAnalogOutput(void*, float presentValue, bool outOfService) {
+  uint8_t duty = 0;
+  if (!io_example::scaleOutputPercentToPwm(presentValue,
+                                           kAnalogOutputMinimum,
+                                           kAnalogOutputMaximum,
+                                           false,
+                                           !outOfService,
+                                           duty)) {
+#if BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
+    Serial.println("[E] AO0 received an invalid effective value");
+#endif
+    return;
+  }
+  analogOutputAppliedValue = presentValue;
+  analogOutputPwmDuty = duty;
+  if (analogOutputHardwareConfigured) {
+    analogWrite(kAnalogOutputPwmGpio, duty);
+  }
+}
+
+void registerCommandableAnalogObjects() {
+  BacnetServerCommandableAnalogValue& analogValue = commandableAnalogValues[0];
+  analogValue.instance = kCommandableAnalogValueInstance;
+  analogValue.objectName = "Analog Setpoint";
+  analogValue.units = static_cast<uint32_t>(BacnetEngineeringUnits::Percent);
+  analogValue.priority.relinquishDefault = kAnalogOutputRelinquishDefault;
+
+  BacnetServerAnalogOutput& analogOutput = analogOutputs[0];
+  analogOutput.instance = kAnalogOutputInstance;
+  analogOutput.objectName = "PWM Output";
+  analogOutput.units = static_cast<uint32_t>(BacnetEngineeringUnits::Percent);
+  analogOutput.priority.relinquishDefault = kAnalogOutputRelinquishDefault;
+  analogOutput.apply = applyAnalogOutput;
+
+  if (!bacnetServer.setCommandableAnalogValues(commandableAnalogValues, 1) ||
+      !bacnetServer.setAnalogOutputs(analogOutputs, 1)) {
+    bacnetConfigured = false;
+#if BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
+    Serial.println("[E] Commandable analog object configuration failed");
+#endif
+    return;
+  }
+  applyAnalogOutput(nullptr, analogOutput.priority.effectiveValue(), analogOutput.outOfService);
+}
+
+void registerLightSensor() {
+  lightSensor.configure(0, "Light Sensor");
+  lightSensor.bindPresentValue(&lightValue);
+  lightSensor.setUnits(BacnetEngineeringUnits::Percent);
+  lightSensor.addProperty(BacnetPropertyId::Description, "LDR light level");
+  lightSensor.addProperty(BacnetPropertyId::MinPresentValue, 0.0F);
+  lightSensor.addProperty(BacnetPropertyId::MaxPresentValue, 100.0F);
+  lightSensor.addProperty(BacnetPropertyId::Resolution, 0.1F);
+  lightSensor.addProperty(BacnetPropertyId::StatusFlags, &lightStatusFlags);
+  lightSensor.addProperty(BacnetPropertyId::EventState, &lightEventState);
+  lightSensor.addProperty(BacnetPropertyId::Reliability, &lightReliability);
+  const auto status = bacnetServer.addObject(lightSensor);
+  if (status != BacnetObjectConfigurationStatus::Ok) {
+    logObjectError(lightSensor, status);
+  }
+}
+
+void registerTemperatureSensor() {
+  temperatureSensor.configure(1, "Temperature");
+  temperatureSensor.bindPresentValue(&temperatureValue);
+  temperatureSensor.setUnits(BacnetEngineeringUnits::DegreesCelsius);
+  temperatureSensor.addProperty(BacnetPropertyId::Description, "DS18B20 temperature sensor");
+  temperatureSensor.addProperty(BacnetPropertyId::MinPresentValue, -55.0F);
+  temperatureSensor.addProperty(BacnetPropertyId::MaxPresentValue, 125.0F);
+  temperatureSensor.addProperty(BacnetPropertyId::Resolution, 0.0625F);
+  temperatureSensor.addProperty(BacnetPropertyId::StatusFlags, &temperatureStatusFlags);
+  temperatureSensor.addProperty(BacnetPropertyId::EventState, &temperatureEventState);
+  temperatureSensor.addProperty(BacnetPropertyId::Reliability, &temperatureReliability);
+  const auto status = bacnetServer.addObject(temperatureSensor);
+  if (status != BacnetObjectConfigurationStatus::Ok) {
+    logObjectError(temperatureSensor, status);
+  }
+}
+
+void registerResetButton() {
+  resetButton.configure(0, "Reset Button");
+  resetButton.bindPresentValue(&resetButtonValue);
+  resetButton.addProperty(BacnetPropertyId::Description, "Low-active reset button");
+  resetButton.addProperty(BacnetPropertyId::StatusFlags, &resetButtonStatusFlags);
+  resetButton.addProperty(BacnetPropertyId::EventState, &resetButtonEventState);
+  resetButton.addProperty(BacnetPropertyId::Reliability, &resetButtonReliability);
+  const auto status = bacnetServer.addObject(resetButton);
+  if (status != BacnetObjectConfigurationStatus::Ok) {
+    logObjectError(resetButton, status);
+  }
+}
+
+void registerMidButton() {
+  midButton.configure(1, "Mid Button");
+  midButton.bindPresentValue(&midButtonValue);
+  midButton.addProperty(BacnetPropertyId::Description, "Low-active mid button");
+  midButton.addProperty(BacnetPropertyId::StatusFlags, &midButtonStatusFlags);
+  midButton.addProperty(BacnetPropertyId::EventState, &midButtonEventState);
+  midButton.addProperty(BacnetPropertyId::Reliability, &midButtonReliability);
+  const auto status = bacnetServer.addObject(midButton);
+  if (status != BacnetObjectConfigurationStatus::Ok) {
+    logObjectError(midButton, status);
+  }
+}
+
+void registerSetButton() {
+  setButton.configure(2, "Set Button");
+  setButton.bindPresentValue(&setButtonValue);
+  setButton.addProperty(BacnetPropertyId::Description, "Low-active set button");
+  setButton.addProperty(BacnetPropertyId::StatusFlags, &setButtonStatusFlags);
+  setButton.addProperty(BacnetPropertyId::EventState, &setButtonEventState);
+  setButton.addProperty(BacnetPropertyId::Reliability, &setButtonReliability);
+  const auto status = bacnetServer.addObject(setButton);
+  if (status != BacnetObjectConfigurationStatus::Ok) {
+    logObjectError(setButton, status);
+  }
+}
+
+void registerLed1() {
+  led1.configure(0, "LED 1");
+  led1.setRelinquishDefault(false);
+  led1.attachOutput(applyLed1, nullptr);
+  led1.addProperty(BacnetPropertyId::Description, "GPIO25 development-station LED");
+  const auto status = bacnetServer.addObject(led1);
+  if (status != BacnetObjectConfigurationStatus::Ok) {
+    logObjectError(led1, status);
+  }
+}
+
+void registerLed2() {
+  led2.configure(1, "LED 2");
+  led2.setRelinquishDefault(false);
+  led2.attachOutput(applyLed2, nullptr);
+  led2.addProperty(BacnetPropertyId::Description, "GPIO26 development-station LED");
+  const auto status = bacnetServer.addObject(led2);
+  if (status != BacnetObjectConfigurationStatus::Ok) {
+    logObjectError(led2, status);
+  }
+}
+
+void registerIoBindings() {
+  ioManager.addAnalogInput("ldr_s", "LDR light level", 36, true, 0, 4095, 0.0F, 100.0F, "%", 1);
+  ioManager.addAnalogInputToSettingsGroup("ldr_s", "I/O", "Analog Inputs", "LDR", 10);
+  ioManager.addAnalogInputToLive("ldr_s", 10, "Live I/O", "Hardware Inputs", "LDR", "Light Sensor", false);
+  ioManager.addAnalogInputToLive("ldr_s", 11, "Live I/O", "Hardware Inputs", "LDR", "Light Sensor raw", true);
+
+  ioManager.addDigitalInput("reset", "Reset Button", 14, true, true, false, true);
+  ioManager.addDigitalInputToSettingsGroup("reset", "I/O", "Digital Inputs", "Reset Button", 14);
+  ioManager.addDigitalInputToLive("reset", 14, "Live I/O", "Hardware Inputs", "Buttons", "Reset Button", false);
+  ioManager.addDigitalInput("mid", "Mid Button", 33, true, true, false, true);
+  ioManager.addDigitalInputToSettingsGroup("mid", "I/O", "Digital Inputs", "Mid Button", 30);
+  ioManager.addDigitalInputToLive("mid", 30, "Live I/O", "Hardware Inputs", "Buttons", "Mid Button", false);
+  ioManager.addDigitalInput("set", "Set Button", 19, true, true, false, true);
+  ioManager.addDigitalInputToSettingsGroup("set", "I/O", "Digital Inputs", "Set Button", 19);
+  ioManager.addDigitalInputToLive("set", 19, "Live I/O", "Hardware Inputs", "Buttons", "Set Button", false);
+
+  ioManager.addDigitalOutput("led1", "LED 1 Red", 25, false, true);
+  ioManager.addDigitalOutputToSettingsGroup("led1", "I/O", "Digital Outputs", "LED 1", 50);
+  ioManager.addDigitalOutput("led2", "LED 2 Yellow", 26, false, true);
+  ioManager.addDigitalOutputToSettingsGroup("led2", "I/O", "Digital Outputs", "LED 2", 60);
+}
+
+void configureDs18b20() {
+  dsConfigured = settings.dsEnabled->get();
+  temperatureSensor.outOfService = !dsConfigured;
+  if (!dsConfigured) {
+    updateHealth(io_example::inputHealth(false, false), temperatureStatusFlags, temperatureEventState, temperatureReliability);
+    return;
+  }
+  oneWire = OneWire(settings.dsGpio->get());
+  ds18b20.setOneWire(&oneWire);
+  ds18b20.begin();
+  ds18b20.setWaitForConversion(false);
+  ds18b20.requestTemperatures();
+}
+
+void configureBacnetObjects() {
+  bacnetConfigured = true;
+  registerLightSensor();
+  registerTemperatureSensor();
+  registerResetButton();
+  registerMidButton();
+  registerSetButton();
+  registerLed1();
+  registerLed2();
+  registerCommandableAnalogObjects();
+  bacnetServer.setClock(&bacnetClock);
+  bacnetServer.setActivityListener(observeBacnetActivity);
+  bacnetServer.setCovDiagnosticListener(observeCovDiagnostic);
+}
+
+void pollInputs(uint32_t now) {
+  if (now - lastInputPollMs < kInputPollMs) {
+    return;
+  }
+  lastInputPollMs = now;
+
+  const bool ldrConfigured = ioManager.isConfigured("ldr_s");
+  lightRawValue = ioManager.getAnalogRawValue("ldr_s");
+  lightValue = ioManager.getAnalogValue("ldr_s");
+  lightSensor.outOfService = !ldrConfigured;
+  updateHealth(io_example::inputHealth(ldrConfigured, std::isfinite(lightValue)),
+               lightStatusFlags,
+               lightEventState,
+               lightReliability);
+
+  const bool resetConfigured = ioManager.isConfigured("reset");
+  resetButtonValue = ioManager.getInputState("reset");
+  resetButton.outOfService = !resetConfigured;
+  updateHealth(io_example::inputHealth(resetConfigured, resetConfigured),
+               resetButtonStatusFlags,
+               resetButtonEventState,
+               resetButtonReliability);
+  const bool midConfigured = ioManager.isConfigured("mid");
+  midButtonValue = ioManager.getInputState("mid");
+  midButton.outOfService = !midConfigured;
+  updateHealth(io_example::inputHealth(midConfigured, midConfigured),
+               midButtonStatusFlags,
+               midButtonEventState,
+               midButtonReliability);
+  const bool setConfigured = ioManager.isConfigured("set");
+  const bool previousSetButtonValue = setButtonValue;
+  setButtonValue = ioManager.getInputState("set");
+  if (setButtonValue != previousSetButtonValue) {
+#if BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
+    Serial.printf("[COV-DIAG %lu] BI2 Present_Value %s -> %s\n",
+                  static_cast<unsigned long>(now),
+                  previousSetButtonValue ? "active" : "inactive",
+                  setButtonValue ? "active" : "inactive");
+#endif
+    logSetButtonCovSubscriptions();
+  }
+  setButton.outOfService = !setConfigured;
+  updateHealth(io_example::inputHealth(setConfigured, setConfigured),
+               setButtonStatusFlags,
+               setButtonEventState,
+               setButtonReliability);
+
+  if (dsConfigured && now - lastDsReadMs >= kDsReadIntervalMs) {
+    lastDsReadMs = now;
+    const float temperature = ds18b20.getTempCByIndex(0);
+    const bool valid = std::isfinite(temperature) && temperature != DEVICE_DISCONNECTED_C &&
+                       temperature >= -55.0F && temperature <= 125.0F;
+    updateHealth(io_example::inputHealth(true, valid), temperatureStatusFlags, temperatureEventState, temperatureReliability);
+    if (valid) {
+      temperatureValue = temperature;
+    }
+    ds18b20.requestTemperatures();
+  }
+}
+
+uint32_t activityAgeSeconds(uint32_t timestamp) {
+  return timestamp == 0 ? 0 : (millis() - timestamp) / 1000U;
+}
+
+const char* activityStateText() {
+  return bacnetActivity.seen && millis() - bacnetActivity.lastSeenMs <= kRecentActivityMs
+           ? "Recent BACnet activity"
+           : "No recent BACnet activity";
+}
+
+void setupRuntimeUi() {
+  auto sensorLive = ConfigManager.liveGroup("ioBacnet")
+                      .page("Live I/O", 10)
+                      .card("External Sensor");
+  sensorLive.value("temperature", []() { return temperatureValue; })
+    .label("Temperature")
+    .unit("°C")
+    .precision(3)
+    .order(10);
+  sensorLive.value("lightReliability", []() { return reliabilityText(lightReliability); })
+    .label("Light Sensor reliability")
+    .order(20);
+  sensorLive.value("temperatureReliability",
+                   []() { return reliabilityText(temperatureReliability); })
+    .label("Temperature reliability")
+    .order(30);
+
+  auto outputLive = ConfigManager.liveGroup("ioBacnet")
+                      .page("Live I/O", 10)
+                      .card("BACnet Outputs");
+  outputLive.boolValue("led1Value", []() { return led1.priority.effectiveValue(); })
+    .label("LED 1 BACnet Present_Value")
+    .order(10);
+  outputLive.boolValue("led1Io", []() { return ioManager.getStatus("led1"); })
+    .label("LED 1 IOManager output state")
+    .order(20);
+  outputLive.value("led1Priority", []() { return led1.priority.effectivePriority(); })
+    .label("LED 1 effective priority (0 = Relinquish_Default)")
+    .order(30);
+  outputLive.boolValue("led2Value", []() { return led2.priority.effectiveValue(); })
+    .label("LED 2 BACnet Present_Value")
+    .order(40);
+  outputLive.boolValue("led2Io", []() { return ioManager.getStatus("led2"); })
+    .label("LED 2 IOManager output state")
+    .order(50);
+  outputLive.value("led2Priority", []() { return led2.priority.effectivePriority(); })
+    .label("LED 2 effective priority (0 = Relinquish_Default)")
+    .order(60);
+  outputLive.value("ao0Value", []() { return analogOutputAppliedValue; })
+    .label("AO0 applied effective Present_Value")
+    .unit("%")
+    .precision(1)
+    .order(70);
+  outputLive.value("ao0Duty", []() { return analogOutputPwmDuty; })
+    .label("AO0 GPIO32 PWM duty")
+    .order(80);
+  outputLive.value("ao0Priority", []() { return analogOutputs[0].priority.effectivePriority(); })
+    .label("AO0 effective priority (0 = Relinquish_Default)")
+    .order(90);
+  outputLive.value("av0Value", []() { return commandableAnalogValues[0].priority.effectiveValue(); })
+    .label("AV0 BACnet Present_Value")
+    .unit("%")
+    .precision(1)
+    .order(100);
+  outputLive.value("av0Priority", []() { return commandableAnalogValues[0].priority.effectivePriority(); })
+    .label("AV0 effective priority (0 = Relinquish_Default)")
+    .order(110);
+
+  auto activityLive = ConfigManager.liveGroup("bacnetActivity")
+                        .page("BACnet", 20)
+                        .card("BACnet Activity");
+  activityLive.value("state", []() { return activityStateText(); })
+    .label("BACnet activity")
+    .order(10);
+  activityLive.value("peer", []() { return bacnetActivity.peerText; })
+    .label("Last BACnet peer")
+    .order(20);
+  activityLive.value("service", []() { return bacnetActivity.service == BacnetServerActivityService::ReadProperty ? "ReadProperty" : "WriteProperty"; })
+    .label("Last request")
+    .order(30);
+  activityLive.value("object", []() { return objectText(bacnetActivity.object); })
+    .label("Last object")
+    .order(40);
+  activityLive.value("property", []() { return propertyText(bacnetActivity.property); })
+    .label("Last property")
+    .order(50);
+  activityLive.value("age", []() { return activityAgeSeconds(bacnetActivity.lastSeenMs); })
+    .label("Last seen")
+    .unit("s ago")
+    .precision(0)
+    .order(60);
+  activityLive.value("covCount", []() { return static_cast<uint32_t>(covLive.count); })
+    .label("Active COV subscriptions")
+    .order(70);
+  activityLive.value("covPeer", []() { return covLive.peer; }).label("COV client").order(80);
+  activityLive.value("covProcess", []() { return covLive.processId; }).label("COV process ID").order(90);
+  activityLive.value("covObject", []() { return covLive.object; }).label("COV object").order(100);
+  activityLive.value("covProperty", []() { return covLive.property; }).label("COV property").order(110);
+  activityLive.value("covMode", []() { return covLive.mode; }).label("COV mode").order(120);
+  activityLive.value("covState", []() { return covLive.state; }).label("COV state").order(130);
+  activityLive.value("covLifetime", []() { return covLive.lifetimeSeconds; }).label("COV lifetime").unit("s").order(140);
+  activityLive.value("covLastSent", []() { return activityAgeSeconds(covLive.lastSentMs); }).label("COV last sent").unit("s ago").precision(0).order(150);
+  activityLive.value("covLastAck", []() { return activityAgeSeconds(covLive.lastAckMs); }).label("COV last ACK").unit("s ago").precision(0).order(160);
+
+  auto pointLive = ConfigManager.liveGroup("bacnetActivity")
+                     .page("BACnet", 20)
+                     .card("BACnet Data Point Activity");
+  pointLive.value("lightReads", []() { return lightActivity.reads; }).label("AI0 Light Sensor reads").order(10);
+  pointLive.value("lightReadAge", []() { return activityAgeSeconds(lightActivity.lastReadMs); }).label("AI0 last read").unit("s ago").precision(0).order(20);
+  pointLive.value("temperatureReads", []() { return temperatureActivity.reads; }).label("AI1 Temperature reads").order(30);
+  pointLive.value("temperatureReadAge", []() { return activityAgeSeconds(temperatureActivity.lastReadMs); }).label("AI1 last read").unit("s ago").precision(0).order(40);
+  pointLive.value("led1Writes", []() { return led1Activity.writes; }).label("BO0 LED 1 writes").order(50);
+  pointLive.value("led1WritePriority", []() { return led1Activity.lastWritePriority; }).label("BO0 last write priority").order(60);
+  pointLive.value("led2Writes", []() { return led2Activity.writes; }).label("BO1 LED 2 writes").order(70);
+  pointLive.value("led2WritePriority", []() { return led2Activity.lastWritePriority; }).label("BO1 last write priority").order(80);
+  pointLive.value("ao0Writes", []() { return analogOutputActivity.writes; }).label("AO0 PWM Output writes").order(90);
+  pointLive.value("ao0WritePriority", []() { return analogOutputActivity.lastWritePriority; }).label("AO0 last write priority").order(100);
+  pointLive.value("av0Writes", []() { return commandableAnalogValueActivity.writes; }).label("AV0 Analog Setpoint writes").order(110);
+  pointLive.value("av0WritePriority", []() { return commandableAnalogValueActivity.lastWritePriority; }).label("AV0 last write priority").order(120);
+}
+
+void startBacnetWhenConnected() {
+  if (bacnetBound || !bacnetConfigured) {
+    return;
+  }
+  const BacnetServerDevice device{deviceInstance, vendorId, "ESP32 I/O BACnet Server", "Unregistered BACnet Test Server", "ESP32 I/O Server", kVersion, nullptr};
+  bacnetBound = bacnetServer.begin(device, udpPort);
+#if BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
+  Serial.println(bacnetBound ? "[I] BACnet server online" : "[E] BACnet UDP bind failed");
+#endif
+}
+
+#if BACNET_DEMO_USE_ETHERNET
+void registerEthernetSettings() {
+  ConfigManager.setCategoryLayoutOverride(
+    "Ethernet", "Network", "Network", "Ethernet Settings", 10);
+  ConfigManager.addSettingsPage("Network", 10);
+  ConfigManager.addSettingsGroup(
+    "Network", "Network", "Ethernet Settings", 10);
+  ConfigManager.addSetting(&ethernetIp);
+  ConfigManager.addSetting(&ethernetSubnet);
+  ConfigManager.addSetting(&ethernetGateway);
+  ConfigManager.addSetting(&ethernetDns);
+}
+
+void startEthernetServices() {
+  if (!ethernetServicesStarted) {
+    ConfigManager.startWebServerOnNetwork();
+    configTzTime(coreSettings.ntp.tz.get().c_str(),
+                 coreSettings.ntp.server1.get().c_str(),
+                 coreSettings.ntp.server2.get().c_str());
+    ethernetServicesStarted = true;
+#if BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
+    Serial.println("[I] ConfigManager services started on Ethernet");
+#endif
+  }
+  startBacnetWhenConnected();
+}
+
+void updateEthernetNetwork() {
+  const bool connected = bacnet_example::EthernetNetwork::hasIp();
+  if (connected && !ethernetWasConnected) {
+#if BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
+    Serial.print("[I] Ethernet station IP: ");
+    Serial.println(bacnet_example::EthernetNetwork::localIp());
+#endif
+    startEthernetServices();
+  } else if (!connected && ethernetWasConnected) {
+    if (bacnetBound) {
+      bacnetServer.end();
+    }
+    bacnetBound = false;
+#if BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
+    Serial.println("[W] Ethernet network unavailable");
+#endif
+  }
+  ethernetWasConnected = connected;
+}
+#endif
+
+void setupNetworkDefaults() {
+#if BACNET_DEMO_USE_ETHERNET
+  if (!BACNET_DEMO_FORCE_SECRET_DEFAULTS && !ethernetIp.get().isEmpty()) {
+    return;
+  }
+#if BACNET_DEMO_FORCE_SECRET_DEFAULTS && BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
+  Serial.println("[I] Applying forced local Ethernet defaults");
+#endif
+  ethernetIp.set(BACNET_DEMO_ETHERNET_IP);
+  ethernetSubnet.set(BACNET_DEMO_ETHERNET_SUBNET);
+  ethernetGateway.set(BACNET_DEMO_ETHERNET_GATEWAY);
+  ethernetDns.set(BACNET_DEMO_ETHERNET_DNS);
+  ConfigManager.saveAll();
+#else
+#if BACNET_DEMO_FORCE_SECRET_DEFAULTS
+#if BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
+  Serial.println("[I] Applying forced local WiFi defaults");
+#endif
+  coreSettings.wifi.wifiSsid.set(MY_WIFI_SSID);
+  coreSettings.wifi.wifiPassword.set(MY_WIFI_PASSWORD);
+  coreSettings.wifi.staticIp.set(MY_WIFI_IP);
+  coreSettings.wifi.useDhcp.set(MY_USE_DHCP);
+  coreSettings.wifi.gateway.set(MY_GATEWAY_IP);
+  coreSettings.wifi.subnet.set(MY_SUBNET_MASK);
+  coreSettings.wifi.dnsPrimary.set(MY_DNS_IP);
+  ConfigManager.saveAll();
+  return;
+#endif
+  if (!coreSettings.wifi.wifiSsid.get().isEmpty()) {
+    return;
+  }
+#if BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
+  Serial.println("[W] WiFi settings are empty; configure them in ConfigManager");
+#endif
+#endif
+}
+
+} // namespace
+
+void setup() {
+  Serial.begin(115200);
+#if BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
+  Serial.println("[I] Starting BACnet I/O server");
+#endif
+  ConfigManager.setAppName(kAppName);
+  ConfigManager.setAppTitle(kAppName);
+  ConfigManager.setVersion(kVersion);
+  ConfigManager.enableBuiltinSystemProvider();
+#if BACNET_DEMO_USE_ETHERNET
+  registerEthernetSettings();
+#else
+  coreSettings.attachWiFi(ConfigManager);
+#endif
+  coreSettings.attachSystem(ConfigManager);
+  coreSettings.attachNtp(ConfigManager);
+  settings.create();
+  registerIoBindings();
+  ConfigManager.loadAll();
+  ioManager.begin();
+  ioManager.set("led1", false);
+  ioManager.set("led2", false);
+  static_cast<void>(configureAnalogOutputHardware());
+  deviceInstance = static_cast<uint32_t>(settings.deviceInstance->get());
+  udpPort = static_cast<uint16_t>(settings.udpPort->get());
+  const int configuredVendorId = settings.vendorId->get();
+  if (deviceInstance > 0x003FFFFFU || udpPort == 0 || configuredVendorId < 0 ||
+      configuredVendorId > UINT16_MAX) {
+#if BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
+    Serial.println("[E] Invalid BACnet startup settings; using defaults");
+#endif
+    deviceInstance = kDeviceInstanceDefault;
+    udpPort = BacnetServer::kDefaultPort;
+    vendorId = kDevelopmentVendorId;
+  } else {
+    vendorId = static_cast<uint16_t>(configuredVendorId);
+  }
+  configureDs18b20();
+  configureBacnetObjects();
+  setupRuntimeUi();
+  setupNetworkDefaults();
+#if BACNET_DEMO_USE_ETHERNET
+  const bacnet_example::EthernetConfig ethernetConfig{
+    BACNET_DEMO_ETHERNET_DHCP,
+    ethernetIp.get().c_str(),
+    ethernetGateway.get().c_str(),
+    ethernetSubnet.get().c_str(),
+    ethernetDns.get().c_str(),
+  };
+  if (!bacnet_example::EthernetNetwork::begin(kAppName, ethernetConfig)) {
+#if BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
+    Serial.println("[E] Ethernet startup failed");
+#endif
+  }
+#else
+  ConfigManager.startWebServer();
+#endif
+  // Keep live I/O feedback responsive; ConfigManager defaults to a slower push interval.
+  ConfigManager.setWebSocketInterval(550);
+}
+
+void loop() {
+  const uint32_t now = millis();
+#if BACNET_DEMO_USE_ETHERNET
+  updateEthernetNetwork();
+#else
+  ConfigManager.getWiFiManager().update();
+#endif
+  ioManager.update();
+  observeSetInputDiagnostic(now);
+  ConfigManager.handleClient();
+  pollInputs(now);
+  if (bacnetBound) {
+    static_cast<void>(bacnetServer.poll());
+  }
+  refreshCovLiveState();
+}
+
+#if !BACNET_DEMO_USE_ETHERNET
+void onWiFiConnected() {
+  wifiServices.onConnected(ConfigManager, kAppName, coreSettings.system, coreSettings.ntp);
+#if BACNET_DEMO_ENABLE_COV_DIAGNOSTICS
+  Serial.print("[I] WiFi connected, local IP ");
+  Serial.println(WiFi.localIP());
+#endif
+  startBacnetWhenConnected();
+}
+
+void onWiFiDisconnected() {
+  wifiServices.onDisconnected();
+  if (bacnetBound) {
+    bacnetServer.end();
+  }
+  bacnetBound = false;
+}
+
+void onWiFiAPMode() {
+  wifiServices.onAPMode();
+}
+#endif

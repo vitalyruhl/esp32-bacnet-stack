@@ -2,6 +2,4 @@
 
 #pragma once
 
-#include <Arduino.h>
-
-#include "BacnetServer.h"
+#include "platform/esp32-arduino/server/ArduinoBacnetServer.h"

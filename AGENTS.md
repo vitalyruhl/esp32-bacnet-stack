@@ -24,6 +24,11 @@ This file is the universal, cross-tool governance kernel. If it conflicts with
   requested or required by a named workflow.
 - Do not perform direct product work on `main`/`master`; the documented
   docs-only TODO exception remains workflow-controlled.
+- `main` and `server` are permanent integration branches and must never be
+  deleted or renamed by cleanup or final synchronization. Client, shared,
+  repository, and general work normally integrates into `main`; server-specific
+  work normally integrates into `server`. Integrate `server` into `main` only
+  through an explicit release/integration request.
 - Do not run upload, monitor, destructive, hardware-affecting, or
   network-affecting commands without explicit request.
 - Never mark an issue solved or fixed until the user confirms it works.

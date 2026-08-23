@@ -1,0 +1,84 @@
+# ESP-to-ESP Ethernet BACnet Client Demo
+
+This permanent paired-demo wrapper is the Ethernet BACnet client side of the
+ESP-to-ESP COV setup. It reuses the proven ETH client source without changing
+it. The checked-in target `192.168.2.126` and Device instance `1682127` are
+laboratory configuration values for the paired Wi-Fi server, not generic
+BACnet defaults. The wrapper keeps paired-demo runtime diagnostics in its own
+`esp2esp_cli` Preferences namespace.
+
+The inherited client discovers the server object list, subscribes supported
+process values through COV, and renews subscriptions. It recreates its session
+after a target I-Am timeout, an empty or failed object-list scan, a local
+Ethernet IP change, or sustained loss of every previously active COV
+subscription. The paired profile retains two Analog Input and six Binary
+process-object previews, so it includes `BV320` as Binary Value instance `320`
+and reports `active 8/8` once all subscriptions are active.
+Existing client GUI cards display the remote process values; the **ESP-to-ESP**
+page adds compact paired-demo status and persistent counters.
+
+The **Server Hardware Inputs** card is populated exclusively from this client's
+runtime COV/property cache. It displays the remote AI0 light sensor as a
+percentage and BI0 Reset, BI1 Mid, and BI2 Set button states; the server's raw
+LDR ADC value is not shown because it is not a transferred BACnet object. Each
+row carries an independent receive-mode marker: `C` means an active COV
+subscription, `P` means polling fallback, and `?` means pending or unknown
+subscription state. The button lamp shows only the remote button value (grey
+inactive, green active); it is deliberately independent of the `C`/`P`/`?`
+receive-mode marker.
+
+The **Server Hardware Inputs** card additionally shows BV320's effective
+Present_Value and COV/polling receive mode. The **Remote COV Variables** card
+contains its COV update counter; renewal, timeout recovery, and polling
+fallback are the same shared subscription path used for the other seven
+objects.
+
+The **BO0 Binding HIL** card provides one deliberately manual command. **RUN
+BO0 PRIORITY / RELINQUISH** sends: P16 `INACTIVE` baseline, P8 `ACTIVE`
+effective override, P16 `ACTIVE` hidden-slot update, BACnet `NULL` for P16,
+then BACnet `NULL` for the winning P8 slot. Every request logs its ACK/error to
+serial. The card records BO0 COV updates from the normal subscription cache;
+the sequence expects exactly two effective-value COV changes, while the hidden
+write and hidden release must not add one. Do not run it as an automatic loop.
+
+## Build and upload
+
+```sh
+pio run -d examples/esp32/paired/live-cov/client-ethernet -e eth-com6
+pio run -d examples/esp32/paired/live-cov/client-ethernet -e eth-com6 -t upload
+pio device monitor -p COM6 -b 115200
+```
+
+The `eth-com6` environment is a local COM6 convenience profile. Reset the
+board manually after flashing when it remains in download mode. Open the
+ConfigManager GUI at the Ethernet address shown on the serial console;
+`192.168.2.127` is the current laboratory configuration. See
+[Change of Value (COV)](../../../../../docs/cov.md) and the paired
+[COV HIL runner](../../../../../tests/hil/esp32/cov-client-server-acceptance/README.md) for
+the protocol and acceptance scope.
+
+If COM6 remains in download mode after flashing, reset it manually before the
+client can establish Ethernet and renew its COV subscriptions.
+
+## Quiet diagnostic build
+
+`eth-com6-quiet` keeps BACnet and client-demo behavior enabled while compiling
+out BACnet logging, client-demo logging, and the shared demo's periodic serial
+diagnostics:
+
+```sh
+pio run -d examples/esp32/paired/live-cov/client-ethernet -e eth-com6-quiet
+```
+
+It does not disable ESP-IDF, Ethernet, PHY, Wi-Fi, or other framework-driver
+logs.
+
+## Laboratory serial-reset finding
+
+The paired HIL station was verified with its external DTR/RTS auto-reset
+transistor circuit removed and only the manual BOOT and RESET buttons connected.
+With that hardware change, the Ethernet client remained stable while the serial
+monitor was closed. The earlier apparent serial-closed failure was traced to
+the external reset/boot-strapping circuit pulling GPIO0 to an unsafe level and
+causing reset or download-mode behavior. It is not a confirmed BACnet, logging,
+or closed-UART software failure.

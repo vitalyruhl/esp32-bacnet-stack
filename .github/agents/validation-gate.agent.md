@@ -12,6 +12,8 @@ disable-model-invocation: false
 
 Execute only the validation commands selected by the parent agent and project
 profile. Load `validation-gate` for the canonical ordering, autofix, and reuse
-rules. Do not decide product scope, version impact, merge readiness, or bypass
+rules. For a selected full repository gate, invoke
+`tools/build/run-full-repository-gate.ps1` rather than reconstructing its
+dynamic matrix. Do not decide product scope, version impact, merge readiness, or bypass
 policy. Return only command, exit status, changed files, and
 `pass`/`fail`/`blocker` for the final file state.

@@ -6,7 +6,7 @@ ESP32, PlatformIO, Arduino, and C++17.
 ## 1. Where things live
 
 - Documentation: `docs/`
-- Tests: `test/`
+- Tests: `tests/`
 - Examples: `examples/`
 - Tools and helper scripts: `tools/`
 - GitHub files: `.github/`
@@ -52,15 +52,24 @@ ESP32, PlatformIO, Arduino, and C++17.
 
 - Default root build: `pio run -e usb`
 - Compile-only tests: `pio test -e usb --without-uploading --without-testing`
-- WiFi client demo build: `pio run -d examples/client-demo-wifi -e usb`
-- Ethernet client demo build: `pio run -d examples/client-demo-ETH -e eth`
+- WiFi client demo build: `pio run -d examples/esp32/client/rich-client/wifi -e usb`
+- Ethernet client demo build: `pio run -d examples/esp32/client/rich-client/ethernet -e eth`
 - Basic client Ethernet build:
-  `pio run -d examples/client-object-list-scan-basic -e eth`
+  `pio run -d examples/esp32/client/basic-object-list-scan -e eth`
 - WAGO HIL Ethernet build:
-  `pio run -d examples/hil-wago-client-acceptance -e eth`
-- Server demo builds: `pio run -d examples/server-demo -e usb -e eth`
-- Full local governance gate: `pwsh -NoProfile -ExecutionPolicy Bypass -File tools/run-precommit-full.ps1`
-- Direct static analysis gate: `pwsh -NoProfile -ExecutionPolicy Bypass -File tools/run-cppcheck.ps1`
+  `pio run -d tests/hil/esp32/wago-client-acceptance -e eth`
+- Server demo builds: `pio run -d examples/esp32/server/bacnet-server -e usb -e eth`
+- Full local governance gate: `pwsh -NoProfile -ExecutionPolicy Bypass -File tools/quality/run-precommit-full.ps1`
+- Full reproducible repository gate: `pwsh -NoProfile -ExecutionPolicy Bypass -File tools/build/run-full-repository-gate.ps1`
+- Repeat only failed checks from a prior gate report:
+  `pwsh -NoProfile -ExecutionPolicy Bypass -File tools/build/run-full-repository-gate.ps1 -OnlyFailedFrom C:\Temp\esp32-bacnet-stack-full-gate\<run>\summary.json`
+- Direct static analysis gate: `pwsh -NoProfile -ExecutionPolicy Bypass -File tools/quality/run-cppcheck.ps1`
+
+The full repository gate creates a pristine archive from `HEAD` below `C:\Temp`.
+It therefore uses only versioned fallback configuration and never copies ignored
+local secrets. It runs compile and link checks only; it never uploads firmware
+or starts a serial monitor. Per-check logs and a JSON summary remain in the
+reported `C:\Temp\esp32-bacnet-stack-full-gate\<run>` directory.
 
 ### Cppcheck policy
 
